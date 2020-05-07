@@ -52,7 +52,7 @@ def display_images(images, titles=None, cols=4, cmap=None, norm=None,
         plt.subplot(rows, cols, i)
         plt.title(title, fontsize=9)
         plt.axis('off')
-        cmap = matplt.colors.ListedColormap(np.random.rand(256, 3))
+        # cmap = matplt.colors.ListedColormap(np.random.rand(256, 3))
         plt.imshow(image.astype(np.uint8), cmap=cmap,
                    norm=norm, interpolation=interpolation)
         i += 1
@@ -170,7 +170,7 @@ def display_instances(image, boxes, masks, class_ids, class_names,
     ax.imshow(masked_image.astype(np.uint8))
     if auto_show:
         plt.show()
-    #     plt.savefig("temp.png")
+        # plt.savefig("temp.png")
     return masked_image.astype(np.uint8)
 
 
@@ -324,6 +324,7 @@ def plot_precision_recall(AP, precisions, recalls):
     ax.set_ylim(0, 1.1)
     ax.set_xlim(0, 1.1)
     _ = ax.plot(recalls, precisions)
+    plt.show()
 
 
 def plot_overlaps(gt_class_ids, pred_class_ids, pred_scores,
@@ -363,6 +364,7 @@ def plot_overlaps(gt_class_ids, pred_class_ids, pred_scores,
     plt.tight_layout()
     plt.xlabel("Ground Truth")
     plt.ylabel("Predictions")
+    plt.show()
 
 
 def draw_boxes(image, boxes=None, refined_boxes=None,
@@ -465,6 +467,7 @@ def draw_boxes(image, boxes=None, refined_boxes=None,
                 p = Polygon(verts, facecolor="none", edgecolor=color)
                 ax.add_patch(p)
     ax.imshow(masked_image.astype(np.uint8))
+    plt.show()
 
 
 def display_table(table):

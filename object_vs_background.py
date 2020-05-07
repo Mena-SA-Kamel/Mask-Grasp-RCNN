@@ -271,7 +271,7 @@ class ObjectVsBackgroundDataset(Dataset):
         return image
 
 ##SETUP ##
-#
+# #
 # import tensorflow as tf
 # config = tf.ConfigProto()
 # config.gpu_options.allow_growth = True
@@ -295,9 +295,9 @@ class ObjectVsBackgroundDataset(Dataset):
 # config.MEAN_PIXEL = np.around(channel_means, decimals = 1)
 # config.display()
 # inference_config = InferenceConfig()
-
 #
-# # ##### TRAINING #####
+# #
+# # # ##### TRAINING #####
 #
 # MODEL_DIR = "models"
 # # COCO_MODEL_PATH = "mask_rcnn_coco.h5"

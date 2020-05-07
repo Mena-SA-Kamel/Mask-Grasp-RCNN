@@ -4,4 +4,5 @@ models/
 videos/
 logs/
 venv/
+Testing_Code/
 *.h5/

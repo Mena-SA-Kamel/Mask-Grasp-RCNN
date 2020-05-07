@@ -58,7 +58,7 @@ frame_count = 0
 
 inference_config = InferenceConfig()
 MODEL_DIR = "models"
-model_path = os.path.join(MODEL_DIR, "mask_rcnn_object_vs_background_20_heads_20_all_new_dataset.h5")
+model_path = os.path.join(MODEL_DIR, "mask_rcnn_object_vs_background_100_heads_150_all.h5")
 model = modellib.MaskRCNN(mode="inference",
                           config=inference_config,
                           model_dir=MODEL_DIR)
@@ -78,6 +78,9 @@ try:
 
         aligned_depth_frame = aligned_frames.get_depth_frame()  # aligned_depth_frame is a 640x480 depth image
         color_frame = aligned_frames.get_color_frame()
+
+        hole_filling = rs.hole_filling_filter()  # hole filling - hole filling
+        aligned_depth_frame = hole_filling.process(aligned_depth_frame)
         # depth_color_frame = colorizer.colorize(aligned_depth_frame)
 
         if not aligned_depth_frame or not color_frame:
@@ -96,7 +99,7 @@ try:
         rgbd_image[:, :, 3] = depth_scaled
         results = model.detect([rgbd_image], verbose=0)
         r = results[0]
-        masked_image = get_mask_overlay(rgbd_image[:,:,0:3], r['masks'], r['scores'])
+        masked_image = get_mask_overlay(rgbd_image[:,:,0:3], r['masks'], r['scores'], 0.85)
         depth_3_channel = cv2.cvtColor(depth_scaled,cv2.COLOR_GRAY2BGR)
         images = np.hstack((color_image, depth_3_channel, masked_image))
         cv2.namedWindow('Align Example', cv2.WINDOW_AUTOSIZE)
