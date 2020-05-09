@@ -44,31 +44,40 @@ class InferenceConfig(ObjectVsBackgroundConfig):
 
 class ObjectVsBackgroundDataset(Dataset):
 
-    def load_dataset(self, type = 'train_set'):
+    def load_dataset(self, type = 'train_set', dataset_dir = 'New Graspable Objects Dataset'):
         self.add_class(ObjectVsBackgroundConfig().NAME, 1, "object")
-        dataset_path = os.path.join('New Graspable Objects Dataset', type)
-        image_list = glob.glob(dataset_path + '/**/rgb/*.png', recursive=True)
+        dataset_path = os.path.join(dataset_dir, type)
+        image_list = glob.glob(dataset_path + '/**/label/*.png', recursive=True)
+        random.shuffle(image_list)
         id = 0
         for image in image_list:
-            label_path = image.replace('rgb', 'label')
-            depth_path = image.replace('rgb', 'depth')
-            self.add_image("object_vs_background", image_id = id, path = image,
+            rgb_path = image.replace('label', 'rgb').replace('table_', '').replace('floor_', '')
+            depth_path = image.replace('label', 'depth').replace('table_', '').replace('floor_', '')
+            label_path = image
+
+            if 'ocid_dataset' in dataset_dir:
+                rgb_path = rgb_path.replace('table_', '').replace('floor_', '')
+                depth_path = depth_path.replace('table_', '').replace('floor_', '')
+            self.add_image("object_vs_background", image_id = id, path = rgb_path,
                            label_path = label_path, depth_path = depth_path)
             id = id + 1
 
     def load_mask(self, image_id):
         mask_path = self.image_info[image_id]['label_path']
         mask_original = self.load_label_from_file(mask_path)
-        mask, class_ids = self.reshape_label_image(mask_original)
+        mask_processed = self.process_label_image(mask_path)
+        mask, class_ids = self.reshape_label_image(mask_processed)
         return mask, np.array(class_ids)
 
     def load_image(self, image_id):
         image = skimage.io.imread(self.image_info[image_id]['path'])
         depth = skimage.io.imread(self.image_info[image_id]['depth_path'])
-        depth = self.rescale_depth_image(depth)
+        if depth.dtype.type == np.uint16:
+            depth = self.rescale_depth_image(depth)
         rgbd_image = np.zeros([image.shape[0], image.shape[1], 4])
         rgbd_image[:, :, 0:3] = image
         rgbd_image[:, :, 3] = depth
+        rgbd_image = np.array(rgbd_image).astype('uint8')
         return rgbd_image
 
     def rescale_depth_image(self, depth_image):
@@ -78,7 +87,7 @@ class ObjectVsBackgroundDataset(Dataset):
         original_range = np.max(depth_image) - np.min(depth_image)
         scaling_factor = 255 / original_range
         img_rescale = depth_image * scaling_factor
-        img_rescale_int = img_rescale.astype(int)
+        img_rescale_int = img_rescale.astype('uint8')
         return img_rescale_int
 
     def load_image_from_file(self, image_path):
@@ -138,13 +147,8 @@ class ObjectVsBackgroundDataset(Dataset):
         test_set = dataset_paths[int((train + val) * num) : ]
         return train_set, val_set, test_set
 
-
-    def construct_dataset(self, train = 0.70, val = 0.15):
-        # Iterates recursively through the OCID dataset folder structure, moves all rgb, label and depth images into
-        # the following folders: "ocid-dataset/rgb", "ocid-dataset/label", "ocid-dataset/depth". Images are shuffled
-        # and split into 'train_set', 'val_set', 'test_set' sub folders based on "train" and "val" ratios
-        dataset_path = '../../../Datasets/OCID-dataset'
-        dataset_paths = glob.glob(dataset_path + '/**/rgb/*.png', recursive=True)
+    def construct_OCID_dataset(self, train = 0.70, val = 0.15, dataset_dir = '../../../Datasets/OCID-dataset'):
+        dataset_paths = glob.glob(dataset_dir + '/**/rgb/*.png', recursive=True)
         dataset_folder = 'ocid_dataset'
         folder_names = ['train_set', 'val_set', 'test_set']
         subfolder_names = ['depth', 'label', 'rgb']
@@ -171,18 +175,82 @@ class ObjectVsBackgroundDataset(Dataset):
                     copyfile(image_path, target_path)
             i = i + 1
 
+    def construct_WISDOM_dataset(self, train = 0.70, val = 0.15, dataset_dir = '../../../Datasets/wisdom-full-single/wisdom/wisdom-real'):
+        dataset_folder = 'wisdom_dataset'
+        folder_names = ['train_set', 'val_set', 'test_set']
+        subfolder_names = ['depth', 'label', 'rgb']
+        if not os.path.exists(dataset_folder):
+            os.makedirs(dataset_folder)
+            for folder_name in folder_names:
+                os.makedirs(os.path.join(dataset_folder, folder_name))
+                for subfolder in subfolder_names:
+                    os.makedirs(os.path.join(dataset_folder, folder_name, subfolder))
+
+        resolutions = os.listdir(dataset_dir)
+        training_images = []
+        testing_images = []
+        validating_images = []
+        resolutions_count = 0
+
+        for resolution in resolutions:
+            rgb_images_path = os.path.join(dataset_dir, resolution, 'color_ims')
+            depth_images_path = os.path.join(dataset_dir, resolution, 'depth_ims')
+            label_images_path = os.path.join(dataset_dir, resolution, 'modal_segmasks')
+
+            image_names = np.array(os.listdir(rgb_images_path))
+
+            train_set, val_set, test_set = self.split_dataset(image_names, train, val)
+            i = 0
+            for dataset_paths in [train_set, val_set, test_set]:
+                for image_name in dataset_paths:
+                    for subfolder_name in subfolder_names:
+                        subfolder_path = vars()[(subfolder_name + '_images_path')]
+
+                        image_path = os.path.join(subfolder_path, image_name)
+
+                        # Converting depth to sngle channel
+                        if subfolder_name == 'depth':
+                            img = skimage.io.imread(image_path)
+                            img = img[:,:,2]
+                            img = Image.fromarray(img)
+                            img.save(image_path)
+
+                        if resolutions_count == 1:
+                            image_name_new = 'image_' + str(int(image_name.split('_')[1].split('.')[0]) + 400).zfill(6) + '.png'
+                            target_path = os.path.join(dataset_folder, folder_names[i], subfolder_name, image_name_new)
+                        else:
+                            target_path = os.path.join(dataset_folder, folder_names[i], subfolder_name, image_name)
+                        copyfile(image_path, target_path)
+
+                i = i + 1
+            resolutions_count = resolutions_count + 1
+
+
+
+    def construct_dataset(self, train = 0.70, val = 0.15, dataset_dir = '../../../Datasets/OCID-dataset'):
+        # Iterates recursively through the OCID dataset folder structure, moves all rgb, label and depth images into
+        # the following folders: "ocid-dataset/rgb", "ocid-dataset/label", "ocid-dataset/depth". Images are shuffled
+        # and split into 'train_set', 'val_set', 'test_set' sub folders based on "train" and "val" ratios
+
+        if 'OCID' in dataset_dir:
+            self.construct_OCID_dataset(train, val, dataset_dir)
+        elif 'wisdom' in dataset_dir:
+            self.construct_WISDOM_dataset(train, val, dataset_dir)
+
     def process_label_image(self, label_path):
         # Removes the table and background from the label images and saves the output image at target_path
         # input:
         # label_paths - path of the original label images
-        image_name = label_path.split('\\')[-1]
-        location = image_name.split('_')[0]
         label = self.load_label_from_file(label_path)
-        if (location == 'floor'):
-            label_new = label * (label > 1)
-        else:
-            label_new = label * (label > 2)
-        return label_new
+        if ('floor' in label_path) or ('table' in label_path):
+            image_name = label_path.split('\\')[-1]
+            location = image_name.split('_')[0]
+            if (location == 'floor'):
+                label_new = label * (label > 1)
+            else:
+                label_new = label * (label > 2)
+            label = label_new
+        return label
 
     def visualize_dataset(self, dataset_type = 'train_set', num_images = 3):
         # Randomly selects num_images images from the OCID datasets and displays them in the following order:
@@ -270,95 +338,90 @@ class ObjectVsBackgroundDataset(Dataset):
         image = np.array(image, dtype='uint8')
         return image
 
-##SETUP ##
-# #
-# import tensorflow as tf
-# config = tf.ConfigProto()
-# config.gpu_options.allow_growth = True
-# sess = tf.Session(config=config)
-#
-# training_dataset = ObjectVsBackgroundDataset()
-# # training_dataset.construct_dataset()
-# training_dataset.load_dataset('train_set')
-# training_dataset.prepare()
-#
-# validating_dataset = ObjectVsBackgroundDataset()
-# validating_dataset.load_dataset('val_set')
-# validating_dataset.prepare()
-#
-# testing_dataset = ObjectVsBackgroundDataset()
-# testing_dataset.load_dataset('test_set')
-# testing_dataset.prepare()
-#
-# config = ObjectVsBackgroundConfig()
-# channel_means = np.array(training_dataset.get_channel_means())
-# config.MEAN_PIXEL = np.around(channel_means, decimals = 1)
-# config.display()
-# inference_config = InferenceConfig()
-#
-# #
+## SETUP ##
+
+import tensorflow as tf
+config = tf.ConfigProto()
+config.gpu_options.allow_growth = True
+sess = tf.Session(config=config)
+
+training_dataset = ObjectVsBackgroundDataset()
+# training_dataset.construct_dataset()
+training_dataset.load_dataset('train_set', dataset_dir='ocid_dataset')
+training_dataset.prepare()
+
+validating_dataset = ObjectVsBackgroundDataset()
+validating_dataset.load_dataset('val_set', dataset_dir='ocid_dataset')
+validating_dataset.prepare()
+
+testing_dataset = ObjectVsBackgroundDataset()
+testing_dataset.load_dataset('test_set', dataset_dir='ocid_dataset')
+testing_dataset.prepare()
+
+config = ObjectVsBackgroundConfig()
+channel_means = np.array(training_dataset.get_channel_means())
+config.MEAN_PIXEL = np.around(channel_means, decimals = 1)
+config.display()
+inference_config = InferenceConfig()
+
+
 # # # ##### TRAINING #####
-#
-# MODEL_DIR = "models"
-# # COCO_MODEL_PATH = "mask_rcnn_coco.h5"
-# COCO_MODEL_PATH = os.path.join("models", "mask_rcnn_object_vs_background_100_heads_150_all.h5")
-# model = modellib.MaskRCNN(mode="training", config=config,
-#                              model_dir=MODEL_DIR)
-#
-# # model.load_weights(COCO_MODEL_PATH, by_name=True,
-# #                       exclude=["conv1", "mrcnn_class_logits", "mrcnn_bbox_fc",
-# #                                "mrcnn_bbox", "mrcnn_mask"])
+
+MODEL_DIR = "models"
+# COCO_MODEL_PATH = os.path.join("models", "mask_rcnn_object_vs_background_100_heads_50_all.h5")
+COCO_MODEL_PATH = os.path.join("models", "mask_rcnn_coco.h5")
+model = modellib.MaskRCNN(mode="training", config=config,
+                             model_dir=MODEL_DIR)
+
+model.load_weights(COCO_MODEL_PATH, by_name=True,
+                      exclude=["conv1", "mrcnn_class_logits", "mrcnn_bbox_fc",
+                               "mrcnn_bbox", "mrcnn_mask"])
 # model.load_weights(COCO_MODEL_PATH, by_name=True)
+
+model.train(training_dataset, validating_dataset,
+               learning_rate=config.LEARNING_RATE,
+               epochs=50,
+               layers=r"(conv1)|(mrcnn\_.*)|(rpn\_.*)|(fpn\_.*)")
+
+model.train(training_dataset, validating_dataset,
+                learning_rate=config.LEARNING_RATE/10,
+                epochs=100,
+                layers="all")
 #
 # model.train(training_dataset, validating_dataset,
-#                learning_rate=config.LEARNING_RATE/15,
-#                epochs=20,
+#                learning_rate=config.LEARNING_RATE,
+#                epochs=100,
 #                layers=r"(conv1)|(mrcnn\_.*)|(rpn\_.*)|(fpn\_.*)")
 #
 # model.train(training_dataset, validating_dataset,
-#                 learning_rate=config.LEARNING_RATE/20,
-#                 epochs=40,
+#                 learning_rate=config.LEARNING_RATE/10,
+#                 epochs=250,
 #                 layers="all")
-# #
-# # model.train(training_dataset, validating_dataset,
-# #                learning_rate=config.LEARNING_RATE,
-# #                epochs=100,
-# #                layers=r"(conv1)|(mrcnn\_.*)|(rpn\_.*)|(fpn\_.*)")
-# #
-# # model.train(training_dataset, validating_dataset,
-# #                 learning_rate=config.LEARNING_RATE/10,
-# #                 epochs=250,
-# #                 layers="all")
-#
-# model_path = os.path.join(MODEL_DIR, "mask_rcnn_object_vs_background_20_heads_20_all_new_dataset.h5")
-# model.keras_model.save_weights(model_path)
 
-##### TESTING #####
+model_path = os.path.join(MODEL_DIR, "mask_rcnn_object_vs_background_OCID-50_head_50_all.h5")
+model.keras_model.save_weights(model_path)
+#
+# # # ##### TESTING #####
 #
 # MODEL_DIR = "models"
-# model_path = os.path.join(MODEL_DIR, "mask_rcnn_object_vs_background_0023.h5")
-# # model_path = os.path.join(MODEL_DIR, "mask_rcnn_object_vs_background_100_heads_150_all.h5")
+# model_path = os.path.join(MODEL_DIR, "mask_rcnn_object_vs_background_OCID-50_head_50_all.h5")
 # model = modellib.MaskRCNN(mode="inference",
 #                            config=inference_config,
 #                            model_dir=MODEL_DIR)
-# # # Load trained weights
-# print("Loading weights from ", model_path)
 # model.load_weights(model_path, by_name=True)
 # image_ids = random.choices(validating_dataset.image_ids, k=15)
 # for image_id in image_ids:
 #      original_image, image_meta, gt_class_id, gt_bbox, gt_mask =\
 #          modellib.load_image_gt(validating_dataset, inference_config,
 #                                 image_id, use_mini_mask=False)
-#      # visualize.display_instances(original_image, gt_bbox, gt_mask, gt_class_id,
-#      #                        training_dataset.class_names, figsize=(8, 8))
-#      # import code;
-#      #
-#      # code.interact(local=dict(globals(), **locals()))
+#      visualize.display_instances(original_image, gt_bbox, gt_mask, gt_class_id,
+#                             validating_dataset.class_names, figsize=(8, 8))
+#
 #      print(validating_dataset.image_info[image_id]['label_path'])
 #      results = model.detect([original_image], verbose=1)
 #      r = results[0]
-#      # image = testing_dataset.get_mask_overlay(original_image[:,:,0:3], r['masks'], r['scores'], 0.96)
-#      # plt.imshow(image)
-#      # plt.show()
-#      visualize.display_instances(original_image, r['rois'], r['masks'], r['class_ids'],
-#                                 validating_dataset.class_names, r['scores'],show_bbox=False, thresh = 0.95)
+     # image = testing_dataset.get_mask_overlay(original_image[:,:,0:3], r['masks'], r['scores'], 0.96)
+     # plt.imshow(image)
+     # plt.show()
+     # visualize.display_instances(original_image, r['rois'], r['masks'], r['class_ids'],
+     #                            validating_dataset.class_names, r['scores'],show_bbox=True, thresh = 0.95)

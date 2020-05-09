@@ -47,7 +47,7 @@ TEST_MODE = "inference"
 
 # Loading validation set
 validating_dataset = ObjectVsBackgroundDataset()
-validating_dataset.load_dataset('val_set')
+validating_dataset.load_dataset('val_set', dataset_dir='wisdom_dataset')
 validating_dataset.prepare()
 
 # Create model in inference mode
@@ -61,24 +61,25 @@ weights_path = MASKRCNN_MODEL_PATH
 print("Loading weights ", weights_path)
 model.load_weights(weights_path, by_name=True)
 
-image_id = random.choice(validating_dataset.image_ids)
-image, image_meta, gt_class_id, gt_bbox, gt_mask =\
-    modellib.load_image_gt(validating_dataset, config, image_id, use_mini_mask=False)
-info = validating_dataset.image_info[image_id]
-print("image ID: {}.{} ({}) {}".format(info["source"], info["id"], image_id,
-                                       validating_dataset.image_reference(image_id)))
+image_ids = random.choices(validating_dataset.image_ids, k=10)
+for image_id in image_ids:
+    image, image_meta, gt_class_id, gt_bbox, gt_mask =\
+        modellib.load_image_gt(validating_dataset, config, image_id, use_mini_mask=False)
+    info = validating_dataset.image_info[image_id]
+    print("image ID: {}.{} ({}) {}".format(info["source"], info["id"], image_id,
+                                           validating_dataset.image_reference(image_id)))
 
-# Run object detection
-results = model.detect([image], verbose=1)
+    # Run object detection
+    results = model.detect([image], verbose=1)
 
-# Display results
-r = results[0]
-visualize.display_instances(image[:,:,0:3], r['rois'], r['masks'], r['class_ids'],
-                            validating_dataset.class_names, r['scores'],
-                            title="Predictions")
-log("gt_class_id", gt_class_id)
-log("gt_bbox", gt_bbox)
-log("gt_mask", gt_mask)
+    # Display results
+    r = results[0]
+    visualize.display_instances(image[:,:,0:3], r['rois'], r['masks'], r['class_ids'],
+                                validating_dataset.class_names, r['scores'],
+                                title="Predictions")
+    log("gt_class_id", gt_class_id)
+    log("gt_bbox", gt_bbox)
+    log("gt_mask", gt_mask)
 
 ## Evaluation
 # # Draw precision-recall curve
@@ -93,85 +94,85 @@ log("gt_mask", gt_mask)
 
 
 # Calculating mean average precision (mAP)
-image_ids = np.random.choice(validating_dataset.image_ids, 10)
-APs = compute_batch_ap(image_ids)
-print("mAP @ IoU=50: ", np.mean(APs))
+# image_ids = np.random.choice(validating_dataset.image_ids, 10)
+# APs = compute_batch_ap(image_ids)
+# print("mAP @ IoU=50: ", np.mean(APs))
 
-# # Validating RPN
-# # Generate RPN trainig targets
-# # target_rpn_match is 1 for positive anchors, -1 for negative anchors
-# # and 0 for neutral anchors.
-# target_rpn_match, target_rpn_bbox = modellib.build_rpn_targets(
-#     image.shape, model.anchors, gt_class_id, gt_bbox, model.config)
-# log("target_rpn_match", target_rpn_match)
-# log("target_rpn_bbox", target_rpn_bbox)
-#
-# positive_anchor_ix = np.where(target_rpn_match[:] == 1)[0]
-# negative_anchor_ix = np.where(target_rpn_match[:] == -1)[0]
-# neutral_anchor_ix = np.where(target_rpn_match[:] == 0)[0]
-# positive_anchors = model.anchors[positive_anchor_ix]
-# negative_anchors = model.anchors[negative_anchor_ix]
-# neutral_anchors = model.anchors[neutral_anchor_ix]
-# log("positive_anchors", positive_anchors)
-# log("negative_anchors", negative_anchors)
-# log("neutral anchors", neutral_anchors)
-#
-# # Apply refinement deltas to positive anchors
-# refined_anchors = utils.apply_box_deltas(
-#     positive_anchors,
-#     target_rpn_bbox[:positive_anchors.shape[0]] * model.config.RPN_BBOX_STD_DEV)
-# log("refined_anchors", refined_anchors, )
-#
-# # Display positive anchors before refinement (dotted) and
-# # after refinement (solid).
-# visualize.draw_boxes(image, boxes=positive_anchors, refined_boxes=refined_anchors)
-#
-# # Run RPN sub-graph
-# pillar = model.keras_model.get_layer("ROI").output  # node to start searching from
-#
-# # TF 1.4 and 1.9 introduce new versions of NMS. Search for all names to support TF 1.3~1.10
-# nms_node = model.ancestor(pillar, "ROI/rpn_non_max_suppression:0")
-# if nms_node is None:
-#     nms_node = model.ancestor(pillar, "ROI/rpn_non_max_suppression/NonMaxSuppressionV2:0")
-# if nms_node is None: #TF 1.9-1.10
-#     nms_node = model.ancestor(pillar, "ROI/rpn_non_max_suppression/NonMaxSuppressionV3:0")
-#
-# rpn = model.run_graph([image], [
-#     ("rpn_class", model.keras_model.get_layer("rpn_class").output),
-#     ("pre_nms_anchors", model.ancestor(pillar, "ROI/pre_nms_anchors:0")),
-#     ("refined_anchors", model.ancestor(pillar, "ROI/refined_anchors:0")),
-#     ("refined_anchors_clipped", model.ancestor(pillar, "ROI/refined_anchors_clipped:0")),
-#     ("post_nms_anchor_ix", nms_node),
-#     ("proposals", model.keras_model.get_layer("ROI").output),
-# ])
-#
-# # Show top anchors by score (before refinement)
-# limit = 100
-# sorted_anchor_ids = np.argsort(rpn['rpn_class'][:,:,1].flatten())[::-1]
-# # visualize.draw_boxes(image[:,:,0:3], boxes=model.anchors[sorted_anchor_ids[:limit]])
-#
-#
-# # Show top anchors with refinement. Then with clipping to image boundaries
-# limit = 50
-# pre_nms_anchors = utils.denorm_boxes(rpn["pre_nms_anchors"][0], image.shape[:2])
-# refined_anchors = utils.denorm_boxes(rpn["refined_anchors"][0], image.shape[:2])
-# refined_anchors_clipped = utils.denorm_boxes(rpn["refined_anchors_clipped"][0], image.shape[:2])
-# # visualize.draw_boxes(image[:,:,0:3], boxes=pre_nms_anchors[:limit],
-# #                      refined_boxes=refined_anchors[:limit])
-#
-# # Show refined anchors after non-max suppression
-# limit = 50
-# ixs = rpn["post_nms_anchor_ix"][:limit]
-# visualize.draw_boxes(image, refined_boxes=refined_anchors_clipped[ixs])
-#
-# # Show final proposals
-# # These are the same as the previous step (refined anchors
-# # after NMS) but with coordinates normalized to [0, 1] range.
-# limit = 50
-# # Convert back to image coordinates for display
-# h, w = config.IMAGE_SHAPE[:2]
-# proposals = rpn['proposals'][0, :limit] * np.array([h, w, h, w])
-# # visualize.draw_boxes(image[:,:,0:3], refined_boxes=proposals)
+# Validating RPN
+# Generate RPN trainig targets
+# target_rpn_match is 1 for positive anchors, -1 for negative anchors
+# and 0 for neutral anchors.
+target_rpn_match, target_rpn_bbox = modellib.build_rpn_targets(
+    image.shape, model.anchors, gt_class_id, gt_bbox, model.config)
+log("target_rpn_match", target_rpn_match)
+log("target_rpn_bbox", target_rpn_bbox)
+
+positive_anchor_ix = np.where(target_rpn_match[:] == 1)[0]
+negative_anchor_ix = np.where(target_rpn_match[:] == -1)[0]
+neutral_anchor_ix = np.where(target_rpn_match[:] == 0)[0]
+positive_anchors = model.anchors[positive_anchor_ix]
+negative_anchors = model.anchors[negative_anchor_ix]
+neutral_anchors = model.anchors[neutral_anchor_ix]
+log("positive_anchors", positive_anchors)
+log("negative_anchors", negative_anchors)
+log("neutral anchors", neutral_anchors)
+
+# Apply refinement deltas to positive anchors
+refined_anchors = utils.apply_box_deltas(
+    positive_anchors,
+    target_rpn_bbox[:positive_anchors.shape[0]] * model.config.RPN_BBOX_STD_DEV)
+log("refined_anchors", refined_anchors, )
+
+# Display positive anchors before refinement (dotted) and
+# after refinement (solid).
+visualize.draw_boxes(image, boxes=positive_anchors, refined_boxes=refined_anchors)
+
+# Run RPN sub-graph
+pillar = model.keras_model.get_layer("ROI").output  # node to start searching from
+
+# TF 1.4 and 1.9 introduce new versions of NMS. Search for all names to support TF 1.3~1.10
+nms_node = model.ancestor(pillar, "ROI/rpn_non_max_suppression:0")
+if nms_node is None:
+    nms_node = model.ancestor(pillar, "ROI/rpn_non_max_suppression/NonMaxSuppressionV2:0")
+if nms_node is None: #TF 1.9-1.10
+    nms_node = model.ancestor(pillar, "ROI/rpn_non_max_suppression/NonMaxSuppressionV3:0")
+
+rpn = model.run_graph([image], [
+    ("rpn_class", model.keras_model.get_layer("rpn_class").output),
+    ("pre_nms_anchors", model.ancestor(pillar, "ROI/pre_nms_anchors:0")),
+    ("refined_anchors", model.ancestor(pillar, "ROI/refined_anchors:0")),
+    ("refined_anchors_clipped", model.ancestor(pillar, "ROI/refined_anchors_clipped:0")),
+    ("post_nms_anchor_ix", nms_node),
+    ("proposals", model.keras_model.get_layer("ROI").output),
+])
+
+# Show top anchors by score (before refinement)
+limit = 100
+sorted_anchor_ids = np.argsort(rpn['rpn_class'][:,:,1].flatten())[::-1]
+# visualize.draw_boxes(image[:,:,0:3], boxes=model.anchors[sorted_anchor_ids[:limit]])
+
+
+# Show top anchors with refinement. Then with clipping to image boundaries
+limit = 50
+pre_nms_anchors = utils.denorm_boxes(rpn["pre_nms_anchors"][0], image.shape[:2])
+refined_anchors = utils.denorm_boxes(rpn["refined_anchors"][0], image.shape[:2])
+refined_anchors_clipped = utils.denorm_boxes(rpn["refined_anchors_clipped"][0], image.shape[:2])
+# visualize.draw_boxes(image[:,:,0:3], boxes=pre_nms_anchors[:limit],
+#                      refined_boxes=refined_anchors[:limit])
+
+# Show refined anchors after non-max suppression
+limit = 50
+ixs = rpn["post_nms_anchor_ix"][:limit]
+visualize.draw_boxes(image, refined_boxes=refined_anchors_clipped[ixs])
+
+# Show final proposals
+# These are the same as the previous step (refined anchors
+# after NMS) but with coordinates normalized to [0, 1] range.
+limit = 50
+# Convert back to image coordinates for display
+h, w = config.IMAGE_SHAPE[:2]
+proposals = rpn['proposals'][0, :limit] * np.array([h, w, h, w])
+# visualize.draw_boxes(image[:,:,0:3], refined_boxes=proposals)
 #
 # # Get input and output to classifier and mask heads.
 # mrcnn = model.run_graph([image], [

@@ -139,8 +139,8 @@ def display_instances(image, boxes, masks, class_ids, class_names,
             ax.add_patch(p)
 
         # Label
-        if scores[i] < thresh:
-            continue
+        # if scores[i] < thresh:
+        #     continue
         if not captions:
             class_id = class_ids[i]
             score = scores[i] if scores is not None else None
