@@ -225,6 +225,32 @@ class ObjectVsBackgroundDataset(Dataset):
                 i = i + 1
             resolutions_count = resolutions_count + 1
 
+    def construct_SAMS_dataset(self, train=0.70, val=0.15, dataset_dir='../../../Datasets/SAMS-Dataset'):
+        dataset_paths = glob.glob(dataset_dir + '/**/rgb/*.png', recursive=True)
+        dataset_folder = 'sams_dataset'
+        folder_names = ['train_set', 'val_set', 'test_set']
+        subfolder_names = ['depth', 'label', 'rgb']
+        if not os.path.exists(dataset_folder):
+            os.makedirs(dataset_folder)
+            for folder_name in folder_names:
+                os.makedirs(os.path.join(dataset_folder, folder_name))
+                for subfolder in subfolder_names:
+                    os.makedirs(os.path.join(dataset_folder, folder_name, subfolder))
+
+        train_set, val_set, test_set = self.split_dataset(dataset_paths, train, val)
+        i = 0
+        for dataset_paths in [train_set, val_set, test_set]:
+            for image_path in dataset_paths:
+                image_path_split = image_path.split('\\')
+                image_name = image_path_split[-1]
+
+                for subfolder_name in subfolder_names:
+                    image_path = os.path.join(*image_path_split[0:-2], subfolder_name, image_name)
+                    target_path = os.path.join(dataset_folder, folder_names[i], subfolder_name, image_name)
+                    copyfile(image_path, target_path)
+            i = i + 1
+
+
 
 
     def construct_dataset(self, train = 0.70, val = 0.15, dataset_dir = '../../../Datasets/OCID-dataset'):
@@ -236,6 +262,8 @@ class ObjectVsBackgroundDataset(Dataset):
             self.construct_OCID_dataset(train, val, dataset_dir)
         elif 'wisdom' in dataset_dir:
             self.construct_WISDOM_dataset(train, val, dataset_dir)
+        elif 'SAMS' in dataset_dir:
+            self.construct_SAMS_dataset(train, val, dataset_dir)
 
     def process_label_image(self, label_path):
         # Removes the table and background from the label images and saves the output image at target_path
@@ -339,89 +367,94 @@ class ObjectVsBackgroundDataset(Dataset):
         return image
 
 ## SETUP ##
-#
+
 # import tensorflow as tf
 # config = tf.ConfigProto()
 # config.gpu_options.allow_growth = True
 # sess = tf.Session(config=config)
 #
-# # training_dataset = ObjectVsBackgroundDataset()
-# # # training_dataset.construct_dataset()
-# # training_dataset.load_dataset('train_set', dataset_dir='hybrid_dataset')
-# # training_dataset.prepare()
+# training_dataset = ObjectVsBackgroundDataset()
+# # training_dataset.construct_dataset(dataset_dir = '../../../Datasets/SAMS-Dataset')
+# training_dataset.load_dataset('train_set', dataset_dir='sams_dataset')
+# training_dataset.prepare()
 #
 # validating_dataset = ObjectVsBackgroundDataset()
-# validating_dataset.load_dataset('val_set', dataset_dir='hybrid_dataset')
+# validating_dataset.load_dataset('val_set', dataset_dir='sams_dataset')
 # validating_dataset.prepare()
 #
-# # testing_dataset = ObjectVsBackgroundDataset()
-# # testing_dataset.load_dataset('test_set', dataset_dir='hybrid_dataset')
-# # testing_dataset.prepare()
+# testing_dataset = ObjectVsBackgroundDataset()
+# testing_dataset.load_dataset('test_set', dataset_dir='sams_dataset')
+# testing_dataset.prepare()
 #
-# # config = ObjectVsBackgroundConfig()
-# # channel_means = np.array(training_dataset.get_channel_means())
-# # config.MEAN_PIXEL = np.around(channel_means, decimals = 1)
-# # config.display()
+# config = ObjectVsBackgroundConfig()
+# channel_means = np.array(training_dataset.get_channel_means())
+# config.MEAN_PIXEL = np.around(channel_means, decimals = 1)
+# config.display()
 # inference_config = InferenceConfig()
-#
-#
-# # # # ##### TRAINING #####
+
+
+# # # ##### TRAINING #####
 # #
-# # MODEL_DIR = "models"
-# # # COCO_MODEL_PATH = os.path.join("models", "mask_rcnn_object_vs_background_100_heads_50_all.h5")
-# # COCO_MODEL_PATH = os.path.join("models", "mask_rcnn_coco.h5")
-# # model = modellib.MaskRCNN(mode="training", config=config,
-# #                              model_dir=MODEL_DIR)
-# #
+# MODEL_DIR = "models"
+# # COCO_MODEL_PATH = os.path.join("models", "mask_rcnn_object_vs_background_100_heads_50_all.h5")
+# COCO_MODEL_PATH = os.path.join("models", "mask_rcnn_object_vs_background_HYBRID-50_head_50_all.h5")
+# model = modellib.MaskRCNN(mode="training", config=config,
+#                              model_dir=MODEL_DIR)
+#
 # # model.load_weights(COCO_MODEL_PATH, by_name=True,
 # #                       exclude=["conv1", "mrcnn_class_logits", "mrcnn_bbox_fc",
 # #                                "mrcnn_bbox", "mrcnn_mask"])
-# # # model.load_weights(COCO_MODEL_PATH, by_name=True)
+# model.load_weights(COCO_MODEL_PATH, by_name=True)
+#
+# # model.train(training_dataset, validating_dataset,
+# #                learning_rate=config.LEARNING_RATE/5, #0.001/5
+# #                epochs=50,
+# #                layers=r"(conv1)|(mrcnn\_.*)|(rpn\_.*)|(fpn\_.*)")
+#
+# model.train(training_dataset, validating_dataset,
+#                 learning_rate=config.LEARNING_RATE,
+#                 epochs=50,
+#                 layers="all")
+#
+# model.train(training_dataset, validating_dataset,
+#                 learning_rate=config.LEARNING_RATE/2,
+#                 epochs=100,
+#                 layers="all")
 # #
 # # model.train(training_dataset, validating_dataset,
 # #                learning_rate=config.LEARNING_RATE,
-# #                epochs=50,
+# #                epochs=100,
 # #                layers=r"(conv1)|(mrcnn\_.*)|(rpn\_.*)|(fpn\_.*)")
 # #
 # # model.train(training_dataset, validating_dataset,
 # #                 learning_rate=config.LEARNING_RATE/10,
-# #                 epochs=100,
+# #                 epochs=250,
 # #                 layers="all")
-# # #
-# # # model.train(training_dataset, validating_dataset,
-# # #                learning_rate=config.LEARNING_RATE,
-# # #                epochs=100,
-# # #                layers=r"(conv1)|(mrcnn\_.*)|(rpn\_.*)|(fpn\_.*)")
-# # #
-# # # model.train(training_dataset, validating_dataset,
-# # #                 learning_rate=config.LEARNING_RATE/10,
-# # #                 epochs=250,
-# # #                 layers="all")
-# #
-# # model_path = os.path.join(MODEL_DIR, "mask_rcnn_object_vs_background_HYBRID-50_head_50_all.h5")
-# # model.keras_model.save_weights(model_path)
-# #
+#
+# model_path = os.path.join(MODEL_DIR, "mask_rcnn_object_vs_background_HYBRID-Weights_SAMS-50_head_50_all.h5")
+# model.keras_model.save_weights(model_path)
+#
 # # # # ##### TESTING #####
-#
-# MODEL_DIR = "models"
-# model_path = os.path.join(MODEL_DIR, "mask_rcnn_object_vs_background_HYBRID-50_head_50_all.h5")
-# model = modellib.MaskRCNN(mode="inference",
-#                            config=inference_config,
-#                            model_dir=MODEL_DIR)
-# model.load_weights(model_path, by_name=True)
-# image_ids = random.choices(validating_dataset.image_ids, k=15)
-# for image_id in image_ids:
-#      original_image, image_meta, gt_class_id, gt_bbox, gt_mask =\
-#          modellib.load_image_gt(validating_dataset, inference_config,
-#                                 image_id, use_mini_mask=False)
-#      # visualize.display_instances(original_image, gt_bbox, gt_mask, gt_class_id,
-#      #                        validating_dataset.class_names, figsize=(8, 8))
-#
-#      print(validating_dataset.image_info[image_id]['label_path'])
-#      results = model.detect([original_image], verbose=1)
-#      r = results[0]
-#      # image = testing_dataset.get_mask_overlay(original_image[:,:,0:3], r['masks'], r['scores'], 0.96)
-#      # plt.imshow(image)
-#      # plt.show()
-#      visualize.display_instances(original_image, r['rois'], r['masks'], r['class_ids'],
-#                                 validating_dataset.class_names, r['scores'],show_bbox=True, thresh = 0.95)
+# #
+# # MODEL_DIR = "models"
+# # model_path = os.path.join(MODEL_DIR, "mask_rcnn_object_vs_background_SAMS-20-epochs.h5")
+# # model = modellib.MaskRCNN(mode="inference",
+# #                            config=inference_config,
+# #                            model_dir=MODEL_DIR)
+# # model.load_weights(model_path, by_name=True)
+# # image_ids = random.choices(testing_dataset.image_ids, k=15)
+# # for image_id in image_ids:
+# #      original_image, image_meta, gt_class_id, gt_bbox, gt_mask =\
+# #          modellib.load_image_gt(testing_dataset, inference_config,
+# #                                 image_id, use_mini_mask=False)
+# #      # visualize.display_instances(original_image, gt_bbox, gt_mask, gt_class_id,
+# #      #                        validating_dataset.class_names, figsize=(8, 8))
+# #
+# #      print(testing_dataset.image_info[image_id]['label_path'])
+# #      results = model.detect([original_image], verbose=1)
+# #      r = results[0]
+# #      # image = testing_dataset.get_mask_overlay(original_image[:,:,0:3], r['masks'], r['scores'], 0.96)
+# #      # # plt.imshow(image)
+# #      # # plt.show()
+# #      visualize.display_instances(original_image, r['rois'], r['masks'], r['class_ids'],
+# #                                 testing_dataset.class_names, r['scores'],show_bbox=True, thresh = 0.95)
