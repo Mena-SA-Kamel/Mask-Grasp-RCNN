@@ -594,6 +594,7 @@ def generate_anchors(scales, ratios, shape, feature_stride, anchor_stride):
         value is 2 then generate anchors for every other feature map pixel.
     """
     # Get all combinations of scales and ratios
+
     scales, ratios = np.meshgrid(np.array(scales), np.array(ratios))
     scales = scales.flatten()
     ratios = ratios.flatten()
@@ -639,6 +640,27 @@ def generate_pyramid_anchors(scales, ratios, feature_shapes, feature_strides,
     for i in range(len(scales)):
         anchors.append(generate_anchors(scales[i], ratios, feature_shapes[i],
                                         feature_strides[i], anchor_stride))
+
+    # Visualizing Anchor locations and sizes
+    # import matplotlib.pyplot as plt
+    # import matplotlib.patches as patches
+    # import numpy as np
+    # img = np.zeros([384, 384, 3], dtype=np.uint8)
+    # img.fill(255)
+    # fig, ax = plt.subplots(1)
+    # ax.imshow(img)
+    # count = 0
+    # for k in anchors[4][4:9]:
+    #     y1, x1, y2, x2 = k
+    #     w = np.abs(x2-x1)
+    #     h = np.abs(y2-y1)
+    #     x = int((x1 + x2)/2)
+    #     y = int((y1+y2)/2)
+    #     rect = patches.Rectangle((x, y), w, h, linewidth=1, edgecolor='r', facecolor='none')
+    #     # Add the patch to the Axes
+    #     ax.add_patch(rect)
+    # plt.show()
+
     return np.concatenate(anchors, axis=0)
 
 

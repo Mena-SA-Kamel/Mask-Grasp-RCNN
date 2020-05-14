@@ -58,7 +58,7 @@ frame_count = 0
 
 inference_config = InferenceConfig()
 MODEL_DIR = "models"
-model_path = os.path.join(MODEL_DIR, "mask_rcnn_object_vs_background_SAMS-20-epochs.h5")
+model_path = os.path.join(MODEL_DIR, "mask_rcnn_object_vs_background_0020.h5")
 model = modellib.MaskRCNN(mode="inference",
                           config=inference_config,
                           model_dir=MODEL_DIR)
@@ -99,7 +99,7 @@ try:
         rgbd_image[:, :, 3] = depth_scaled
         results = model.detect([rgbd_image], verbose=0)
         r = results[0]
-        masked_image = get_mask_overlay(rgbd_image[:,:,0:3], r['masks'], r['scores'], threshold=0.9)
+        masked_image = get_mask_overlay(rgbd_image[:,:,0:3], r['masks'], r['scores'], threshold=0.95)
         depth_3_channel = cv2.cvtColor(depth_scaled,cv2.COLOR_GRAY2BGR)
         images = np.hstack((color_image, depth_3_channel, masked_image))
         cv2.namedWindow('Align Example', cv2.WINDOW_AUTOSIZE)
@@ -124,7 +124,7 @@ try:
                 print ('####################\n')
                 print ('frames per minute:', frame_count)
                 print('####################\n')
-                break
+                # break
         frame_count = frame_count + 1
         # Press esc or 'q' to close the image window
 

@@ -18,28 +18,9 @@ from mrcnn.model import log
 from object_vs_background import InferenceConfig
 from object_vs_background import ObjectVsBackgroundDataset
 
-# Compute VOC-style Average Precision
-def compute_batch_ap(image_ids):
-    APs = []
-    for image_id in image_ids:
-        # Load image
-        image, image_meta, gt_class_id, gt_bbox, gt_mask =\
-            modellib.load_image_gt(validating_dataset, config,
-                                   image_id, use_mini_mask=False)
-        # Run object detection
-        results = model.detect([image], verbose=0)
-        # Compute AP
-        r = results[0]
-        AP, precisions, recalls, overlaps =\
-            utils.compute_ap(gt_bbox, gt_class_id, gt_mask,
-                              r['rois'], r['class_ids'], r['scores'], r['masks'])
-        APs.append(AP)
-    return APs
-
-
 # Directory to save logs and trained model
 MODEL_DIR = "models"
-MASKRCNN_MODEL_PATH = os.path.join(MODEL_DIR, "mask_rcnn_object_vs_background_20_heads_20_all_new_dataset.h5")
+MASKRCNN_MODEL_PATH = os.path.join(MODEL_DIR, "mask_rcnn_object_vs_background_0020.h5")
 config = InferenceConfig()
 config.display()
 DEVICE = "/gpu:0"
@@ -61,42 +42,10 @@ weights_path = MASKRCNN_MODEL_PATH
 print("Loading weights ", weights_path)
 model.load_weights(weights_path, by_name=True)
 
-image_ids = random.choices(validating_dataset.image_ids, k=10)
+image_ids = random.choices(validating_dataset.image_ids, k=1)
 for image_id in image_ids:
     image, image_meta, gt_class_id, gt_bbox, gt_mask =\
         modellib.load_image_gt(validating_dataset, config, image_id, use_mini_mask=False)
-    info = validating_dataset.image_info[image_id]
-    print("image ID: {}.{} ({}) {}".format(info["source"], info["id"], image_id,
-                                           validating_dataset.image_reference(image_id)))
-
-    # Run object detection
-    results = model.detect([image], verbose=1)
-
-    # Display results
-    r = results[0]
-    visualize.display_instances(image[:,:,0:3], r['rois'], r['masks'], r['class_ids'],
-                                validating_dataset.class_names, r['scores'],
-                                title="Predictions")
-    log("gt_class_id", gt_class_id)
-    log("gt_bbox", gt_bbox)
-    log("gt_mask", gt_mask)
-
-## Evaluation
-# # Draw precision-recall curve
-# AP, precisions, recalls, overlaps = utils.compute_ap(gt_bbox, gt_class_id, gt_mask,
-#                                           r['rois'], r['class_ids'], r['scores'], r['masks'])
-# visualize.plot_precision_recall(AP, precisions, recalls)
-#
-#
-# # Grid of ground truth objects and their predictions
-# visualize.plot_overlaps(gt_class_id, r['class_ids'], r['scores'],
-#                         overlaps, validating_dataset.class_names)
-
-
-# Calculating mean average precision (mAP)
-# image_ids = np.random.choice(validating_dataset.image_ids, 10)
-# APs = compute_batch_ap(image_ids)
-# print("mAP @ IoU=50: ", np.mean(APs))
 
 # Validating RPN
 # Generate RPN trainig targets
