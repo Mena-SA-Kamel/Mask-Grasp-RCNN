@@ -26,7 +26,6 @@ def convert_to_depth_image(pcd, pcd_path = ''):
         i += 1
     return img
 
-
 cornell_dataset_path = '../../../Datasets/Cornell-Dataset/Raw Dataset/10'
 image_paths = glob.glob(cornell_dataset_path + '/**/*.png', recursive=True)
 
