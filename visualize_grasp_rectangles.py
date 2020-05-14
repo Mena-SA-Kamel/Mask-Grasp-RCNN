@@ -6,6 +6,7 @@ import matplotlib.patches as patches
 import glob
 import open3d as o3d
 import skimage.io
+import math
 
 def convert_to_depth_image(pcd, pcd_path = ''):
     xyz_load = np.asarray(pcd.points)
@@ -26,7 +27,31 @@ def convert_to_depth_image(pcd, pcd_path = ''):
         i += 1
     return img
 
-cornell_dataset_path = '../../../Datasets/Cornell-Dataset/Raw Dataset/10'
+def get_five_dimensional_box(coordinates):
+    x_coordinates = coordinates[:, 0]
+    y_coordinates = coordinates[:, 1]
+    gripper_orientation = coordinates[:2, :]
+
+    x = int((np.max(x_coordinates) - np.min(x_coordinates)) / 2) + np.min(x_coordinates)
+    y = int((np.max(y_coordinates) - np.min(y_coordinates)) / 2) + np.min(y_coordinates)
+
+    # Gripper opening distance
+    w = np.linalg.norm(gripper_orientation[0] - gripper_orientation[1])
+
+    # Gripper width - Cross product betwee
+    # h = np.cross(p2-p1, p1-p3)/norm(p2-p1)
+    p1 = gripper_orientation[0]
+    p2 = gripper_orientation[1]
+    p3 = rectange_class[i][2, :]
+    h = np.cross(p2 - p1, p3 - p1) / np.linalg.norm(p2 - p1)
+
+    deltaY = gripper_orientation[0][1] - gripper_orientation[1][1]
+    deltaX = gripper_orientation[0][0] - gripper_orientation[1][0]
+    theta = -1 * np.arctan2(deltaY, deltaX) * 180 / math.pi
+    return [x,y,w,h,theta]
+
+
+cornell_dataset_path = '../../../Datasets/Cornell-Dataset/Raw Dataset/06'
 image_paths = glob.glob(cornell_dataset_path + '/**/*.png', recursive=True)
 
 for i in list(range(len(image_paths))):
@@ -89,6 +114,16 @@ for image_name in image_paths:
 
         for i in list(range(rectange_class.shape[0])):
             rect = patches.Polygon(np.array(rectange_class[i]), linewidth=1, edgecolor=colors[j], facecolor='none')
+            gripper_orientation = rectange_class[i][:2, :]
+
+            x, y, w, h, theta = get_five_dimensional_box(rectange_class[i])
+
+            title =  ('x = %d, y = %d, w = %d, h = %d, theta = %d' %(x,y,w,h,theta))
+
+            ax2.plot(gripper_orientation[:, 0], gripper_orientation[:, 1], linewidth=1, color='c')
+            ax2.scatter([x],[y], linewidth=2, color='k')
             ax2.add_patch(rect)
+            ax2.set_title(title)
+
         j += 1
     plt.show()

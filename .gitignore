@@ -3,6 +3,7 @@ ocid_dataset/
 wisdom_dataset/
 hybrid_dataset/
 sams_dataset/
+cornell_grasping_dataset/
 models/
 videos/
 logs/

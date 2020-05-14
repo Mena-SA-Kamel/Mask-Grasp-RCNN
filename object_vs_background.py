@@ -433,7 +433,7 @@ model.keras_model.save_weights(model_path)
 #      original_image, image_meta, gt_class_id, gt_bbox, gt_mask =\
 #          modellib.load_image_gt(testing_dataset, inference_config,
 #                                 image_id, use_mini_mask=False)
-#      visualize.display_instances(original_image, gt_bbox, gt_mask, gt_class_id,
+#       visualize.display_instances(original_image, gt_bbox, gt_mask, gt_class_id,
 #                             validating_dataset.class_names, figsize=(8, 8))
 
      # print(testing_dataset.image_info[image_id]['label_path'])
