@@ -22,6 +22,7 @@ import skimage.transform
 import urllib.request
 import shutil
 import warnings
+import cv2
 from distutils.version import LooseVersion
 
 # URL from which to download the latest COCO trained weights
@@ -493,6 +494,26 @@ def resize_image(image, min_dim=None, max_dim=None, min_scale=None, mode="square
     else:
         raise Exception("Mode {} not supported".format(mode))
     return image.astype(image_dtype), window, scale, padding, crop
+
+def resize_bbox(window, bbox_vertices, original_shape):
+    """ Resizes the bounding_boxes specified by bbox_vertices using the affine transformation
+    window: (y1, x1, y2, x2).
+    """
+    width = original_shape[1]
+    height = original_shape[0]
+    original_points = np.float32([[0,0], [0, height - 1], [width - 1, 0] ])
+
+    # window
+    y1, x1, y2, x2 = window
+    # final_points = np.float32([[y1, x1], [y2-1, x1], [y1, x2-1]])
+    final_points = np.float32([[x1, y1], [x1, y2-1], [x2-1, y1]])
+    transformation_matrix = cv2.getAffineTransform(original_points, final_points)
+    resized_bbox_vertices = []
+    for box in bbox_vertices:
+        box = np.array([np.float32(box)])
+        resized_bbox_vertices.extend(cv2.transform(box, transformation_matrix).astype(int))
+    resized_bbox_vertices = np.array(resized_bbox_vertices)
+    return resized_bbox_vertices
 
 
 def resize_mask(mask, scale, padding, crop=None):

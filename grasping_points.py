@@ -12,11 +12,12 @@ import numpy as np
 import os
 import glob
 from shutil import copyfile
-import matplotlib.image as mpimg
 import matplotlib.pyplot as plt
 import skimage.io
 from PIL import Image
 import open3d as o3d
+import math
+import matplotlib.patches as patches
 
 # Extending the mrcnn.config class to update the default variables
 class GraspingPointsConfig(Config):
@@ -57,7 +58,7 @@ class GraspingPointsDataset(Dataset):
             depth_path = image.replace('rgb', 'depth')
             positive_grasp_points = image.replace('r.png', 'cpos.txt').replace('rgb', 'grasp_rectangles')
             negative_grasp_points = image.replace('r.png', 'cneg.txt').replace('rgb', 'grasp_rectangles')
-            self.add_image("object_vs_background", image_id = id, path = rgb_path,
+            self.add_image("grasping_points", image_id = id, path = rgb_path,
                            depth_path = depth_path, positive_points = positive_grasp_points,
                            negative_points = negative_grasp_points)
             id = id + 1
@@ -161,12 +162,130 @@ class GraspingPointsDataset(Dataset):
                 copyfile(source_negative_rect_path, target_neg_rect_path)
             i = i + 1
 
+    def load_ground_truth_bbox_files(self, image_id):
+        positive_rectangles_path = self.image_info[image_id]['positive_points']
+        negative_rectangles_path = self.image_info[image_id]['negative_points']
+
+        with open(positive_rectangles_path) as f:
+            positive_rectangles = f.readlines()
+        with open(negative_rectangles_path) as f:
+            negative_rectangles = f.readlines()
+
+        bounding_boxes_formatted = []
+        vertices = []
+        class_ids = []
+
+        class_id = 0
+        for bounding_box_class in [negative_rectangles, positive_rectangles]:
+            i = 0
+            for bounding_box in bounding_box_class:
+                x = int(float(bounding_box.split(' ')[0]))
+                y = int(float(bounding_box.split(' ')[1]))
+                vertices.append([x, y])
+                i += 1
+                if i % 4 == 0:
+                    bounding_boxes_formatted.append(vertices)
+                    class_ids.append(class_id)
+                    vertices = []
+            class_id += 1
+        return np.array(bounding_boxes_formatted), class_ids
+
+    def get_five_dimensional_box(self, coordinates):
+        x_coordinates = coordinates[:, 0]
+        y_coordinates = coordinates[:, 1]
+        gripper_orientation = coordinates[:2, :]
+
+        x = int((np.max(x_coordinates) - np.min(x_coordinates)) / 2) + np.min(x_coordinates)
+        y = int((np.max(y_coordinates) - np.min(y_coordinates)) / 2) + np.min(y_coordinates)
+
+        # Gripper opening distance
+        w = np.abs(np.linalg.norm(gripper_orientation[0] - gripper_orientation[1]))
+
+        # Gripper width - Cross product betwee
+        # h = np.cross(p2-p1, p1-p3)/norm(p2-p1)
+        p1 = gripper_orientation[0]
+        p2 = gripper_orientation[1]
+        p3 = coordinates[2, :]
+        h = np.abs(np.cross(p2 - p1, p3 - p1) / np.linalg.norm(p2 - p1))
+
+        deltaY = gripper_orientation[0][1] - gripper_orientation[1][1]
+        deltaX = gripper_orientation[0][0] - gripper_orientation[1][0]
+        theta = -1 * np.arctan2(deltaY, deltaX) * 180 / math.pi
+
+        return [x, y, w, h, theta]
+
+    def visualize_bbox(self, image_id, bounding_box, class_id, bbox_5_dimensional, rgbd_image = []):
+        x, y, w, h, theta = bbox_5_dimensional
+        if rgbd_image == []:
+            rgbd_image = self.load_image(image_id)
+        fig2, ax2 = plt.subplots(1)
+        ax2.imshow(rgbd_image)
+        ax2.set_title('Visualizing rectangles')
+        colors = ['r', 'g']
+        rect = patches.Polygon(np.array(bounding_box), linewidth=1, edgecolor=colors[class_id], facecolor='none')
+        ax2.plot(bounding_box[2:, 0], bounding_box[2:, 1], linewidth=1, color='b')
+        ax2.scatter([x], [y], linewidth=1.25, color='k')
+        title = ('x = %d, y = %d, w = %d, h = %d, theta = %d' % (x, y, w, h, theta))
+        ax2.add_patch(rect)
+        ax2.set_title(title)
+        plt.show()
+
+    def bbox_convert_to_five_dimension(self, bounding_box_vertices):
+        bbox_5_dimensional = []
+        i = 0
+        for bounding_box in bounding_box_vertices:
+            x, y, w, h, theta = self.get_five_dimensional_box(bounding_box)
+            bbox_5_dimensional.append([x, y, w, h, theta])
+            # self.visualize_bbox(image_id, bounding_box, class_ids[i], [x, y, w, h, theta])
+            i += 1
+        bbox_5_dimensional = np.array(bbox_5_dimensional)
+        return bbox_5_dimensional
+
+
+    def load_bounding_boxes(self, image_id):
+        # bounding boxes here have a shape of N x 4 x 2, consisting of four vertices per rectangle given N rectangles
+        bounding_box_vertices, class_ids = self.load_ground_truth_bbox_files(image_id)
+        bbox_5_dimensional = self.bbox_convert_to_five_dimension(bounding_box_vertices)
+
+        class_ids = np.array(class_ids)
+        bounding_box_vertices = np.array(bounding_box_vertices)
+        p = np.random.permutation(len(class_ids))
+        return bounding_box_vertices[p], bbox_5_dimensional[p], class_ids[p].astype('uint8')
+
+
+
+
 # SETUP ##
 import tensorflow as tf
 config = tf.ConfigProto()
 config.gpu_options.allow_growth = True
 sess = tf.Session(config=config)
 
+# Directory to save logs and trained model
+MODEL_DIR = "models"
+MASKRCNN_MODEL_PATH = os.path.join(MODEL_DIR, "mask_rcnn_object_vs_background_0020.h5")
+config = InferenceConfig()
+config.display()
+DEVICE = "/gpu:0"
+TEST_MODE = "inference"
+
 training_dataset = GraspingPointsDataset()
 # training_dataset.construct_dataset()
 training_dataset.load_dataset()
+training_dataset.prepare()
+
+# Create model in inference mode
+with tf.device(DEVICE):
+    model = modellib.MaskRCNN(mode="inference", model_dir=MODEL_DIR,
+                              config=config)
+
+weights_path = MASKRCNN_MODEL_PATH
+
+# Load weights
+print("Loading weights ", weights_path)
+model.load_weights(weights_path, by_name=True)
+
+image_ids = random.choices(training_dataset.image_ids, k=1)
+for image_id in image_ids:
+    image, image_meta, gt_class_id, gt_bbox, gt_mask =\
+        modellib.load_image_gt(training_dataset, config, image_id, use_mini_mask=False, mode='grasping_points')
