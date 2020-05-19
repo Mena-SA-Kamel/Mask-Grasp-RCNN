@@ -604,7 +604,7 @@ def unmold_mask(mask, bbox, image_shape):
 #  Anchors
 ############################################################
 
-def generate_anchors(scales, ratios, shape, feature_stride, anchor_stride):
+def generate_anchors(scales, ratios, shape, feature_stride, anchor_stride, mode='', angles=[]):
     """
     scales: 1D array of anchor sizes in pixels. Example: [32, 64, 128]
     ratios: 1D array of anchor ratios of width/height. Example: [0.5, 1, 2]
@@ -615,6 +615,9 @@ def generate_anchors(scales, ratios, shape, feature_stride, anchor_stride):
         value is 2 then generate anchors for every other feature map pixel.
     """
     # Get all combinations of scales and ratios
+
+    if mode == 'grasping_points':
+        return generate_grasping_anchors(scales, ratios, shape, feature_stride, anchor_stride, angles)
 
     scales, ratios = np.meshgrid(np.array(scales), np.array(ratios))
     scales = scales.flatten()
@@ -644,8 +647,45 @@ def generate_anchors(scales, ratios, shape, feature_stride, anchor_stride):
     return boxes
 
 
+def generate_grasping_anchors(scales, ratios, shape, feature_stride, anchor_stride, thetas):
+    """
+    scales: 1D array of anchor sizes in pixels. Example: [32, 64, 128]
+    ratios: 1D array of anchor ratios of width/height. Example: [0.5, 1, 2]
+    shape: [height, width] spatial shape of the feature map over which
+            to generate anchors.
+    feature_stride: Stride of the feature map relative to the image in pixels.
+    anchor_stride: Stride of anchors on the feature map. For example, if the
+        value is 2 then generate anchors for every other feature map pixel.
+    """
+    # Main goal - Get bbox in the form {x, y, w, h, theta}
+    scales, ratios = np.meshgrid(np.array(scales), np.array(ratios))
+    scales = scales.flatten()
+    ratios = ratios.flatten()
+
+    # Enumerate heights and widths from scales and ratios
+    heights = scales / np.sqrt(ratios)
+    widths = scales * np.sqrt(ratios)
+
+    # Enumerate shifts in feature space
+    shifts_y = np.arange(0, shape[0], anchor_stride) * feature_stride
+    shifts_x = np.arange(0, shape[1], anchor_stride) * feature_stride
+
+    box_sizes = np.stack([heights, widths], axis = 1)
+
+    boxes = np.array(np.meshgrid(shifts_x, shifts_y, ratios, thetas)).T.reshape(-1, 4)
+    final_boxes = np.zeros((boxes.shape[0], 5))
+    j = 0
+    for i in ratios:
+        final_boxes[boxes[:, 2] == i, 2:4] = box_sizes[j]
+        j += 1
+    final_boxes[:,0:2] = boxes[:,0:2]
+    final_boxes[:,-1] = boxes[:,-1]
+
+    return final_boxes
+
+
 def generate_pyramid_anchors(scales, ratios, feature_shapes, feature_strides,
-                             anchor_stride):
+                             anchor_stride, mode='', angles=[]):
     """Generate anchors at different levels of a feature pyramid. Each scale
     is associated with a level of the pyramid, but each ratio is used in
     all levels of the pyramid.
@@ -660,8 +700,12 @@ def generate_pyramid_anchors(scales, ratios, feature_shapes, feature_strides,
     anchors = []
     for i in range(len(scales)):
         anchors.append(generate_anchors(scales[i], ratios, feature_shapes[i],
-                                        feature_strides[i], anchor_stride))
-
+                                        feature_strides[i], anchor_stride, mode, angles))
+    # bbox_resized_reconstructed = dataset.bbox_convert_to_four_vertices(bbox_resize_5_dimensional[i])
+    #     dataset.visualize_bbox(image_id, bbox_resized[i], class_ids[i], bbox_resize_5_dimensional[i], image)
+    #     dataset.visualize_bbox(image_id, bbox_resized_reconstructed[0], class_ids[i], bbox_resize_5_dimensional[i], image)
+    #     import code;
+    #     code.interact(local=dict(globals(), **locals()))
     # Visualizing Anchor locations and sizes
     # import matplotlib.pyplot as plt
     # import matplotlib.patches as patches
@@ -896,7 +940,7 @@ def download_trained_weights(coco_model_path, verbose=1):
         print("... done downloading pretrained model!")
 
 
-def norm_boxes(boxes, shape):
+def norm_boxes(boxes, shape, mode=''):
     """Converts boxes from pixel coordinates to normalized coordinates.
     boxes: [N, (y1, x1, y2, x2)] in pixel coordinates
     shape: [..., (height, width)] in pixels
@@ -908,9 +952,13 @@ def norm_boxes(boxes, shape):
         [N, (y1, x1, y2, x2)] in normalized coordinates
     """
     h, w = shape
-    scale = np.array([h - 1, w - 1, h - 1, w - 1])
-    shift = np.array([0, 0, 1, 1])
-    return np.divide((boxes - shift), scale).astype(np.float32)
+    if mode == 'grasping_points':
+        scale = np.array([h - 1, w - 1, h - 1, w - 1, 1])
+        return np.divide(boxes, scale)
+    else:
+        scale = np.array([h - 1, w - 1, h - 1, w - 1])
+        shift = np.array([0, 0, 1, 1])
+        return np.divide((boxes - shift), scale).astype(np.float32)
 
 
 def denorm_boxes(boxes, shape):

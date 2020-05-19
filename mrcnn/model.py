@@ -1228,9 +1228,7 @@ def load_image_gt(dataset, config, image_id, augment=False, augmentation=None,
         mode=config.IMAGE_RESIZE_MODE)
     if mode == 'grasping_points':
         bbox_resized = utils.resize_bbox(window, bbox_vertices, original_shape)
-        bbox_resize_5_dimensional = dataset.bbox_convert_to_five_dimension(bbox_resized)
-        # for i in list(range(len(class_ids))):
-        #     dataset.visualize_bbox(image_id, bbox_resized[i], class_ids[i], bbox_resize_5_dimensional[i], image)
+        bbox_resize_5_dimensional = dataset.bbox_convert_to_five_dimension(bbox_resized, image_id)
     else:
         mask = utils.resize_mask(mask, scale, padding, crop)
 
@@ -2619,7 +2617,7 @@ class MaskRCNN():
             })
         return results
 
-    def get_anchors(self, image_shape):
+    def get_anchors(self, image_shape, mode=''):
         """Returns anchor pyramid for the given image size."""
         backbone_shapes = compute_backbone_shapes(self.config, image_shape)
 
@@ -2633,13 +2631,14 @@ class MaskRCNN():
                 self.config.RPN_ANCHOR_RATIOS,
                 backbone_shapes,
                 self.config.BACKBONE_STRIDES,
-                self.config.RPN_ANCHOR_STRIDE)
+                self.config.RPN_ANCHOR_STRIDE,
+                mode)
             # Keep a copy of the latest anchors in pixel coordinates because
             # it's used in inspect_model notebooks.
             # TODO: Remove this after the notebook are refactored to not use it
             self.anchors = a
             # Normalize coordinates
-            self._anchor_cache[tuple(image_shape)] = utils.norm_boxes(a, image_shape[:2])
+            self._anchor_cache[tuple(image_shape)] = utils.norm_boxes(a, image_shape[:2], mode)
         return self._anchor_cache[tuple(image_shape)]
 
     def ancestor(self, tensor, name, checked=None):
