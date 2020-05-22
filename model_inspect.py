@@ -51,8 +51,14 @@ for image_id in image_ids:
 # Generate RPN trainig targets
 # target_rpn_match is 1 for positive anchors, -1 for negative anchors
 # and 0 for neutral anchors.
+backbone_shapes = modellib.compute_backbone_shapes(config, config.IMAGE_SHAPE)
+anchors = utils.generate_pyramid_anchors(config.RPN_ANCHOR_SCALES,
+                                          config.RPN_ANCHOR_RATIOS,
+                                          backbone_shapes,
+                                          config.BACKBONE_STRIDES,
+                                          config.RPN_ANCHOR_STRIDE)
 target_rpn_match, target_rpn_bbox = modellib.build_rpn_targets(
-    image.shape, model.anchors, gt_class_id, gt_bbox, model.config)
+    image.shape, anchors, gt_class_id, gt_bbox, model.config)
 log("target_rpn_match", target_rpn_match)
 log("target_rpn_bbox", target_rpn_bbox)
 

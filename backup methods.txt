@@ -1,0 +1,37 @@
+
+
+    bbox_sides = np.array([[gt_bbox_vertices[0], gt_bbox_vertices[1]],
+                          [gt_bbox_vertices[1], gt_bbox_vertices[2]],
+                          [gt_bbox_vertices[2], gt_bbox_vertices[3]],
+                          [gt_bbox_vertices[3], gt_bbox_vertices[0]]])
+
+    anchor_centers = anchors[:,0:2]
+    anchor_x = anchor_centers[:, 0]
+    anchor_y = anchor_centers[:, 1]
+
+    matches = np.zeros((anchors.shape[0], 1))
+    i = 0
+    for center_x, center_y in anchor_centers:
+        center_vertix = np.array([center_x,center_y])
+        bbox_sub_triangles = np.insert(bbox_sides, bbox_sides.shape[1], center_vertix, axis=1)
+        area = 0
+        for triangle in bbox_sub_triangles:
+            area = area + compute_triangle_area(triangle)
+            if area > gt_area:
+                matches[i] = -1
+                break
+            matches[i] = 1
+        i += 1
+
+    matching_anchors_index = (matches == 1).reshape(matches.shape[0])
+    anchors2 = anchors[matching_anchors_index]
+    print('Anchors left after step 2: ', str(anchors2.shape[0]))
+
+def compute_triangle_area(triangle):
+    '''
+    Computes area of triangle based on the cross product
+    '''
+    x1, y1, x2, y2, x3, y3 = triangle[0][0], triangle[0][1], \
+                             triangle[1][0], triangle[1][1], \
+                             triangle[2][0], triangle[2][1]
+    return abs(0.5 * (((x2-x1)*(y3-y1))-((x3-x1)*(y2-y1))))

@@ -1460,7 +1460,7 @@ def build_detection_targets(rpn_rois, gt_class_ids, gt_boxes, gt_masks, config):
     return rois, roi_gt_class_ids, bboxes, masks
 
 
-def build_rpn_targets(image_shape, anchors, gt_class_ids, gt_boxes, config):
+def build_rpn_targets(image_shape, anchors, gt_class_ids, gt_boxes, config, mode=''):
     """Given the anchors and GT boxes, compute overlaps and identify positive
     anchors and deltas to refine them to match their corresponding GT boxes.
 
@@ -1489,7 +1489,7 @@ def build_rpn_targets(image_shape, anchors, gt_class_ids, gt_boxes, config):
         gt_class_ids = gt_class_ids[non_crowd_ix]
         gt_boxes = gt_boxes[non_crowd_ix]
         # Compute overlaps with crowd boxes [anchors, crowds]
-        crowd_overlaps = utils.compute_overlaps(anchors, crowd_boxes)
+        crowd_overlaps = utils.compute_overlaps(anchors, crowd_boxes, config, mode)
         crowd_iou_max = np.amax(crowd_overlaps, axis=1)
         no_crowd_bool = (crowd_iou_max < 0.001)
     else:
@@ -1497,7 +1497,7 @@ def build_rpn_targets(image_shape, anchors, gt_class_ids, gt_boxes, config):
         no_crowd_bool = np.ones([anchors.shape[0]], dtype=bool)
 
     # Compute overlaps [num_anchors, num_gt_boxes]
-    overlaps = utils.compute_overlaps(anchors, gt_boxes)
+    overlaps = utils.compute_overlaps(anchors, gt_boxes, config, mode)
 
     # Match anchors to GT Boxes
     # If an anchor overlaps a GT box with IoU >= 0.7 then it's positive.
@@ -1567,7 +1567,6 @@ def build_rpn_targets(image_shape, anchors, gt_class_ids, gt_boxes, config):
         # Normalize
         rpn_bbox[ix] /= config.RPN_BBOX_STD_DEV
         ix += 1
-
     return rpn_match, rpn_bbox
 
 
@@ -2617,7 +2616,7 @@ class MaskRCNN():
             })
         return results
 
-    def get_anchors(self, image_shape, mode=''):
+    def get_anchors(self, image_shape, mode='', angles=[]):
         """Returns anchor pyramid for the given image size."""
         backbone_shapes = compute_backbone_shapes(self.config, image_shape)
 
@@ -2632,7 +2631,8 @@ class MaskRCNN():
                 backbone_shapes,
                 self.config.BACKBONE_STRIDES,
                 self.config.RPN_ANCHOR_STRIDE,
-                mode)
+                mode,
+                angles)
             # Keep a copy of the latest anchors in pixel coordinates because
             # it's used in inspect_model notebooks.
             # TODO: Remove this after the notebook are refactored to not use it

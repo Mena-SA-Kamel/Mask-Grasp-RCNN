@@ -40,7 +40,7 @@ class GraspingPointsConfig(Config):
     # MEAN_PIXEL = np.array([134.6, 125.7, 119.0, 147.6]) # Added a 4th channel. Modify the mean of the pixel depth
     MEAN_PIXEL = np.array([112.7, 112.1, 113.5, 123.5]) # Added a 4th channel. Modify the mean of the pixel depth
     MAX_GT_INSTANCES = 50
-    RPN_GRASP_ANGLES = [-60, -30, 0, 30, 60]
+    RPN_GRASP_ANGLES = [-60, -30, 0, 30, 60, 90]
 
 class InferenceConfig(GraspingPointsConfig):
     GPU_COUNT = 1
@@ -279,8 +279,6 @@ class GraspingPointsDataset(Dataset):
         return bounding_box_vertices[p], bbox_5_dimensional[p], class_ids[p].astype('uint8')
 
 
-
-
 # SETUP ##
 import tensorflow as tf
 config = tf.ConfigProto()
@@ -294,6 +292,7 @@ config = InferenceConfig()
 config.display()
 DEVICE = "/gpu:0"
 TEST_MODE = "inference"
+mode = "grasping_points"
 
 training_dataset = GraspingPointsDataset()
 # training_dataset.construct_dataset()
@@ -315,8 +314,11 @@ image_ids = random.choices(training_dataset.image_ids, k=1)
 for image_id in image_ids:
     image, image_meta, gt_class_id, gt_bbox, gt_mask =\
         modellib.load_image_gt(training_dataset, config, image_id, use_mini_mask=False, mode='grasping_points')
+    for i in list(range(len(gt_class_id))):
+        bounding_box = training_dataset.bbox_convert_to_four_vertices(gt_bbox[i])
+        # training_dataset.visualize_bbox(image_id, bounding_box[0], gt_class_id[i], gt_bbox[i], rgbd_image=image)
 
-anchors = model.get_anchors(config.IMAGE_SHAPE, mode='grasping_points')
+normalized_anchors = model.get_anchors(config.IMAGE_SHAPE, mode='grasping_points', angles=config.RPN_GRASP_ANGLES)
 
 # Generate Anchors
 mode= 'grasping_points'
@@ -329,47 +331,40 @@ anchors = utils.generate_pyramid_anchors(config.RPN_ANCHOR_SCALES,
                                           mode,
                                           config.RPN_GRASP_ANGLES)
 
+target_rpn_match, target_rpn_bbox = modellib.build_rpn_targets(
+    image.shape, model.anchors, gt_class_id, gt_bbox, model.config, mode)
 
-# import code; code.interact(local=dict(globals(), **locals()))
-num_levels = len(backbone_shapes)
-anchors_per_cell = len(config.RPN_ANCHOR_RATIOS) * len(config.RPN_GRASP_ANGLES)
-anchors_per_level = []
-for l in range(num_levels):
-    num_cells = backbone_shapes[l][0] * backbone_shapes[l][1]
-    anchors_per_level.append(anchors_per_cell * num_cells // config.RPN_ANCHOR_STRIDE**2)
-    print("Anchors in Level {}: {}".format(l, anchors_per_level[l]))
 
-## Visualize anchors of one cell at the center of the feature map of a specific level
 
-# Load and draw random image
-image_id = np.random.choice(training_dataset.image_ids, 1)[0]
-image, image_meta, _, _, _ = modellib.load_image_gt(training_dataset, config, image_id)
 
-levels = len(backbone_shapes)
-
-for level in range(levels):
-    colors = visualize.random_colors(levels)
-    # Compute the index of the anchors at the center of the image
-    # anchors[(anchors[:, 0] == [0]) & (anchors[:, 1] == [0])].shape
-    level_start = sum(anchors_per_level[:level]) # sum of anchors of previous levels
-    level_anchors = anchors[level_start:level_start+anchors_per_level[level]]
-
-    level_indexes = np.unique(level_anchors[:, 0])
-    num_indexes = len(level_indexes)
-    center_index = int(level_indexes[int(num_indexes/2)])
-    anchors_to_show = level_anchors[(level_anchors[:, 0] == [center_index]) & (level_anchors[:, 1] == [center_index])]
-
-    # Draw anchors. Brightness show the order in the array, dark to bright.
-    fig, ax = plt.subplots(1, figsize=(10, 10))
-    ax.imshow(image)
-    for i, rect in enumerate(anchors_to_show):
-        rect = training_dataset.bbox_convert_to_four_vertices(rect)
-        p = patches.Polygon(rect[0], linewidth=1,edgecolor=(i+1)*np.array(colors[level]) / anchors_per_cell,
-                            facecolor='none')
-        ax.add_patch(p)
-plt.show(block=False)
-
-# target_rpn_match, target_rpn_bbox = modellib.build_rpn_targets(
-#     image.shape, model.anchors, gt_class_id, gt_bbox, model.config)
-# log("target_rpn_match", target_rpn_match)
-# log("target_rpn_bbox", target_rpn_bbox)
+####################################### VISUALIZING ANCHORS ############################################################
+# num_levels = len(backbone_shapes)
+# anchors_per_cell = len(config.RPN_ANCHOR_RATIOS) * len(config.RPN_GRASP_ANGLES)
+# anchors_per_level = []
+# for l in range(num_levels):
+#     num_cells = backbone_shapes[l][0] * backbone_shapes[l][1]
+#     anchors_per_level.append(anchors_per_cell * num_cells // config.RPN_ANCHOR_STRIDE**2)
+#     print("Anchors in Level {}: {}".format(l, anchors_per_level[l]))
+#
+# ## Visualize anchors of one cell at the center of the feature map of a specific level
+# # Load and draw random image
+# image_id = np.random.choice(training_dataset.image_ids, 1)[0]
+# image, image_meta, _, _, _ = modellib.load_image_gt(training_dataset, config, image_id)
+# levels = len(backbone_shapes)
+#
+# for level in range(levels):
+#     colors = visualize.random_colors(levels)
+#     level_start = sum(anchors_per_level[:level]) # sum of anchors of previous levels
+#     level_anchors = anchors[level_start:level_start+anchors_per_level[level]]
+#     level_indexes = np.unique(level_anchors[:, 0])
+#     num_indexes = len(level_indexes)
+#     center_index = int(level_indexes[int(num_indexes/2)])
+#     anchors_to_show = level_anchors[(level_anchors[:, 0] == [center_index]) & (level_anchors[:, 1] == [center_index])]
+#     fig, ax = plt.subplots(1, figsize=(10, 10))
+#     ax.imshow(image)
+#     for i, rect in enumerate(anchors_to_show):
+#         rect = training_dataset.bbox_convert_to_four_vertices(rect)
+#         p = patches.Polygon(rect[0], linewidth=1,edgecolor='r',facecolor='none')
+#         ax.add_patch(p)
+#     plt.savefig(os.path.join('Grasping_anchors','P'+str(level+2)+ 'center_anchors.png'))
+# plt.show(block=False)

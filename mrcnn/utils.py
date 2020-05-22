@@ -24,6 +24,9 @@ import shutil
 import warnings
 import cv2
 from distutils.version import LooseVersion
+from matplotlib.path import Path
+import matplotlib.pyplot as plt
+import matplotlib.patches as patches
 
 # URL from which to download the latest COCO trained weights
 COCO_MODEL_URL = "https://github.com/matterport/Mask_RCNN/releases/download/v2.0/mask_rcnn_coco.h5"
@@ -80,13 +83,15 @@ def compute_iou(box, boxes, box_area, boxes_area):
     return iou
 
 
-def compute_overlaps(boxes1, boxes2):
+def compute_overlaps(boxes1, boxes2, config, mode=''):
     """Computes IoU overlaps between two sets of boxes.
     boxes1, boxes2: [N, (y1, x1, y2, x2)].
 
     For better performance, pass the largest set first and the smaller second.
     """
     # Areas of anchors and GT boxes
+
+    # Change area calculation for mode = 'grasping_points'
     area1 = (boxes1[:, 2] - boxes1[:, 0]) * (boxes1[:, 3] - boxes1[:, 1])
     area2 = (boxes2[:, 2] - boxes2[:, 0]) * (boxes2[:, 3] - boxes2[:, 1])
 
@@ -95,8 +100,136 @@ def compute_overlaps(boxes1, boxes2):
     overlaps = np.zeros((boxes1.shape[0], boxes2.shape[0]))
     for i in range(overlaps.shape[1]):
         box2 = boxes2[i]
-        overlaps[:, i] = compute_iou(box2, boxes1, area2[i], area1)
+        if mode == 'grasping_points':
+            overlaps[:, i] = compute_overlaps_grasping_rectangles(box2, boxes1, config)
+        else:
+            overlaps[:, i] = compute_iou(box2, boxes1, area2[i], area1)
+    import code;
+    code.interact(local=dict(globals(), **locals()))
     return overlaps
+
+def compute_overlaps_grasping_rectangles(gt_box, anchors, config):
+    x, y, w, h, theta = gt_box
+    gt_area = h * w
+    angle_threshold = 15
+    print('Anchors before filtering: ', str(anchors.shape[0]))
+
+    # Filtering based on center position
+    gt_bbox_vertices = bbox_convert_to_four_vertices(gt_box)
+    gt_bbox_vertices = gt_bbox_vertices[0]
+
+    anchor_vertices = anchors[:,0:2]
+    vertices_path = Path(gt_bbox_vertices)
+    matching_anchors_index1 = vertices_path.contains_points(anchor_vertices)
+    anchors_step1 = anchors[matching_anchors_index1]
+    print('Anchors left after step 1 (Center Position): ', str(anchors.shape[0]))
+
+    # Filtering based on area / scale
+    scales, ratios = np.meshgrid(config.RPN_ANCHOR_SCALES, config.RPN_ANCHOR_RATIOS)
+    anchor_areas = np.unique((scales / np.sqrt(ratios)) * (scales * np.sqrt(ratios)))
+
+    matching_area = anchor_areas[0]
+    min_diff = matching_area - gt_area
+    for area in anchor_areas:
+        difference = abs(area - gt_area)
+        if difference < min_diff:
+            min_diff = difference
+            matching_area = area
+
+    anchor_areas = anchors_step1[:, 2] * anchors_step1[:, 3]
+    matching_anchors_index2 = (anchor_areas == matching_area)
+    anchors_step2 = anchors_step1[matching_anchors_index2]
+    print('Anchors left after step 2 (Scale): ', str(anchors_step2.shape[0]))
+
+    # Filtering based on angle
+
+    anchor_angles = anchors_step2[:,-1]
+    angle_ranges = np.array([theta - angle_threshold, theta + angle_threshold])
+    allowable_angles = np.array([angle_ranges - 180,
+                                 angle_ranges,
+                                 angle_ranges + 180])
+    angle_values = np.unique(anchor_angles)
+
+    for angles in allowable_angles:
+        angle_index = np.where(np.logical_and(angle_values >= angles[0], angle_values <= angles[1]))
+        if not np.array(angle_index).size == 0:
+            matching_anchors_index3 = (anchor_angles == angle_values[angle_index])
+
+    anchors_step3 = anchors_step2[matching_anchors_index3]
+    if anchors_step3.shape[0] == 0:
+        print('Anchors all cancelled')
+        import code;
+        code.interact(local=dict(globals(), **locals()))
+    print('Anchors left after step 3 (angle): ', str(anchors_step3.shape[0]))
+
+    # Filtering based on euclidean distance
+    anchor_x = anchors_step3[:,0]
+    anchor_y = anchors_step3[:,1]
+    euclidean_distance = np.sqrt((anchor_x - x) ** 2 + (anchor_y - y) ** 2)
+    minimum_distance = np.min(euclidean_distance)
+    anchors_step4 = anchors_step3[np.where(euclidean_distance == minimum_distance)]
+    print('Anchors left after step 4 (distance): ', str(anchors_step4.shape[0]))
+
+    # Filtering based on aspect ratio
+    gt_aspect_ratio = gt_area/h**2
+    anchor_aspect_ratios = matching_area / anchors_step4[:,3]**2
+    #
+    # if gt_aspect_ratio <= 0.7:
+    #     target_ar = 0.5
+    # elif gt_aspect_ratio > 0.7 and gt_aspect_ratio <= 1.5:
+    #     target_ar = 1
+    # else:
+    #     target_ar = 2
+
+    index = 0
+    min_diff = abs(anchor_aspect_ratios[0] - gt_aspect_ratio)
+    for i in list(range(len(anchor_aspect_ratios))):
+        difference = abs(anchor_aspect_ratios[i] - gt_aspect_ratio)
+        if difference < min_diff:
+            min_diff = difference
+            index = i
+
+    final_anchor = anchors_step4[index]
+
+    image = np.zeros(config.IMAGE_SHAPE)
+    fig, ax = plt.subplots(1, figsize=(10, 10))
+    ax.imshow(image)
+    for i, rect in enumerate(anchors_step3):
+        rect = bbox_convert_to_four_vertices(rect)
+        p = patches.Polygon(rect[0], linewidth=1,edgecolor='r',facecolor='none')
+        ax.add_patch(p)
+    # plt.savefig(os.path.join('Grasping_anchors','P'+str(level+2)+ 'center_anchors.png'))
+    p = patches.Polygon(gt_bbox_vertices, linewidth=1, edgecolor='b', facecolor='none')
+    ax.add_patch(p)
+    matching_anchor_vertices = bbox_convert_to_four_vertices(final_anchor)
+    p = patches.Polygon(matching_anchor_vertices[0], linewidth=1, edgecolor='g', facecolor='none')
+    ax.add_patch(p)
+    plt.show(block=False)
+
+
+
+def bbox_convert_to_four_vertices(bbox_5_dimension):
+    x, y, w, h, theta = bbox_5_dimension
+    original_points = np.float32([[0, 0], [w - 1, 0], [w - 1, h - 1], [0, h - 1]])
+    original_points = np.array([np.float32(original_points)])
+
+    translational_matrix = np.array([[1, 0, x - (w / 2)],
+                                     [0, 1, y - (h / 2)]])
+
+    original_points_translated = cv2.transform(original_points, translational_matrix)
+    scale = 1
+    angle = theta
+    if np.sign(theta) == 1:
+        angle = angle + 90
+        if angle > 180:
+            angle = angle - 360
+    else:
+        angle = angle + 90
+
+    rotational_matrix = cv2.getRotationMatrix2D((x, y), angle + 90, scale)
+    original_points_rotated = cv2.transform(original_points_translated, rotational_matrix)
+
+    return original_points_rotated
 
 
 def compute_overlaps_masks(masks1, masks2):
