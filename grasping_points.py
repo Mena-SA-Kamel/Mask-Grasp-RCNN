@@ -41,6 +41,8 @@ class GraspingPointsConfig(Config):
     MEAN_PIXEL = np.array([112.7, 112.1, 113.5, 123.5]) # Added a 4th channel. Modify the mean of the pixel depth
     MAX_GT_INSTANCES = 50
     RPN_GRASP_ANGLES = [-60, -30, 0, 30, 60, 90]
+    RPN_BBOX_STD_DEV = np.array([0.1, 0.1, 0.2, 0.2])
+    # RPN_BBOX_MEAN = np.array([0, 0, 0, 0])
 
 class InferenceConfig(GraspingPointsConfig):
     GPU_COUNT = 1
@@ -215,7 +217,8 @@ class GraspingPointsDataset(Dataset):
         deltaY = gripper_orientation[0][1] - gripper_orientation[1][1]
         deltaX = gripper_orientation[0][0] - gripper_orientation[1][0]
         theta = -1 * np.arctan2(deltaY, deltaX) * 180 / math.pi
-
+        if theta < -90:
+            theta = theta + 180
         return [x, y, w, h, theta]
 
     def visualize_bbox(self, image_id, bounding_box, class_id, bbox_5_dimensional, rgbd_image = []):
@@ -334,6 +337,24 @@ anchors = utils.generate_pyramid_anchors(config.RPN_ANCHOR_SCALES,
 target_rpn_match, target_rpn_bbox = modellib.build_rpn_targets(
     image.shape, model.anchors, gt_class_id, gt_bbox, model.config, mode)
 
+log("target_rpn_match", target_rpn_match)
+log("target_rpn_bbox", target_rpn_bbox)
+
+positive_anchor_ix = np.where(target_rpn_match[:] == 1)[0]
+negative_anchor_ix = np.where(target_rpn_match[:] == -1)[0]
+neutral_anchor_ix = np.where(target_rpn_match[:] == 0)[0]
+positive_anchors = model.anchors[positive_anchor_ix]
+negative_anchors = model.anchors[negative_anchor_ix]
+neutral_anchors = model.anchors[neutral_anchor_ix]
+log("positive_anchors", positive_anchors)
+log("negative_anchors", negative_anchors)
+log("neutral anchors", neutral_anchors)
+
+import code;
+
+code.interact(local=dict(globals(), **locals()))
+# Apply refinement deltas to positive anchors
+refined_anchors = utils.apply_box_deltas(positive_anchors,target_rpn_bbox[:positive_anchors.shape[0]] * model.config.RPN_BBOX_STD_DEV)
 
 
 

@@ -2119,8 +2119,6 @@ class MaskRCNN():
             f = f['model_weights']
         # In multi-GPU training, we wrap the model. Get layers
         # of the inner model because they have the weights.
-        import code;
-        code.interact(local=dict(globals(), **locals()))
         keras_model = self.keras_model
 
         layers = keras_model.inner_model.layers if hasattr(keras_model, "inner_model")\

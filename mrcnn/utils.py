@@ -83,7 +83,7 @@ def compute_iou(box, boxes, box_area, boxes_area):
     return iou
 
 
-def compute_overlaps(boxes1, boxes2, config, mode=''):
+def compute_overlaps(boxes1, boxes2):
     """Computes IoU overlaps between two sets of boxes.
     boxes1, boxes2: [N, (y1, x1, y2, x2)].
 
@@ -100,61 +100,67 @@ def compute_overlaps(boxes1, boxes2, config, mode=''):
     overlaps = np.zeros((boxes1.shape[0], boxes2.shape[0]))
     for i in range(overlaps.shape[1]):
         box2 = boxes2[i]
-        if mode == 'grasping_points':
-            overlaps[:, i] = compute_overlaps_grasping_rectangles(box2, boxes1, config)
-        else:
-            overlaps[:, i] = compute_iou(box2, boxes1, area2[i], area1)
-    import code;
-    code.interact(local=dict(globals(), **locals()))
+        overlaps[:, i] = compute_iou(box2, boxes1, area2[i], area1)
     return overlaps
 
-def compute_overlaps_grasping_rectangles(gt_box, anchors, config):
+def compute_grasping_training_anchors(gt_box, anchors, config):
+    overlaps = np.zeros(anchors.shape[0])
+    anchor_indices = np.arange(anchors.shape[0]).reshape(anchors.shape[0], 1)
+    anchors = np.append(anchors, anchor_indices, axis=1)
+
     x, y, w, h, theta = gt_box
     gt_area = h * w
     angle_threshold = 15
+
+    # anchors_out_of_boundary = anchors[np.logical_not(matching_anchors_index1)]
+    euclidean_distance = np.sqrt((anchors[:, 0] - x) ** 2 + (anchors[:, 1] - y) ** 2)
+    euclidean_distance = (euclidean_distance / np.max(euclidean_distance))
+    euclidean_distance = np.interp(euclidean_distance, (euclidean_distance.min(), euclidean_distance.max()), (0, 1))
+    anchor_match_score = 1 - euclidean_distance
+    overlaps[anchor_match_score < 0.3] = -1
+
     print('Anchors before filtering: ', str(anchors.shape[0]))
 
     # Filtering based on center position
     gt_bbox_vertices = bbox_convert_to_four_vertices(gt_box)
     gt_bbox_vertices = gt_bbox_vertices[0]
-
-    anchor_vertices = anchors[:,0:2]
     vertices_path = Path(gt_bbox_vertices)
+    anchor_vertices = anchors[:, 0:2]
     matching_anchors_index1 = vertices_path.contains_points(anchor_vertices)
     anchors_step1 = anchors[matching_anchors_index1]
-    print('Anchors left after step 1 (Center Position): ', str(anchors.shape[0]))
+    print('Anchors left after step 1 (Center Position): ', str(anchors_step1.shape[0]))
 
     # Filtering based on area / scale
     scales, ratios = np.meshgrid(config.RPN_ANCHOR_SCALES, config.RPN_ANCHOR_RATIOS)
-    anchor_areas = np.unique((scales / np.sqrt(ratios)) * (scales * np.sqrt(ratios)))
-
-    matching_area = anchor_areas[0]
-    min_diff = matching_area - gt_area
-    for area in anchor_areas:
+    anchor_areas = anchors_step1[:, 2] * anchors_step1[:, 3]
+    available_areas = np.unique(anchor_areas)
+    matching_area = available_areas[0]
+    min_diff = abs(matching_area - gt_area)
+    for area in available_areas:
         difference = abs(area - gt_area)
         if difference < min_diff:
             min_diff = difference
             matching_area = area
 
-    anchor_areas = anchors_step1[:, 2] * anchors_step1[:, 3]
     matching_anchors_index2 = (anchor_areas == matching_area)
     anchors_step2 = anchors_step1[matching_anchors_index2]
     print('Anchors left after step 2 (Scale): ', str(anchors_step2.shape[0]))
 
     # Filtering based on angle
 
-    anchor_angles = anchors_step2[:,-1]
+    anchor_angles = anchors_step2[:,4]
     angle_ranges = np.array([theta - angle_threshold, theta + angle_threshold])
     allowable_angles = np.array([angle_ranges - 180,
                                  angle_ranges,
                                  angle_ranges + 180])
     angle_values = np.unique(anchor_angles)
 
+    # Finds the anchor angles that most closely match the gt_bbox theta value
     for angles in allowable_angles:
         angle_index = np.where(np.logical_and(angle_values >= angles[0], angle_values <= angles[1]))
         if not np.array(angle_index).size == 0:
-            matching_anchors_index3 = (anchor_angles == angle_values[angle_index])
-
+            break
+    matching_anchors_index3 = np.isin(anchor_angles, angle_values[angle_index])
     anchors_step3 = anchors_step2[matching_anchors_index3]
     if anchors_step3.shape[0] == 0:
         print('Anchors all cancelled')
@@ -173,13 +179,6 @@ def compute_overlaps_grasping_rectangles(gt_box, anchors, config):
     # Filtering based on aspect ratio
     gt_aspect_ratio = gt_area/h**2
     anchor_aspect_ratios = matching_area / anchors_step4[:,3]**2
-    #
-    # if gt_aspect_ratio <= 0.7:
-    #     target_ar = 0.5
-    # elif gt_aspect_ratio > 0.7 and gt_aspect_ratio <= 1.5:
-    #     target_ar = 1
-    # else:
-    #     target_ar = 2
 
     index = 0
     min_diff = abs(anchor_aspect_ratios[0] - gt_aspect_ratio)
@@ -190,23 +189,23 @@ def compute_overlaps_grasping_rectangles(gt_box, anchors, config):
             index = i
 
     final_anchor = anchors_step4[index]
+    overlaps[int(final_anchor[-1])] = 1
 
     image = np.zeros(config.IMAGE_SHAPE)
     fig, ax = plt.subplots(1, figsize=(10, 10))
     ax.imshow(image)
     for i, rect in enumerate(anchors_step3):
-        rect = bbox_convert_to_four_vertices(rect)
+        rect = bbox_convert_to_four_vertices(rect[0:5])
         p = patches.Polygon(rect[0], linewidth=1,edgecolor='r',facecolor='none')
         ax.add_patch(p)
     # plt.savefig(os.path.join('Grasping_anchors','P'+str(level+2)+ 'center_anchors.png'))
-    p = patches.Polygon(gt_bbox_vertices, linewidth=1, edgecolor='b', facecolor='none')
+    p = patches.Polygon(gt_bbox_vertices, linewidth=1.5, edgecolor='b', facecolor='none')
     ax.add_patch(p)
-    matching_anchor_vertices = bbox_convert_to_four_vertices(final_anchor)
-    p = patches.Polygon(matching_anchor_vertices[0], linewidth=1, edgecolor='g', facecolor='none')
+    matching_anchor_vertices = bbox_convert_to_four_vertices(final_anchor[0:5])
+    p = patches.Polygon(matching_anchor_vertices[0], linewidth=1.5, edgecolor='k', facecolor='none')
     ax.add_patch(p)
     plt.show(block=False)
-
-
+    return overlaps
 
 def bbox_convert_to_four_vertices(bbox_5_dimension):
     x, y, w, h, theta = bbox_5_dimension
