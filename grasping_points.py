@@ -183,8 +183,13 @@ class GraspingPointsDataset(Dataset):
         for bounding_box_class in [negative_rectangles, positive_rectangles]:
             i = 0
             for bounding_box in bounding_box_class:
-                x = int(float(bounding_box.split(' ')[0]))
-                y = int(float(bounding_box.split(' ')[1]))
+                try:
+                    x = int(float(bounding_box.split(' ')[0]))
+                    y = int(float(bounding_box.split(' ')[1]))
+                except:
+                    print("ERROR : ValueError: cannot convert float NaN to integer")
+                    import code;
+                    code.interact(local=dict(globals(), **locals()))
                 vertices.append([x, y])
                 i += 1
                 if i % 4 == 0:
@@ -334,7 +339,7 @@ anchors = utils.generate_pyramid_anchors(config.RPN_ANCHOR_SCALES,
                                           mode,
                                           config.RPN_GRASP_ANGLES)
 
-target_rpn_match, target_rpn_bbox = modellib.build_rpn_targets(
+target_rpn_match, target_rpn_bbox, anchor_data = modellib.build_rpn_targets(
     image.shape, model.anchors, gt_class_id, gt_bbox, model.config, mode)
 
 log("target_rpn_match", target_rpn_match)
@@ -350,11 +355,14 @@ log("positive_anchors", positive_anchors)
 log("negative_anchors", negative_anchors)
 log("neutral anchors", neutral_anchors)
 
-import code;
-
-code.interact(local=dict(globals(), **locals()))
 # Apply refinement deltas to positive anchors
-refined_anchors = utils.apply_box_deltas(positive_anchors,target_rpn_bbox[:positive_anchors.shape[0]] * model.config.RPN_BBOX_STD_DEV)
+positive_anchor_indices = anchor_data[anchor_data[:,1] == 1][:,0]
+positive_anchors = anchors[positive_anchor_indices]
+
+gt_boxes = gt_bbox[gt_class_id == 1]
+deltas = target_rpn_bbox[:positive_anchors.shape[0]]* np.append(model.config.RPN_BBOX_STD_DEV, [1])
+refined_anchors = utils.apply_box_deltas(positive_anchors, deltas, mode)
+
 
 
 

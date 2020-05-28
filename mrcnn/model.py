@@ -1624,7 +1624,7 @@ def build_rpn_targets(image_shape, anchors, gt_class_ids, gt_boxes, config, mode
             # Normalize
             rpn_bbox[ix] /= config.RPN_BBOX_STD_DEV
             ix += 1
-    return rpn_match, rpn_bbox
+    return rpn_match, rpn_bbox, anchor_data
 
 
 def generate_random_rois(image_shape, count, gt_class_ids, gt_boxes):
@@ -1789,7 +1789,7 @@ def data_generator(dataset, config, shuffle=True, augment=False, augmentation=No
                 continue
 
             # RPN Targets
-            rpn_match, rpn_bbox = build_rpn_targets(image.shape, anchors,
+            rpn_match, rpn_bbox, _ = build_rpn_targets(image.shape, anchors,
                                                     gt_class_ids, gt_boxes, config)
 
             # Mask R-CNN Targets

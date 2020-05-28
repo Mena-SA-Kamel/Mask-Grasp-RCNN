@@ -290,28 +290,44 @@ def non_max_suppression(boxes, scores, threshold):
     return np.array(pick, dtype=np.int32)
 
 
-def apply_box_deltas(boxes, deltas):
+def apply_box_deltas(boxes, deltas, mode=''):
     """Applies the given deltas to the given boxes.
     boxes: [N, (y1, x1, y2, x2)]. Note that (y2, x2) is outside the box.
     deltas: [N, (dy, dx, log(dh), log(dw))]
     """
-    boxes = boxes.astype(np.float32)
-    # Convert to y, x, h, w
-    height = boxes[:, 2] - boxes[:, 0]
-    width = boxes[:, 3] - boxes[:, 1]
-    center_y = boxes[:, 0] + 0.5 * height
-    center_x = boxes[:, 1] + 0.5 * width
-    # Apply deltas
-    center_y += deltas[:, 0] * height
-    center_x += deltas[:, 1] * width
-    height *= np.exp(deltas[:, 2])
-    width *= np.exp(deltas[:, 3])
-    # Convert back to y1, x1, y2, x2
-    y1 = center_y - 0.5 * height
-    x1 = center_x - 0.5 * width
-    y2 = y1 + height
-    x2 = x1 + width
-    return np.stack([y1, x1, y2, x2], axis=1)
+    if mode == 'grasping_points':
+        boxes = boxes.astype(np.float32)
+        center_x = boxes[:, 0]
+        center_y = boxes[:, 1]
+        width = boxes[:, 2]
+        height = boxes[:, 3]
+        theta = boxes[:, 4]
+
+        center_x += deltas[:, 0] * width
+        center_y += deltas[:, 1] * height
+        width *= np.exp(deltas[:, 2])
+        height *= np.exp(deltas[:, 3])
+        theta += deltas[:, 4]
+        return np.stack([center_x, center_y, width, height, theta], axis=1)
+
+    else:
+        boxes = boxes.astype(np.float32)
+        # Convert to y, x, h, w
+        height = boxes[:, 2] - boxes[:, 0]
+        width = boxes[:, 3] - boxes[:, 1]
+        center_y = boxes[:, 0] + 0.5 * height
+        center_x = boxes[:, 1] + 0.5 * width
+        # Apply deltas
+        center_y += deltas[:, 0] * height
+        center_x += deltas[:, 1] * width
+        height *= np.exp(deltas[:, 2])
+        width *= np.exp(deltas[:, 3])
+        # Convert back to y1, x1, y2, x2
+        y1 = center_y - 0.5 * height
+        x1 = center_x - 0.5 * width
+        y2 = y1 + height
+        x2 = x1 + width
+        return np.stack([y1, x1, y2, x2], axis=1)
 
 
 def box_refinement_graph(box, gt_box):
