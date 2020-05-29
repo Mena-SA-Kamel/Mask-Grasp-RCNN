@@ -40,7 +40,7 @@ class GraspingPointsConfig(Config):
     # MEAN_PIXEL = np.array([134.6, 125.7, 119.0, 147.6]) # Added a 4th channel. Modify the mean of the pixel depth
     MEAN_PIXEL = np.array([112.7, 112.1, 113.5, 123.5]) # Added a 4th channel. Modify the mean of the pixel depth
     MAX_GT_INSTANCES = 50
-    RPN_GRASP_ANGLES = [-60, -30, 0, 30, 60, 90]
+    RPN_GRASP_ANGLES = [-60, -30, 0, 30, 60]
     RPN_BBOX_STD_DEV = np.array([0.1, 0.1, 0.2, 0.2])
     # RPN_BBOX_MEAN = np.array([0, 0, 0, 0])
 
@@ -309,8 +309,8 @@ training_dataset.prepare()
 
 # Create model in inference mode
 with tf.device(DEVICE):
-    model = modellib.MaskRCNN(mode="inference", model_dir=MODEL_DIR,
-                              config=config)
+    model = modellib.MaskRCNN(mode="training", model_dir=MODEL_DIR,
+                              config=config, task="grasping_points")
 
 weights_path = MASKRCNN_MODEL_PATH
 
@@ -362,6 +362,17 @@ positive_anchors = anchors[positive_anchor_indices]
 gt_boxes = gt_bbox[gt_class_id == 1]
 deltas = target_rpn_bbox[:positive_anchors.shape[0]]* np.append(model.config.RPN_BBOX_STD_DEV, [1])
 refined_anchors = utils.apply_box_deltas(positive_anchors, deltas, mode)
+
+# Display positive anchors before refinement (dotted) and
+# after refinement (solid).
+visualize.draw_boxes(image, boxes=positive_anchors, refined_boxes=refined_anchors, mode=mode)
+
+import code; code.interact(local=dict(globals(), **locals()))
+
+pillar = model.keras_model.get_layer("ROI").output  # node to start searching from
+
+
+
 
 
 

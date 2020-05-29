@@ -847,6 +847,7 @@ def rpn_graph(feature_map, anchors_per_location, anchor_stride):
     # TODO: check if stride of 2 causes alignment issues if the feature map
     # is not even.
     # Shared convolutional base of the RPN
+
     shared = KL.Conv2D(512, (3, 3), padding='same', activation='relu',
                        strides=anchor_stride,
                        name='rpn_conv_shared')(feature_map)
@@ -873,8 +874,51 @@ def rpn_graph(feature_map, anchors_per_location, anchor_stride):
 
     return [rpn_class_logits, rpn_probs, rpn_bbox]
 
+def grasping_rpn_graph(feature_map, anchors_per_location, anchor_stride):
+    """Builds the RPN graph, predicting scores and refinements to oriented anchor.
 
-def build_rpn_model(anchor_stride, anchors_per_location, depth):
+    feature_map: backbone features [batch, height, width, depth]
+    anchors_per_location: number of anchors per pixel in the feature map
+    anchor_stride: Controls the density of anchors. Typically 1 (anchors for
+                   every pixel in the feature map), or 2 (every other pixel).
+
+    Returns:
+        rpn_class_logits: [batch, H * W * anchors_per_location, 2] Anchor classifier logits (before softmax)
+        rpn_probs: [batch, H * W * anchors_per_location, 2] Anchor classifier probabilities.
+        rpn_bbox: [batch, H * W * anchors_per_location, (dx, dy, log(dw), log(dh), dtheta)] Deltas to be
+                  applied to anchors.
+    """
+    # TODO: check if stride of 2 causes alignment issues if the feature map
+    # is not even.
+    # Shared convolutional base of the RPN
+
+    shared = KL.Conv2D(512, (3, 3), padding='same', activation='relu',
+                       strides=anchor_stride,
+                       name='grasp_rpn_conv_shared')(feature_map)
+
+    # Anchor Score. [batch, height, width, anchors per location * 2].
+    x = KL.Conv2D(2 * anchors_per_location, (1, 1), padding='valid',
+                  activation='linear', name='grasp_rpn_class_raw')(shared)
+
+    # Reshape to [batch, anchors, 2]
+    rpn_class_logits = KL.Lambda(
+        lambda t: tf.reshape(t, [tf.shape(t)[0], -1, 2]))(x)
+
+    # Softmax on last dimension of BG/FG.
+    rpn_probs = KL.Activation(
+        "softmax", name="grasp_rpn_class_xxx")(rpn_class_logits)
+
+    # Bounding box refinement. [batch, H, W, anchors per location * depth]
+    # where depth is [dx, dy, log(dw), log(dh), dtheta]
+    x = KL.Conv2D(anchors_per_location * 5, (1, 1), padding="valid",
+                  activation='linear', name='grasp_rpn_bbox_pred')(shared)
+
+    # Reshape to [batch, anchors, 5]
+    rpn_bbox = KL.Lambda(lambda t: tf.reshape(t, [tf.shape(t)[0], -1, 5]))(x)
+    return [rpn_class_logits, rpn_probs, rpn_bbox]
+
+
+def build_rpn_model(anchor_stride, anchors_per_location, depth, task=''):
     """Builds a Keras model of the Region Proposal Network.
     It wraps the RPN graph so it can be used multiple times with shared
     weights.
@@ -892,7 +936,10 @@ def build_rpn_model(anchor_stride, anchors_per_location, depth):
     """
     input_feature_map = KL.Input(shape=[None, None, depth],
                                  name="input_rpn_feature_map")
-    outputs = rpn_graph(input_feature_map, anchors_per_location, anchor_stride)
+    if task == 'grasping_points':
+        outputs = grasping_rpn_graph(input_feature_map, anchors_per_location, anchor_stride)
+    else:
+        outputs = rpn_graph(input_feature_map, anchors_per_location, anchor_stride)
     return KM.Model([input_feature_map], outputs, name="rpn_model")
 
 
@@ -1471,7 +1518,7 @@ def build_rpn_targets(image_shape, anchors, gt_class_ids, gt_boxes, config, mode
     Returns:
     rpn_match: [N] (int32) matches between anchors and GT boxes.
                1 = positive anchor, -1 = negative anchor, 0 = neutral
-    rpn_bbox: [N, (dy, dx, log(dh), log(dw))] Anchor bbox deltas.
+    rpn_bbox: [N, (dy, dx, log(dh), log(dw))] Anchor bbox deltas. # Modify this description
     """
     # RPN Match: 1 = positive anchor, -1 = negative anchor, 0 = neutral
     rpn_match = np.zeros([anchors.shape[0]], dtype=np.int32)
@@ -1479,7 +1526,7 @@ def build_rpn_targets(image_shape, anchors, gt_class_ids, gt_boxes, config, mode
     rpn_bbox = np.zeros((config.RPN_TRAIN_ANCHORS_PER_IMAGE, 4))
 
     if mode == 'grasping_points':
-        # RPN bounding boxes: [max anchors per image, (dy, dx, log(dh), log(dw), dtheta)]
+        # RPN bounding boxes: [max anchors per image, (dx, dy, log(dw), log(dh), dtheta)]
         rpn_bbox = np.zeros((config.RPN_TRAIN_ANCHORS_PER_IMAGE, 5))
         overlaps = np.zeros((anchors.shape[0], gt_boxes.shape[0]))
 
@@ -1492,9 +1539,7 @@ def build_rpn_targets(image_shape, anchors, gt_class_ids, gt_boxes, config, mode
         anchor_data = np.append(matching_anchor_indices.reshape(1, -1), gt_class_ids.reshape(1, -1), axis=0).T
         gt_ids = np.arange(len(gt_class_ids)).reshape(1, -1).T
         anchor_data = np.append(anchor_data, gt_ids, axis = 1)
-
         rpn_match = np.amax(overlaps, axis=1)
-        anchor_iou_argmax = np.argmax(overlaps, axis=1)
     else:
         # Handle COCO crowds
         # A crowd box in COCO is a bounding box around several instances. Exclude
@@ -1897,7 +1942,7 @@ class MaskRCNN():
     The actual Keras model is in the keras_model property.
     """
 
-    def __init__(self, mode, config, model_dir):
+    def __init__(self, mode, config, model_dir, task=''):
         """
         mode: Either "training" or "inference"
         config: A Sub-class of the Config class
@@ -1908,7 +1953,11 @@ class MaskRCNN():
         self.config = config
         self.model_dir = model_dir
         self.set_log_dir()
-        self.keras_model = self.build(mode=mode, config=config)
+        if task == 'grasping_points':
+            self.keras_model = self.build_grasping_model(mode=mode, config=config)
+        else:
+            self.keras_model = self.build(mode=mode, config=config)
+
 
     def build(self, mode, config):
         """Build Mask R-CNN architecture.
@@ -2138,6 +2187,95 @@ class MaskRCNN():
             from mrcnn.parallel_model import ParallelModel
             model = ParallelModel(model, config.GPU_COUNT)
         return model
+
+    def build_grasping_model(self, mode, config):
+        """Builds the architecture for the Grasping Points RPN.
+                input_shape: The shape of the input image.
+                mode: Either "training" or "inference". The inputs and
+                    outputs of the model differ accordingly.
+        """
+        # Image size must be dividable by 2 multiple times
+        h, w = config.IMAGE_SHAPE[:2]
+        if h / 2 ** 6 != int(h / 2 ** 6) or w / 2 ** 6 != int(w / 2 ** 6):
+            raise Exception("Image size must be dividable by 2 at least 6 times "
+                            "to avoid fractions when downscaling and upscaling."
+                            "For example, use 256, 320, 384, 448, 512, ... etc. ")
+
+        # Inputs
+        input_image = KL.Input(
+            shape=[None, None, config.IMAGE_SHAPE[2]], name="input_image")
+        input_image_meta = KL.Input(shape=[config.IMAGE_META_SIZE],
+                                    name="input_image_meta")
+        if mode == "training":
+            # RPN GT
+            input_rpn_match = KL.Input(
+                shape=[None, 1], name="input_rpn_match", dtype=tf.int32)
+            # Recall: rpn_bbox specifies the refinements required for each positive anchor to match the GT boxes. Shape
+            # is [N, 5] = [N, [dx, dy, log(dw), log(dh), dtheta]]
+            input_rpn_bbox = KL.Input(
+                shape=[None, 5], name="input_rpn_bbox", dtype=tf.float32)
+
+        elif mode == "inference":
+            # Anchors in normalized coordinates, recall, anchors have a shape of Nx5 since we are using 5 dimensions to
+            # describe the oriented rectangle anchors
+            input_anchors = KL.Input(shape=[None, 5], name="input_anchors")
+
+        # Build the shared convolutional layers.
+        # Bottom-up Layers
+        # Returns a list of the last layers of each stage, 5 in total.
+        # Don't create the thead (stage 5), so we pick the 4th item in the list.
+        if callable(config.BACKBONE):
+            _, C2, C3, C4, C5 = config.BACKBONE(input_image, stage5=True,
+                                                train_bn=config.TRAIN_BN)
+        else:
+            _, C2, C3, C4, C5 = resnet_graph(input_image, config.BACKBONE,
+                                             stage5=True, train_bn=config.TRAIN_BN)
+
+        # Top-down Layers
+        P5 = KL.Conv2D(config.TOP_DOWN_PYRAMID_SIZE, (1, 1), name='fpn_c5p5')(C5)
+        P4 = KL.Add(name="fpn_p4add")([
+            KL.UpSampling2D(size=(2, 2), name="fpn_p5upsampled")(P5),
+            KL.Conv2D(config.TOP_DOWN_PYRAMID_SIZE, (1, 1), name='fpn_c4p4')(C4)])
+        P3 = KL.Add(name="fpn_p3add")([
+            KL.UpSampling2D(size=(2, 2), name="fpn_p4upsampled")(P4),
+            KL.Conv2D(config.TOP_DOWN_PYRAMID_SIZE, (1, 1), name='fpn_c3p3')(C3)])
+        P2 = KL.Add(name="fpn_p2add")([
+            KL.UpSampling2D(size=(2, 2), name="fpn_p3upsampled")(P3),
+            KL.Conv2D(config.TOP_DOWN_PYRAMID_SIZE, (1, 1), name='fpn_c2p2')(C2)])
+
+        # Attach 3x3 conv to all P layers to get the final feature maps.
+        P2 = KL.Conv2D(config.TOP_DOWN_PYRAMID_SIZE, (3, 3), padding="SAME", name="fpn_p2")(P2)
+        P3 = KL.Conv2D(config.TOP_DOWN_PYRAMID_SIZE, (3, 3), padding="SAME", name="fpn_p3")(P3)
+        P4 = KL.Conv2D(config.TOP_DOWN_PYRAMID_SIZE, (3, 3), padding="SAME", name="fpn_p4")(P4)
+        P5 = KL.Conv2D(config.TOP_DOWN_PYRAMID_SIZE, (3, 3), padding="SAME", name="fpn_p5")(P5)
+        # P6 is used for the 5th anchor scale in RPN. Generated by
+        # subsampling from P5 with stride of 2.
+        P6 = KL.MaxPooling2D(pool_size=(1, 1), strides=2, name="fpn_p6")(P5)
+
+        rpn_feature_maps = [P2, P3, P4, P5, P6]
+
+        # Anchors
+        if mode == "training":
+            anchors = self.get_anchors(config.IMAGE_SHAPE, mode='grasping_points', angles=config.RPN_GRASP_ANGLES)
+            # Duplicate across the batch dimension because Keras requires it
+            # TODO: can this be optimized to avoid duplicating the anchors?
+            anchors = np.broadcast_to(anchors, (config.BATCH_SIZE,) + anchors.shape)
+
+            # A hack to get around Keras's bad support for constants
+            anchors = KL.Lambda(lambda x: tf.Variable(anchors), name="anchors")(input_image) ### ???
+        else:
+            anchors = input_anchors
+
+        # RPN Model
+        anchors_per_location = len(config.RPN_ANCHOR_RATIOS) * len(config.RPN_GRASP_ANGLES)
+        rpn = build_rpn_model(config.RPN_ANCHOR_STRIDE,
+                              anchors_per_location, config.TOP_DOWN_PYRAMID_SIZE, task='grasping_points')
+
+
+
+
+
+
 
     def find_last(self):
         """Finds the last checkpoint file of the last trained model in the

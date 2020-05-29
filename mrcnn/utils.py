@@ -110,7 +110,7 @@ def compute_grasping_training_anchors(gt_box, anchors, config):
 
     x, y, w, h, theta = gt_box
     gt_area = h * w
-    angle_threshold = 15
+    angle_threshold = 30
 
     # anchors_out_of_boundary = anchors[np.logical_not(matching_anchors_index1)]
     euclidean_distance = np.sqrt((anchors[:, 0] - x) ** 2 + (anchors[:, 1] - y) ** 2)
@@ -119,7 +119,7 @@ def compute_grasping_training_anchors(gt_box, anchors, config):
     anchor_match_score = 1 - euclidean_distance
     overlaps[anchor_match_score < 0.3] = -1
 
-    print('Anchors before filtering: ', str(anchors.shape[0]))
+    # print('Anchors before filtering: ', str(anchors.shape[0]))
 
     # Filtering based on center position
     gt_bbox_vertices = bbox_convert_to_four_vertices(gt_box)
@@ -128,7 +128,7 @@ def compute_grasping_training_anchors(gt_box, anchors, config):
     anchor_vertices = anchors[:, 0:2]
     matching_anchors_index1 = vertices_path.contains_points(anchor_vertices)
     anchors_step1 = anchors[matching_anchors_index1]
-    print('Anchors left after step 1 (Center Position): ', str(anchors_step1.shape[0]))
+    # print('Anchors left after step 1 (Center Position): ', str(anchors_step1.shape[0]))
 
     # Filtering based on area / scale
     scales, ratios = np.meshgrid(config.RPN_ANCHOR_SCALES, config.RPN_ANCHOR_RATIOS)
@@ -144,7 +144,7 @@ def compute_grasping_training_anchors(gt_box, anchors, config):
 
     matching_anchors_index2 = (anchor_areas == matching_area)
     anchors_step2 = anchors_step1[matching_anchors_index2]
-    print('Anchors left after step 2 (Scale): ', str(anchors_step2.shape[0]))
+    # print('Anchors left after step 2 (Scale): ', str(anchors_step2.shape[0]))
 
     # Filtering based on angle
 
@@ -166,7 +166,7 @@ def compute_grasping_training_anchors(gt_box, anchors, config):
         print('Anchors all cancelled')
         import code;
         code.interact(local=dict(globals(), **locals()))
-    print('Anchors left after step 3 (angle): ', str(anchors_step3.shape[0]))
+    # print('Anchors left after step 3 (angle): ', str(anchors_step3.shape[0]))
 
     # Filtering based on euclidean distance
     anchor_x = anchors_step3[:,0]
@@ -174,7 +174,7 @@ def compute_grasping_training_anchors(gt_box, anchors, config):
     euclidean_distance = np.sqrt((anchor_x - x) ** 2 + (anchor_y - y) ** 2)
     minimum_distance = np.min(euclidean_distance)
     anchors_step4 = anchors_step3[np.where(euclidean_distance == minimum_distance)]
-    print('Anchors left after step 4 (distance): ', str(anchors_step4.shape[0]))
+    # print('Anchors left after step 4 (distance): ', str(anchors_step4.shape[0]))
 
     # Filtering based on aspect ratio
     gt_aspect_ratio = gt_area/h**2
@@ -191,20 +191,20 @@ def compute_grasping_training_anchors(gt_box, anchors, config):
     final_anchor = anchors_step4[index]
     overlaps[int(final_anchor[-1])] = 1
 
-    image = np.zeros(config.IMAGE_SHAPE)
-    fig, ax = plt.subplots(1, figsize=(10, 10))
-    ax.imshow(image)
-    for i, rect in enumerate(anchors_step3):
-        rect = bbox_convert_to_four_vertices(rect[0:5])
-        p = patches.Polygon(rect[0], linewidth=1,edgecolor='r',facecolor='none')
-        ax.add_patch(p)
-    # plt.savefig(os.path.join('Grasping_anchors','P'+str(level+2)+ 'center_anchors.png'))
-    p = patches.Polygon(gt_bbox_vertices, linewidth=1.5, edgecolor='b', facecolor='none')
-    ax.add_patch(p)
-    matching_anchor_vertices = bbox_convert_to_four_vertices(final_anchor[0:5])
-    p = patches.Polygon(matching_anchor_vertices[0], linewidth=1.5, edgecolor='k', facecolor='none')
-    ax.add_patch(p)
-    plt.show(block=False)
+    # image = np.zeros(config.IMAGE_SHAPE)
+    # fig, ax = plt.subplots(1, figsize=(10, 10))
+    # ax.imshow(image)
+    # for i, rect in enumerate(anchors_step3):
+    #     rect = bbox_convert_to_four_vertices(rect[0:5])
+    #     p = patches.Polygon(rect[0], linewidth=1,edgecolor='r',facecolor='none')
+    #     ax.add_patch(p)
+    # # plt.savefig(os.path.join('Grasping_anchors','P'+str(level+2)+ 'center_anchors.png'))
+    # p = patches.Polygon(gt_bbox_vertices, linewidth=1.5, edgecolor='b', facecolor='none')
+    # ax.add_patch(p)
+    # matching_anchor_vertices = bbox_convert_to_four_vertices(final_anchor[0:5])
+    # p = patches.Polygon(matching_anchor_vertices[0], linewidth=1.5, edgecolor='k', facecolor='none')
+    # ax.add_patch(p)
+    # plt.show(block=False)
     return overlaps
 
 def bbox_convert_to_four_vertices(bbox_5_dimension):
@@ -293,7 +293,7 @@ def non_max_suppression(boxes, scores, threshold):
 def apply_box_deltas(boxes, deltas, mode=''):
     """Applies the given deltas to the given boxes.
     boxes: [N, (y1, x1, y2, x2)]. Note that (y2, x2) is outside the box.
-    deltas: [N, (dy, dx, log(dh), log(dw))]
+    deltas: [N, (dy, dx, log(dh), log(dw))] # Modify this desription
     """
     if mode == 'grasping_points':
         boxes = boxes.astype(np.float32)
@@ -762,36 +762,35 @@ def generate_anchors(scales, ratios, shape, feature_stride, anchor_stride, mode=
     anchor_stride: Stride of anchors on the feature map. For example, if the
         value is 2 then generate anchors for every other feature map pixel.
     """
-    # Get all combinations of scales and ratios
-
     if mode == 'grasping_points':
-        return generate_grasping_anchors(scales, ratios, shape, feature_stride, anchor_stride, angles)
+        boxes = generate_grasping_anchors(scales, ratios, shape, feature_stride, anchor_stride, angles)
+    else:
+        # Get all combinations of scales and ratios
+        scales, ratios = np.meshgrid(np.array(scales), np.array(ratios))
+        scales = scales.flatten()
+        ratios = ratios.flatten()
 
-    scales, ratios = np.meshgrid(np.array(scales), np.array(ratios))
-    scales = scales.flatten()
-    ratios = ratios.flatten()
+        # Enumerate heights and widths from scales and ratios
+        heights = scales / np.sqrt(ratios)
+        widths = scales * np.sqrt(ratios)
 
-    # Enumerate heights and widths from scales and ratios
-    heights = scales / np.sqrt(ratios)
-    widths = scales * np.sqrt(ratios)
+        # Enumerate shifts in feature space
+        shifts_y = np.arange(0, shape[0], anchor_stride) * feature_stride
+        shifts_x = np.arange(0, shape[1], anchor_stride) * feature_stride
+        shifts_x, shifts_y = np.meshgrid(shifts_x, shifts_y)
 
-    # Enumerate shifts in feature space
-    shifts_y = np.arange(0, shape[0], anchor_stride) * feature_stride
-    shifts_x = np.arange(0, shape[1], anchor_stride) * feature_stride
-    shifts_x, shifts_y = np.meshgrid(shifts_x, shifts_y)
+        # Enumerate combinations of shifts, widths, and heights
+        box_widths, box_centers_x = np.meshgrid(widths, shifts_x)
+        box_heights, box_centers_y = np.meshgrid(heights, shifts_y)
 
-    # Enumerate combinations of shifts, widths, and heights
-    box_widths, box_centers_x = np.meshgrid(widths, shifts_x)
-    box_heights, box_centers_y = np.meshgrid(heights, shifts_y)
+        # Reshape to get a list of (y, x) and a list of (h, w)
+        box_centers = np.stack(
+            [box_centers_y, box_centers_x], axis=2).reshape([-1, 2])
+        box_sizes = np.stack([box_heights, box_widths], axis=2).reshape([-1, 2])
 
-    # Reshape to get a list of (y, x) and a list of (h, w)
-    box_centers = np.stack(
-        [box_centers_y, box_centers_x], axis=2).reshape([-1, 2])
-    box_sizes = np.stack([box_heights, box_widths], axis=2).reshape([-1, 2])
-
-    # Convert to corner coordinates (y1, x1, y2, x2)
-    boxes = np.concatenate([box_centers - 0.5 * box_sizes,
-                            box_centers + 0.5 * box_sizes], axis=1)
+        # Convert to corner coordinates (y1, x1, y2, x2)
+        boxes = np.concatenate([box_centers - 0.5 * box_sizes,
+                                box_centers + 0.5 * box_sizes], axis=1)
     return boxes
 
 

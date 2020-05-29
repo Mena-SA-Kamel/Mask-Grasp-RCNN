@@ -369,7 +369,7 @@ def plot_overlaps(gt_class_ids, pred_class_ids, pred_scores,
 
 def draw_boxes(image, boxes=None, refined_boxes=None,
                masks=None, captions=None, visibilities=None,
-               title="", ax=None):
+               title="", ax=None, mode=''):
     """Draw bounding boxes and segmentation masks with different
     customizations.
 
@@ -389,7 +389,7 @@ def draw_boxes(image, boxes=None, refined_boxes=None,
 
     # Matplotlib Axis
     if not ax:
-        _, ax = plt.subplots(1, figsize=(12, 12))
+        _, ax = plt.subplots(1)
 
     # Generate random colors
     colors = random_colors(N)
@@ -424,17 +424,30 @@ def draw_boxes(image, boxes=None, refined_boxes=None,
             if not np.any(boxes[i]):
                 # Skip this instance. Has no bbox. Likely lost in cropping.
                 continue
-            y1, x1, y2, x2 = boxes[i]
-            p = patches.Rectangle((x1, y1), x2 - x1, y2 - y1, linewidth=2,
+            if mode == 'grasping_points':
+                rect = utils.bbox_convert_to_four_vertices(boxes[i])
+                p = patches.Polygon(rect[0], linewidth=2, alpha=alpha, linestyle=style,
+                                    edgecolor=color,facecolor='none')
+                x1, y1 = rect[0][0]
+                x2, y2 = rect[0][2]
+            else:
+                y1, x1, y2, x2 = boxes[i]
+                p = patches.Rectangle((x1, y1), x2 - x1, y2 - y1, linewidth=2,
                                   alpha=alpha, linestyle=style,
                                   edgecolor=color, facecolor='none')
             ax.add_patch(p)
 
         # Refined boxes
         if refined_boxes is not None and visibility > 0:
-            ry1, rx1, ry2, rx2 = refined_boxes[i].astype(np.int32)
-            p = patches.Rectangle((rx1, ry1), rx2 - rx1, ry2 - ry1, linewidth=2,
-                                  edgecolor=color, facecolor='none')
+            if mode == 'grasping_points':
+                refined_rect = utils.bbox_convert_to_four_vertices(refined_boxes[i])
+                p = patches.Polygon(refined_rect[0], linewidth=2, edgecolor=color, facecolor='none')
+                rx1, ry1 = refined_rect[0][0]
+                rx2, ry2 = refined_rect[0][2]
+            else:
+                ry1, rx1, ry2, rx2 = refined_boxes[i].astype(np.int32)
+                p = patches.Rectangle((rx1, ry1), rx2 - rx1, ry2 - ry1, linewidth=2,
+                                   edgecolor=color, facecolor='none')
             ax.add_patch(p)
             # Connect the top-left corners of the anchor and proposal
             if boxes is not None:
@@ -467,7 +480,7 @@ def draw_boxes(image, boxes=None, refined_boxes=None,
                 p = Polygon(verts, facecolor="none", edgecolor=color)
                 ax.add_patch(p)
     ax.imshow(masked_image.astype(np.uint8))
-    plt.show()
+    plt.show(block=False)
 
 
 def display_table(table):
