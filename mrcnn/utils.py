@@ -307,7 +307,7 @@ def apply_box_deltas(boxes, deltas, mode=''):
         center_y += deltas[:, 1] * height
         width *= np.exp(deltas[:, 2])
         height *= np.exp(deltas[:, 3])
-        theta += deltas[:, 4]
+        theta += deltas[:, 4] * (180/len(config.RPN_GRASP_ANGLES))
         return np.stack([center_x, center_y, width, height, theta], axis=1)
 
     else:
@@ -1100,8 +1100,9 @@ def norm_boxes(boxes, shape, mode=''):
     """
     h, w = shape
     if mode == 'grasping_points':
-        scale = np.array([h - 1, w - 1, h - 1, w - 1, 1])
-        return np.divide(boxes, scale)
+        # normalize angles relative to 90 degrees
+        scale = np.array([w - 1, h - 1, w - 1, h - 1, 90])
+        return np.divide(boxes, scale).astype(np.float32)
     else:
         scale = np.array([h - 1, w - 1, h - 1, w - 1])
         shift = np.array([0, 0, 1, 1])

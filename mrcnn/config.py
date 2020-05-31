@@ -162,7 +162,7 @@ class Config(object):
 
     # Bounding box refinement standard deviation for RPN and final detections.
     RPN_BBOX_STD_DEV = np.array([0.1, 0.1, 0.2, 0.2])
-    BBOX_STD_DEV = np.array([0.1, 0.1, 0.2, 0.2, ])
+    BBOX_STD_DEV = np.array([0.1, 0.1, 0.2, 0.2])
 
     # Max number of final detections
     DETECTION_MAX_INSTANCES = 100

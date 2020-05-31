@@ -65,9 +65,9 @@ log("target_rpn_bbox", target_rpn_bbox)
 positive_anchor_ix = np.where(target_rpn_match[:] == 1)[0]
 negative_anchor_ix = np.where(target_rpn_match[:] == -1)[0]
 neutral_anchor_ix = np.where(target_rpn_match[:] == 0)[0]
-positive_anchors = model.anchors[positive_anchor_ix]
-negative_anchors = model.anchors[negative_anchor_ix]
-neutral_anchors = model.anchors[neutral_anchor_ix]
+positive_anchors = anchors[positive_anchor_ix]
+negative_anchors = anchors[negative_anchor_ix]
+neutral_anchors = anchors[neutral_anchor_ix]
 log("positive_anchors", positive_anchors)
 log("negative_anchors", negative_anchors)
 log("neutral anchors", neutral_anchors)

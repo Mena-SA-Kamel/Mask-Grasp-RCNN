@@ -41,8 +41,7 @@ class GraspingPointsConfig(Config):
     MEAN_PIXEL = np.array([112.7, 112.1, 113.5, 123.5]) # Added a 4th channel. Modify the mean of the pixel depth
     MAX_GT_INSTANCES = 50
     RPN_GRASP_ANGLES = [-60, -30, 0, 30, 60]
-    RPN_BBOX_STD_DEV = np.array([0.1, 0.1, 0.2, 0.2])
-    # RPN_BBOX_MEAN = np.array([0, 0, 0, 0])
+    RPN_BBOX_STD_DEV = np.array([0.1, 0.1, 0.2, 0.2, 1])
 
 class InferenceConfig(GraspingPointsConfig):
     GPU_COUNT = 1
@@ -309,9 +308,11 @@ training_dataset.prepare()
 
 # Create model in inference mode
 with tf.device(DEVICE):
-    model = modellib.MaskRCNN(mode="training", model_dir=MODEL_DIR,
+    model = modellib.MaskRCNN(mode="inference", model_dir=MODEL_DIR,
                               config=config, task="grasping_points")
+    import code;
 
+    code.interact(local=dict(globals(), **locals()))
 weights_path = MASKRCNN_MODEL_PATH
 
 # Load weights
@@ -367,9 +368,6 @@ refined_anchors = utils.apply_box_deltas(positive_anchors, deltas, mode)
 # after refinement (solid).
 visualize.draw_boxes(image, boxes=positive_anchors, refined_boxes=refined_anchors, mode=mode)
 
-import code; code.interact(local=dict(globals(), **locals()))
-
-pillar = model.keras_model.get_layer("ROI").output  # node to start searching from
 
 
 

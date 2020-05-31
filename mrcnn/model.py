@@ -212,7 +212,7 @@ def resnet_graph(input_image, architecture, stage5=False, train_bn=True):
 #  Proposal Layer
 ############################################################
 
-def apply_box_deltas_graph(boxes, deltas):
+def apply_box_deltas_graph(boxes, deltas, task=''):
     """Applies the given deltas to the given boxes.
     boxes: [N, (y1, x1, y2, x2)] boxes to update
     deltas: [N, (dy, dx, log(dh), log(dw))] refinements to apply
@@ -235,6 +235,26 @@ def apply_box_deltas_graph(boxes, deltas):
     result = tf.stack([y1, x1, y2, x2], axis=1, name="apply_box_deltas_out")
     return result
 
+def apply_oriented_box_deltas_graph(boxes, deltas, num_angles):
+    """Applies the given deltas to the given oriented rectangleboxes.
+    boxes: [N, (x, y, w, h, theta)] boxes to update
+    deltas: [N, (dx, dy, log(dw), log(dh), dtheta)] refinements to apply
+    num_angles: number of different anchor angles
+    """
+    boxes = tf.cast(boxes, tf.float32)
+    center_x = boxes[:, 0]
+    center_y = boxes[:, 1]
+    width = boxes[:, 2]
+    height = boxes[:, 3]
+    theta = boxes[:, 4]
+
+    center_x += deltas[:, 0] * width
+    center_y += deltas[:, 1] * height
+    width *= tf.exp(deltas[:, 2])
+    height *= tf.exp(deltas[:, 3])
+    theta += deltas[:, 4] * (180/num_angles)
+    result = tf.stack([center_x, center_y, width, height, theta], axis=1, name="apply_box_deltas_out")
+    return result
 
 def clip_boxes_graph(boxes, window):
     """
@@ -252,6 +272,102 @@ def clip_boxes_graph(boxes, window):
     clipped = tf.concat([y1, x1, y2, x2], axis=1, name="clipped_boxes")
     clipped.set_shape((clipped.shape[0], 4))
     return clipped
+
+def clip_oriented_boxes_graph(boxes, window):
+    """
+    boxes: [N, (x, y, w, h, theta)]
+    window: [4] in the form y1, x1, y2, x2
+    """
+    # Split
+    wy1, wx1, wy2, wx2 = tf.split(window, 4)
+    x, y, w, h, theta = tf.split(boxes, 5, axis=1)
+    # Clip
+    x = tf.maximum(tf.minimum(x, wx2), wx1)
+    y = tf.maximum(tf.minimum(y, wy2), wy1)
+    clipped = tf.concat([x, y, w, h, theta], axis=1, name="clipped_boxes")
+    clipped.set_shape((clipped.shape[0], 5))
+    return clipped
+
+class GraspProposalLayer(KE.Layer):
+    """Receives anchor scores and selects a subset to pass as proposals
+        to the second stage. Filtering is done based on anchor scores and
+        non-max suppression to remove overlaps. It also applies bounding
+        box refinement deltas to anchors. This is a modified version of
+        ProposalLayer to work with oriented rectangles.
+
+        Inputs:
+            rpn_probs: [batch, num_anchors, (bg prob, fg prob)]
+            rpn_bbox: [batch, num_anchors, (dy, dx, log(dh), log(dw))]
+            anchors: [batch, num_anchors, (y1, x1, y2, x2)] anchors in normalized coordinates
+
+        Returns:
+            Proposals in normalized coordinates [batch, rois, (y1, x1, y2, x2)]
+        """
+
+    def __init__(self, proposal_count, nms_threshold, config=None, **kwargs):
+        super(GraspProposalLayer, self).__init__(**kwargs)
+        self.config = config
+        self.proposal_count = proposal_count
+        self.nms_threshold = nms_threshold
+
+    def call(self, inputs):
+        # Box Scores. Use the foreground class confidence. [Batch, num_rois, 1]
+        scores = inputs[0][:, :, 1]
+        # Box deltas [batch, num_rois, 5]
+        deltas = inputs[1]
+        deltas = deltas * np.reshape(self.config.RPN_BBOX_STD_DEV, [1, 1, 5])
+        # Anchors
+        anchors = inputs[2]
+
+        # Improve performance by trimming to top anchors by score
+        # and doing the rest on the smaller subset.
+        pre_nms_limit = tf.minimum(self.config.PRE_NMS_LIMIT, tf.shape(anchors)[1])
+        ix = tf.nn.top_k(scores, pre_nms_limit, sorted=True,
+                         name="top_anchors").indices
+        scores = utils.batch_slice([scores, ix], lambda x, y: tf.gather(x, y),
+                                   self.config.IMAGES_PER_GPU)
+        deltas = utils.batch_slice([deltas, ix], lambda x, y: tf.gather(x, y),
+                                   self.config.IMAGES_PER_GPU)
+        pre_nms_anchors = utils.batch_slice([anchors, ix], lambda a, x: tf.gather(a, x),
+                                            self.config.IMAGES_PER_GPU,
+                                            names=["pre_nms_anchors"])
+
+        # Apply deltas to anchors to get refined anchors.
+        # [batch, N, (y1, x1, y2, x2)]
+        boxes = utils.batch_slice([pre_nms_anchors, deltas, [len(self.config.RPN_GRASP_ANGLES)]],
+                                  lambda x, y, z: apply_oriented_box_deltas_graph(x, y, z),
+                                  self.config.IMAGES_PER_GPU,
+                                  names=["refined_anchors"])
+
+        # Clip to image boundaries. Since we're in normalized coordinates,
+        # clip to 0..1 range. [batch, N, (y1, x1, y2, x2)]
+        window = np.array([0, 0, 1, 1], dtype=np.float32)
+        boxes = utils.batch_slice(boxes,
+                                  lambda x: clip_oriented_boxes_graph(x, window),
+                                  self.config.IMAGES_PER_GPU,
+                                  names=["refined_anchors_clipped"])
+
+        # Filter out small boxes
+        # According to Xinlei Chen's paper, this reduces detection accuracy
+        # for small objects, so we're skipping it.
+
+        # Non-max suppression - skip for now, apply non-max suppression on the output
+        # def nms(boxes, scores):
+        #     indices = tf.image.non_max_suppression(
+        #         boxes, scores, self.proposal_count,
+        #         self.nms_threshold, name="rpn_non_max_suppression")
+        #     proposals = tf.gather(boxes, indices)
+        #     # Pad if needed
+        #     padding = tf.maximum(self.proposal_count - tf.shape(proposals)[0], 0)
+        #     proposals = tf.pad(proposals, [(0, padding), (0, 0)])
+        #     return proposals
+        #
+        # proposals = utils.batch_slice([boxes, scores], nms,
+        #                               self.config.IMAGES_PER_GPU)
+        return boxes
+
+    def compute_output_shape(self, input_shape):
+        return (None, self.proposal_count, 5)
 
 
 class ProposalLayer(KE.Layer):
@@ -281,6 +397,7 @@ class ProposalLayer(KE.Layer):
         # Box deltas [batch, num_rois, 4]
         deltas = inputs[1]
         deltas = deltas * np.reshape(self.config.RPN_BBOX_STD_DEV, [1, 1, 4])
+
         # Anchors
         anchors = inputs[2]
 
@@ -1090,6 +1207,9 @@ def rpn_class_loss_graph(rpn_match, rpn_class_logits):
     loss = K.sparse_categorical_crossentropy(target=anchor_class,
                                              output=rpn_class_logits,
                                              from_logits=True)
+
+    # loss should have the losses computed for each of the samples - Maybe this is where we can apply the Online
+    # hard example mining process
     loss = K.switch(tf.size(loss) > 0, K.mean(loss), tf.constant(0.0))
     return loss
 
@@ -1544,6 +1664,7 @@ def build_rpn_targets(image_shape, anchors, gt_class_ids, gt_boxes, config, mode
         # Handle COCO crowds
         # A crowd box in COCO is a bounding box around several instances. Exclude
         # them from training. A crowd box is given a negative class ID.
+        anchor_data =[]
         crowd_ix = np.where(gt_class_ids < 0)[0]
         if crowd_ix.shape[0] > 0:
             # Filter out crowds from ground truth class IDs and boxes
@@ -1635,9 +1756,9 @@ def build_rpn_targets(image_shape, anchors, gt_class_ids, gt_boxes, config, mode
                 (gt_center_y - a_center_y) / a_h,
                 np.log(gt_w / a_w),
                 np.log(gt_h / a_h),
-                (gt_theta - a_theta),
+                (gt_theta - a_theta)/(180/len(config.RPN_GRASP_ANGLES)),
             ]
-            rpn_bbox[ix, :4] /= config.RPN_BBOX_STD_DEV
+            rpn_bbox[ix] /= config.RPN_BBOX_STD_DEV ## rpn_bbox[ix, :4]
             ix+=1
 
     else:
@@ -2258,9 +2379,7 @@ class MaskRCNN():
         if mode == "training":
             anchors = self.get_anchors(config.IMAGE_SHAPE, mode='grasping_points', angles=config.RPN_GRASP_ANGLES)
             # Duplicate across the batch dimension because Keras requires it
-            # TODO: can this be optimized to avoid duplicating the anchors?
             anchors = np.broadcast_to(anchors, (config.BATCH_SIZE,) + anchors.shape)
-
             # A hack to get around Keras's bad support for constants
             anchors = KL.Lambda(lambda x: tf.Variable(anchors), name="anchors")(input_image) ### ???
         else:
@@ -2271,11 +2390,59 @@ class MaskRCNN():
         rpn = build_rpn_model(config.RPN_ANCHOR_STRIDE,
                               anchors_per_location, config.TOP_DOWN_PYRAMID_SIZE, task='grasping_points')
 
+        # Loop through pyramid layers
+        layer_outputs = []  # list of lists
+        for p in rpn_feature_maps:
+            layer_outputs.append(rpn([p]))
 
+        # Concatenate layer outputs
+        # Convert from list of lists of level outputs to list of lists
+        # of outputs across levels.
+        # e.g. [[a1, b1, c1], [a2, b2, c2]] => [[a1, a2], [b1, b2], [c1, c2]]
+        output_names = ["rpn_class_logits", "rpn_class", "rpn_bbox"]
+        outputs = list(zip(*layer_outputs))
+        outputs = [KL.Concatenate(axis=1, name=n)(list(o))
+                   for o, n in zip(outputs, output_names)]
 
+        rpn_class_logits, rpn_class, rpn_bbox = outputs
 
+        # Generate proposals
+        # Proposals are [batch, N, (x, y, w, h, theta)] in normalized coordinates
+        # and zero padded.
+        proposal_count = config.POST_NMS_ROIS_TRAINING if mode == "training" \
+            else config.POST_NMS_ROIS_INFERENCE
+        rpn_rois = GraspProposalLayer(
+            proposal_count=proposal_count,
+            nms_threshold=config.RPN_NMS_THRESHOLD,
+            name="ROI",
+            config=config)([rpn_class, rpn_bbox, anchors])
 
+        if mode == 'training':
+            # Losses
+            # Classification loss
+            rpn_class_loss = KL.Lambda(lambda x: rpn_class_loss_graph(*x), name="rpn_class_loss")(
+                [input_rpn_match, rpn_class_logits])
 
+            # Regression Loss
+            rpn_bbox_loss = KL.Lambda(lambda x: rpn_bbox_loss_graph(config, *x), name="rpn_bbox_loss")(
+                [input_rpn_bbox, input_rpn_match, rpn_bbox])
+
+            # Model
+            inputs = [input_image, input_image_meta, input_rpn_match, input_rpn_bbox]
+            outputs = [rpn_class_logits, rpn_class, rpn_bbox, rpn_rois, rpn_class_loss, rpn_bbox_loss]
+            model = KM.Model(inputs, outputs, name='grasp_rcnn')
+
+        else:
+            # Model
+            inputs = [input_image, input_image_meta, input_anchors]
+            outputs = [rpn_rois, rpn_class, rpn_bbox]
+            model = KM.Model(inputs, outputs, name='grasp_rcnn')
+
+        # Add multi-GPU support.
+        if config.GPU_COUNT > 1:
+            from mrcnn.parallel_model import ParallelModel
+            model = ParallelModel(model, config.GPU_COUNT)
+        return model
 
     def find_last(self):
         """Finds the last checkpoint file of the last trained model in the
