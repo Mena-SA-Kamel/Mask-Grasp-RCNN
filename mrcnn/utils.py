@@ -290,7 +290,7 @@ def non_max_suppression(boxes, scores, threshold):
     return np.array(pick, dtype=np.int32)
 
 
-def apply_box_deltas(boxes, deltas, mode=''):
+def apply_box_deltas(boxes, deltas, mode='', num_angles=0):
     """Applies the given deltas to the given boxes.
     boxes: [N, (y1, x1, y2, x2)]. Note that (y2, x2) is outside the box.
     deltas: [N, (dy, dx, log(dh), log(dw))] # Modify this desription
@@ -307,7 +307,7 @@ def apply_box_deltas(boxes, deltas, mode=''):
         center_y += deltas[:, 1] * height
         width *= np.exp(deltas[:, 2])
         height *= np.exp(deltas[:, 3])
-        theta += deltas[:, 4] * (180/len(config.RPN_GRASP_ANGLES))
+        theta += deltas[:, 4] * (180/num_angles)
         return np.stack([center_x, center_y, width, height, theta], axis=1)
 
     else:

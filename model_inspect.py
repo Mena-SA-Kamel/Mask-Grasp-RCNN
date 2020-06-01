@@ -33,10 +33,13 @@ validating_dataset.prepare()
 
 # Create model in inference mode
 with tf.device(DEVICE):
-    model = modellib.MaskRCNN(mode="inference", model_dir=MODEL_DIR,
+    model = modellib.MaskRCNN(mode="training", model_dir=MODEL_DIR,
                               config=config)
 
 weights_path = MASKRCNN_MODEL_PATH
+import code;
+
+code.interact(local=dict(globals(), **locals()))
 
 # Load weights
 print("Loading weights ", weights_path)

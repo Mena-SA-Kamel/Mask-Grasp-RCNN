@@ -20,6 +20,8 @@ import math
 import matplotlib.patches as patches
 import cv2
 
+os.environ["PATH"] += os.pathsep + 'D:/Software/graphviz-2.38/release/bin'
+
 # Extending the mrcnn.config class to update the default variables
 class GraspingPointsConfig(Config):
     NAME = 'grasping_points'
@@ -306,18 +308,26 @@ training_dataset = GraspingPointsDataset()
 training_dataset.load_dataset()
 training_dataset.prepare()
 
+validating_dataset = GraspingPointsDataset()
+validating_dataset.load_dataset(type='val_set')
+validating_dataset.prepare()
+
 # Create model in inference mode
 with tf.device(DEVICE):
-    model = modellib.MaskRCNN(mode="inference", model_dir=MODEL_DIR,
+    model = modellib.MaskRCNN(mode="training", model_dir=MODEL_DIR,
                               config=config, task="grasping_points")
-    import code;
-
-    code.interact(local=dict(globals(), **locals()))
-weights_path = MASKRCNN_MODEL_PATH
+# import code; code.interact(local=dict(globals(), **locals()))
 
 # Load weights
+weights_path = MASKRCNN_MODEL_PATH
 print("Loading weights ", weights_path)
-model.load_weights(weights_path, by_name=True)
+model.load_weights(weights_path, by_name=True,
+                       exclude=["conv1", "rpn_model", "rpn_class_logits",
+                                "rpn_class ", "rpn_bbox "])
+# model.train(training_dataset, validating_dataset,
+#                learning_rate=config.LEARNING_RATE,
+#                epochs=50,
+#                layers=r"(conv1)|(rpn\_.*)|(fpn\_.*)")
 
 image_ids = random.choices(training_dataset.image_ids, k=1)
 for image_id in image_ids:
@@ -361,15 +371,16 @@ positive_anchor_indices = anchor_data[anchor_data[:,1] == 1][:,0]
 positive_anchors = anchors[positive_anchor_indices]
 
 gt_boxes = gt_bbox[gt_class_id == 1]
-deltas = target_rpn_bbox[:positive_anchors.shape[0]]* np.append(model.config.RPN_BBOX_STD_DEV, [1])
-refined_anchors = utils.apply_box_deltas(positive_anchors, deltas, mode)
+deltas = target_rpn_bbox[:positive_anchors.shape[0]]* model.config.RPN_BBOX_STD_DEV
+refined_anchors = utils.apply_box_deltas(positive_anchors, deltas, mode, len(config.RPN_GRASP_ANGLES))
 
 # Display positive anchors before refinement (dotted) and
 # after refinement (solid).
 visualize.draw_boxes(image, boxes=positive_anchors, refined_boxes=refined_anchors, mode=mode)
 
+import code;
 
-
+code.interact(local=dict(globals(), **locals()))
 
 
 

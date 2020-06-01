@@ -368,57 +368,57 @@ class ObjectVsBackgroundDataset(Dataset):
 
 # SETUP ##
 
-# import tensorflow as tf
-# config = tf.ConfigProto()
-# config.gpu_options.allow_growth = True
-# sess = tf.Session(config=config)
+import tensorflow as tf
+config = tf.ConfigProto()
+config.gpu_options.allow_growth = True
+sess = tf.Session(config=config)
+
+training_dataset = ObjectVsBackgroundDataset()
+# training_dataset.construct_dataset(dataset_dir = '../../../Datasets/SAMS-Dataset')
+training_dataset.load_dataset('train_set', dataset_dir='ocid_dataset')
+training_dataset.prepare()
+
+validating_dataset = ObjectVsBackgroundDataset()
+validating_dataset.load_dataset('val_set', dataset_dir='ocid_dataset')
+validating_dataset.prepare()
+
+testing_dataset = ObjectVsBackgroundDataset()
+testing_dataset.load_dataset('test_set', dataset_dir='ocid_dataset')
+testing_dataset.prepare()
+
+config = ObjectVsBackgroundConfig()
+channel_means = np.array(training_dataset.get_channel_means())
+config.MEAN_PIXEL = np.around(channel_means, decimals = 1)
+config.display()
+inference_config = InferenceConfig()
+
+
+# # ##### TRAINING #####
 #
-# training_dataset = ObjectVsBackgroundDataset()
-# # training_dataset.construct_dataset(dataset_dir = '../../../Datasets/SAMS-Dataset')
-# training_dataset.load_dataset('train_set', dataset_dir='ocid_dataset')
-# training_dataset.prepare()
-#
-# validating_dataset = ObjectVsBackgroundDataset()
-# validating_dataset.load_dataset('val_set', dataset_dir='ocid_dataset')
-# validating_dataset.prepare()
-#
-# testing_dataset = ObjectVsBackgroundDataset()
-# testing_dataset.load_dataset('test_set', dataset_dir='ocid_dataset')
-# testing_dataset.prepare()
-#
-# config = ObjectVsBackgroundConfig()
-# channel_means = np.array(training_dataset.get_channel_means())
-# config.MEAN_PIXEL = np.around(channel_means, decimals = 1)
-# config.display()
-# inference_config = InferenceConfig()
-#
-#
-# # # ##### TRAINING #####
-# #
-# MODEL_DIR = "models"
-# # COCO_MODEL_PATH = os.path.join("models", "mask_rcnn_object_vs_background_100_heads_50_all.h5")
-# COCO_MODEL_PATH = os.path.join("models", "mask_rcnn_object_vs_background_HYBRID-50_head_50_all.h5")
-# model = modellib.MaskRCNN(mode="training", config=config,
-#                              model_dir=MODEL_DIR)
-#
-# # model.load_weights(COCO_MODEL_PATH, by_name=True,
-# #                       exclude=["conv1", "mrcnn_class_logits", "mrcnn_bbox_fc",
-# #                                "mrcnn_bbox", "mrcnn_mask"])
-# model.load_weights(COCO_MODEL_PATH, by_name=True)
-#
+MODEL_DIR = "models"
+# COCO_MODEL_PATH = os.path.join("models", "mask_rcnn_object_vs_background_100_heads_50_all.h5")
+COCO_MODEL_PATH = os.path.join("models", "mask_rcnn_object_vs_background_HYBRID-50_head_50_all.h5")
+model = modellib.MaskRCNN(mode="training", config=config,
+                             model_dir=MODEL_DIR)
+
+# model.load_weights(COCO_MODEL_PATH, by_name=True,
+#                       exclude=["conv1", "mrcnn_class_logits", "mrcnn_bbox_fc",
+#                                "mrcnn_bbox", "mrcnn_mask"])
+model.load_weights(COCO_MODEL_PATH, by_name=True)
+
+model.train(training_dataset, validating_dataset,
+               learning_rate=config.LEARNING_RATE,
+               epochs=50,
+               layers=r"(conv1)|(mrcnn\_.*)|(rpn\_.*)|(fpn\_.*)")
+
+
 # model.train(training_dataset, validating_dataset,
-#                learning_rate=config.LEARNING_RATE,
-#                epochs=50,
-#                layers=r"(conv1)|(mrcnn\_.*)|(rpn\_.*)|(fpn\_.*)")
-#
-#
-# # model.train(training_dataset, validating_dataset,
-# #                 learning_rate=config.LEARNING_RATE/10,
-# #                 epochs=250,
-# #                 layers="all")
-#
-# model_path = os.path.join(MODEL_DIR, "mask_rcnn_object_vs_background_HYBRID-Weights_SAMS-50_head_50_all.h5")
-# model.keras_model.save_weights(model_path)
+#                 learning_rate=config.LEARNING_RATE/10,
+#                 epochs=250,
+#                 layers="all")
+
+model_path = os.path.join(MODEL_DIR, "mask_rcnn_object_vs_background_HYBRID-Weights_SAMS-50_head_50_all.h5")
+model.keras_model.save_weights(model_path)
 
 # # # # ##### TESTING #####
 #
