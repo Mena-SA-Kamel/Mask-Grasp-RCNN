@@ -37,9 +37,6 @@ with tf.device(DEVICE):
                               config=config)
 
 weights_path = MASKRCNN_MODEL_PATH
-import code;
-
-code.interact(local=dict(globals(), **locals()))
 
 # Load weights
 print("Loading weights ", weights_path)
@@ -74,6 +71,9 @@ neutral_anchors = anchors[neutral_anchor_ix]
 log("positive_anchors", positive_anchors)
 log("negative_anchors", negative_anchors)
 log("neutral anchors", neutral_anchors)
+import code;
+
+code.interact(local=dict(globals(), **locals()))
 
 # Apply refinement deltas to positive anchors
 refined_anchors = utils.apply_box_deltas(

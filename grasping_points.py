@@ -316,7 +316,6 @@ validating_dataset.prepare()
 with tf.device(DEVICE):
     model = modellib.MaskRCNN(mode="training", model_dir=MODEL_DIR,
                               config=config, task="grasping_points")
-# import code; code.interact(local=dict(globals(), **locals()))
 
 # Load weights
 weights_path = MASKRCNN_MODEL_PATH
@@ -324,63 +323,71 @@ print("Loading weights ", weights_path)
 model.load_weights(weights_path, by_name=True,
                        exclude=["conv1", "rpn_model", "rpn_class_logits",
                                 "rpn_class ", "rpn_bbox "])
-# model.train(training_dataset, validating_dataset,
-#                learning_rate=config.LEARNING_RATE,
-#                epochs=50,
-#                layers=r"(conv1)|(rpn\_.*)|(fpn\_.*)")
+model.train(training_dataset, validating_dataset,
+               learning_rate=config.LEARNING_RATE,
+               epochs=50,
+               layers=r"(conv1)|(grasp_rpn\_.*)|(fpn\_.*)",
+               task=mode)
 
-image_ids = random.choices(training_dataset.image_ids, k=1)
-for image_id in image_ids:
-    image, image_meta, gt_class_id, gt_bbox, gt_mask =\
-        modellib.load_image_gt(training_dataset, config, image_id, use_mini_mask=False, mode='grasping_points')
-    for i in list(range(len(gt_class_id))):
-        bounding_box = training_dataset.bbox_convert_to_four_vertices(gt_bbox[i])
-        # training_dataset.visualize_bbox(image_id, bounding_box[0], gt_class_id[i], gt_bbox[i], rgbd_image=image)
-
-normalized_anchors = model.get_anchors(config.IMAGE_SHAPE, mode='grasping_points', angles=config.RPN_GRASP_ANGLES)
-
-# Generate Anchors
-mode= 'grasping_points'
-backbone_shapes = modellib.compute_backbone_shapes(config, config.IMAGE_SHAPE)
-anchors = utils.generate_pyramid_anchors(config.RPN_ANCHOR_SCALES,
-                                          config.RPN_ANCHOR_RATIOS,
-                                          backbone_shapes,
-                                          config.BACKBONE_STRIDES,
-                                          config.RPN_ANCHOR_STRIDE,
-                                          mode,
-                                          config.RPN_GRASP_ANGLES)
-
-target_rpn_match, target_rpn_bbox, anchor_data = modellib.build_rpn_targets(
-    image.shape, model.anchors, gt_class_id, gt_bbox, model.config, mode)
-
-log("target_rpn_match", target_rpn_match)
-log("target_rpn_bbox", target_rpn_bbox)
-
-positive_anchor_ix = np.where(target_rpn_match[:] == 1)[0]
-negative_anchor_ix = np.where(target_rpn_match[:] == -1)[0]
-neutral_anchor_ix = np.where(target_rpn_match[:] == 0)[0]
-positive_anchors = model.anchors[positive_anchor_ix]
-negative_anchors = model.anchors[negative_anchor_ix]
-neutral_anchors = model.anchors[neutral_anchor_ix]
-log("positive_anchors", positive_anchors)
-log("negative_anchors", negative_anchors)
-log("neutral anchors", neutral_anchors)
-
-# Apply refinement deltas to positive anchors
-positive_anchor_indices = anchor_data[anchor_data[:,1] == 1][:,0]
-positive_anchors = anchors[positive_anchor_indices]
-
-gt_boxes = gt_bbox[gt_class_id == 1]
-deltas = target_rpn_bbox[:positive_anchors.shape[0]]* model.config.RPN_BBOX_STD_DEV
-refined_anchors = utils.apply_box_deltas(positive_anchors, deltas, mode, len(config.RPN_GRASP_ANGLES))
-
-# Display positive anchors before refinement (dotted) and
-# after refinement (solid).
-visualize.draw_boxes(image, boxes=positive_anchors, refined_boxes=refined_anchors, mode=mode)
-
-import code;
-
-code.interact(local=dict(globals(), **locals()))
+model_path = os.path.join(MODEL_DIR, "grasp_rcnn_attempt_1.h5")
+model.keras_model.save_weights(model_path)
+#
+# image_ids = random.choices(training_dataset.image_ids, k=1)
+# for image_id in image_ids:
+#     image, image_meta, gt_class_id, gt_bbox, gt_mask =\
+#         modellib.load_image_gt(training_dataset, config, image_id, use_mini_mask=False, mode='grasping_points')
+#     for i in list(range(len(gt_class_id))):
+#         bounding_box = training_dataset.bbox_convert_to_four_vertices(gt_bbox[i])
+#         # training_dataset.visualize_bbox(image_id, bounding_box[0], gt_class_id[i], gt_bbox[i], rgbd_image=image)
+#
+# normalized_anchors = model.get_anchors(config.IMAGE_SHAPE, mode='grasping_points', angles=config.RPN_GRASP_ANGLES)
+#
+# # Generate Anchors
+# mode= 'grasping_points'
+# backbone_shapes = modellib.compute_backbone_shapes(config, config.IMAGE_SHAPE)
+# anchors = utils.generate_pyramid_anchors(config.RPN_ANCHOR_SCALES,
+#                                           config.RPN_ANCHOR_RATIOS,
+#                                           backbone_shapes,
+#                                           config.BACKBONE_STRIDES,
+#                                           config.RPN_ANCHOR_STRIDE,
+#                                           mode,
+#                                           config.RPN_GRASP_ANGLES)
+#
+# target_rpn_match, target_rpn_bbox, anchor_data = modellib.build_rpn_targets(
+#     image.shape, model.anchors, gt_class_id, gt_bbox, model.config, mode)
+#
+# log("target_rpn_match", target_rpn_match)
+# log("target_rpn_bbox", target_rpn_bbox)
+# positive_anchor_ix = np.where(target_rpn_match[:] == 1)[0]
+# negative_anchor_ix = np.where(target_rpn_match[:] == -1)[0]
+# neutral_anchor_ix = np.where(target_rpn_match[:] == 0)[0]
+# positive_anchors = model.anchors[positive_anchor_ix]
+# negative_anchors = model.anchors[negative_anchor_ix]
+# neutral_anchors = model.anchors[neutral_anchor_ix]
+# log("positive_anchors", positive_anchors)
+# log("negative_anchors", negative_anchors)
+# log("neutral anchors", neutral_anchors)
+#
+# # Apply refinement deltas to positive anchors
+# positive_anchor_indices = anchor_data[anchor_data[:,1] == 1][:,0]
+# positive_anchors = anchors[positive_anchor_indices]
+#
+# gt_boxes = gt_bbox[gt_class_id == 1]
+#
+# deltas = target_rpn_bbox[:positive_anchors.shape[0]]* model.config.RPN_BBOX_STD_DEV
+# if not (deltas.shape[0] == len(positive_anchor_ix)):
+#     print ('$$$$$$$$$$$$$$$$$$$$$$$  ERRRORRRR $$$$$$$$$$$$$$$$$$$$$')
+#     import code;
+#     code.interact(local=dict(globals(), **locals()))
+#
+# refined_anchors = utils.apply_box_deltas(positive_anchors, deltas, mode, len(config.RPN_GRASP_ANGLES))
+#
+# # Display positive anchors before refinement (dotted) and
+# # after refinement (solid).
+# visualize.draw_boxes(image, boxes=positive_anchors, refined_boxes=refined_anchors, mode=mode)
+#
+# import code;
+# code.interact(local=dict(globals(), **locals()))
 
 
 
