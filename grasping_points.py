@@ -13,6 +13,7 @@ import os
 import glob
 from shutil import copyfile
 import matplotlib.pyplot as plt
+from matplotlib.path import Path
 import skimage.io
 from PIL import Image
 import open3d as o3d
@@ -44,6 +45,8 @@ class GraspingPointsConfig(Config):
     MAX_GT_INSTANCES = 50
     RPN_GRASP_ANGLES = [-60, -30, 0, 30, 60]
     RPN_BBOX_STD_DEV = np.array([0.1, 0.1, 0.2, 0.2, 1])
+    LEARNING_RATE = 0.003
+    LEARNING_MOMENTUM = 0.8
 
 class InferenceConfig(GraspingPointsConfig):
     GPU_COUNT = 1
@@ -179,6 +182,7 @@ class GraspingPointsDataset(Dataset):
         bounding_boxes_formatted = []
         vertices = []
         class_ids = []
+        bad_rectangle = False
 
         class_id = 0
         for bounding_box_class in [negative_rectangles, positive_rectangles]:
@@ -187,16 +191,19 @@ class GraspingPointsDataset(Dataset):
                 try:
                     x = int(float(bounding_box.split(' ')[0]))
                     y = int(float(bounding_box.split(' ')[1]))
+                    vertices.append([x, y])
                 except:
-                    print("ERROR : ValueError: cannot convert float NaN to integer")
-                    import code;
-                    code.interact(local=dict(globals(), **locals()))
-                vertices.append([x, y])
+                    # print("ERROR : ValueError: cannot convert float NaN to integer")
+                    # import code;
+                    # code.interact(local=dict(globals(), **locals()))
+                    bad_rectangle = True
                 i += 1
                 if i % 4 == 0:
-                    bounding_boxes_formatted.append(vertices)
-                    class_ids.append(class_id)
+                    if not bad_rectangle:
+                        bounding_boxes_formatted.append(vertices)
+                        class_ids.append(class_id)
                     vertices = []
+                    bad_rectangle = False
             class_id += 1
         return np.array(bounding_boxes_formatted), class_ids
 
@@ -287,6 +294,108 @@ class GraspingPointsDataset(Dataset):
         p = np.random.permutation(len(class_ids))
         return bounding_box_vertices[p], bbox_5_dimensional[p], class_ids[p].astype('uint8')
 
+    def clip_oriented_boxes_to_boundary(self, boxes, window):
+        """
+        boxes: [N, (x, y, w, h, theta)]
+        window: [4] in the form y1, x1, y2, x2
+        """
+        # Split
+        x = boxes[:, 0]
+        y = boxes[:, 1]
+        wx1, wy1, wx2, wy2 = window
+
+        # Clip
+        x = np.maximum(np.minimum(x, wx2), wx1)
+        y = np.maximum(np.minimum(y, wy2), wy1)
+
+        boxes[:, 0] = x
+        boxes[:, 1] = y
+        return boxes
+
+    def refine_results(self, results, anchors):
+        '''
+        Applies a NMS like refinement algorithm on the proposals output by the RPN
+        '''
+        proposals = results['rois']
+        probabilities = results['scores'] # bg prob, fg prob
+        deltas = results['refinements']
+        anchors = np.array(list(anchors.values()))[0]
+        mode = 'grasping_points'
+
+        all_boxes = utils.apply_box_deltas(anchors, deltas, mode,
+                                           len(config.RPN_GRASP_ANGLES))
+
+        # # clips the boxes in normalized coordinates - filters out boxes with center locations out of the range [0,1]
+        # boxes_clipped = self.clip_oriented_boxes_to_boundary(all_boxes, [0,0,1,1])
+
+        # Filter out boxes with center coordinates out of the image
+        invalid_x_coordinates = np.logical_or((all_boxes[:,0] < 0), (all_boxes[:,0] > 1))
+        invalid_y_coordinates = np.logical_or((all_boxes[:,1] < 0), (all_boxes[:,1] > 1))
+        boxes_to_keep = np.logical_not(np.logical_or(invalid_x_coordinates, invalid_y_coordinates))
+        all_boxes = all_boxes[boxes_to_keep]
+        probabilities = probabilities[boxes_to_keep]
+
+        # Denormalizes the boxes - brings the values from [0,1] to pixel coordinates
+        boxes_denorm = utils.denorm_boxes(all_boxes, config.IMAGE_SHAPE[:2], mode='grasping_points')
+        boxes_denorm[:, -1] = boxes_denorm[:, -1] / (2 * 360)
+
+        # want to get n boxes with highest probabilities (n = config.PRE_NMS_LIMIT)
+        # Ascending order, need to get largest n
+        sorting_ix = np.argsort(probabilities[:, 1])[::-1][:config.PRE_NMS_LIMIT]
+        top_boxes = boxes_denorm[sorting_ix]
+        top_box_probabilities = probabilities[sorting_ix]
+
+        # Remove boxes with dimensions larger than image
+        large_width_ix = top_boxes[:, 2] > config.IMAGE_SHAPE[1]
+        large_height_ix = top_boxes[:, 3] > config.IMAGE_SHAPE[0]
+        large_box_ix = np.logical_or(large_width_ix, large_height_ix)
+
+        # Remove boxes with dimensions smaller than 1 pixel
+        small_width_ix = top_boxes[:, 2] < 1
+        small_height_ix = top_boxes[:, 3] < 1
+        small_box_ix = np.logical_or(small_width_ix, small_height_ix)
+
+        # Filter small and large boxes
+        boxes_to_keep = np.logical_not(np.logical_or(large_box_ix, small_box_ix))
+        top_boxes = top_boxes[boxes_to_keep]
+        top_box_probabilities = top_box_probabilities[boxes_to_keep]
+
+        filtered_proposals = top_boxes
+        ix = 0
+        while ix < filtered_proposals.shape[0]:
+            box = filtered_proposals[ix]
+            x, y, w, h, theta = box
+            box_vertices = self.bbox_convert_to_four_vertices(box)
+            box_vertices = box_vertices[0]
+
+            # confirm all vertices are within the image
+            x_values = box_vertices[:, 0]
+            y_values = box_vertices[:, 1]
+            invalid_xs = np.logical_or(x_values < 0, x_values > config.IMAGE_SHAPE[1])
+            invalid_ys = np.logical_or(y_values < 0, y_values > config.IMAGE_SHAPE[0])
+            if any(invalid_xs) or any(invalid_ys):
+                ix += 1
+                continue
+
+            # To remove, two conditions need to be met:
+            # 1. box vertices are within the boundary of the current box
+            # 2. Angle difference is less than 30 (Need to implement this)
+            # Step #1 filtering
+            vertices_path = Path(box_vertices)
+            other_box_vertices = filtered_proposals[:, 0:2]
+            boxes_within_boundary = vertices_path.contains_points(other_box_vertices)
+            # Step #2 filtering
+            box_angles = filtered_proposals[:, -1]
+            angle_differences = np.abs(theta - box_angles)%360
+            angle_threshold = 30
+            boxes_within_angle = angle_differences < angle_threshold
+
+            # Enforcing both conditions for a box to match
+            matching_boxes = np.logical_and(boxes_within_boundary, boxes_within_angle)
+            filtered_proposals = np.delete(filtered_proposals, np.where(matching_boxes == True), axis=0)
+            ix += 1
+
+        return filtered_proposals
 
 # SETUP ##
 import tensorflow as tf
@@ -296,7 +405,7 @@ sess = tf.Session(config=config)
 
 # Directory to save logs and trained model
 MODEL_DIR = "models"
-MASKRCNN_MODEL_PATH = os.path.join(MODEL_DIR, "mask_rcnn_object_vs_background_0020.h5")
+MASKRCNN_MODEL_PATH = os.path.join(MODEL_DIR, "mask_rcnn_coco.h5")
 config = InferenceConfig()
 config.display()
 DEVICE = "/gpu:0"
@@ -314,32 +423,52 @@ validating_dataset.prepare()
 
 # Create model in inference mode
 with tf.device(DEVICE):
-    model = modellib.MaskRCNN(mode="training", model_dir=MODEL_DIR,
+    model = modellib.MaskRCNN(mode="inference", model_dir=MODEL_DIR,
                               config=config, task="grasping_points")
 
 # Load weights
-weights_path = MASKRCNN_MODEL_PATH
-print("Loading weights ", weights_path)
-model.load_weights(weights_path, by_name=True,
-                       exclude=["conv1", "rpn_model", "rpn_class_logits",
-                                "rpn_class ", "rpn_bbox "])
-model.train(training_dataset, validating_dataset,
-               learning_rate=config.LEARNING_RATE,
-               epochs=50,
-               layers=r"(conv1)|(grasp_rpn\_.*)|(fpn\_.*)",
-               task=mode)
+# weights_path = MASKRCNN_MODEL_PATH
+# print("Loading weights ", weights_path)
+# model.load_weights(weights_path, by_name=True,
+#                        exclude=["conv1", "rpn_model", "rpn_class_logits",
+#                                 "rpn_class ", "rpn_bbox "])
+# model.train(training_dataset, validating_dataset,
+#                learning_rate=config.LEARNING_RATE,
+#                epochs=300,
+#                layers=r"(conv1)|(grasp_rpn\_.*)|(fpn\_.*)",
+#                task=mode)
+#
+# model.train(training_dataset, validating_dataset,
+#                learning_rate=config.LEARNING_RATE/3,
+#                epochs=400,
+#                layers="all",
+#                task=mode)
+#
+# model_path = os.path.join(MODEL_DIR, "grasp_rcnn_attempt_2.h5")
+# model.keras_model.save_weights(model_path)
 
-model_path = os.path.join(MODEL_DIR, "grasp_rcnn_attempt_1.h5")
-model.keras_model.save_weights(model_path)
-#
-# image_ids = random.choices(training_dataset.image_ids, k=1)
-# for image_id in image_ids:
-#     image, image_meta, gt_class_id, gt_bbox, gt_mask =\
-#         modellib.load_image_gt(training_dataset, config, image_id, use_mini_mask=False, mode='grasping_points')
-#     for i in list(range(len(gt_class_id))):
-#         bounding_box = training_dataset.bbox_convert_to_four_vertices(gt_bbox[i])
-#         # training_dataset.visualize_bbox(image_id, bounding_box[0], gt_class_id[i], gt_bbox[i], rgbd_image=image)
-#
+image_ids = random.choices(training_dataset.image_ids, k=10)
+for image_id in image_ids:
+    image, image_meta, gt_class_id, gt_bbox, gt_mask =\
+        modellib.load_image_gt(training_dataset, config, image_id, use_mini_mask=False, mode='grasping_points')
+    results = model.detect([image], verbose=1, task=mode)
+    r = results[0]
+    proposals = r['rois']
+    proposals = training_dataset.refine_results(r, model._anchor_cache)
+    fig, ax = plt.subplots(1, figsize=(10, 10))
+    ax.imshow(image)
+    for i, rect in enumerate(proposals):
+        rect = training_dataset.bbox_convert_to_four_vertices(rect)
+        p = patches.Polygon(rect[0], linewidth=1,edgecolor='r',facecolor='none')
+        ax.add_patch(p)
+    plt.show(block=False)
+
+import code;
+code.interact(local=dict(globals(), **locals()))
+    # plt.savefig(os.path.join('Grasping_anchors','P'+str(level+2)+ 'center_anchors.png'))
+
+    # training_dataset.visualize_bbox(image_id, bounding_box[0], gt_class_id[i], gt_bbox[i], rgbd_image=image)
+
 # normalized_anchors = model.get_anchors(config.IMAGE_SHAPE, mode='grasping_points', angles=config.RPN_GRASP_ANGLES)
 #
 # # Generate Anchors
@@ -388,10 +517,10 @@ model.keras_model.save_weights(model_path)
 #
 # import code;
 # code.interact(local=dict(globals(), **locals()))
-
-
-
-
+#
+#
+#
+#
 
 ####################################### VISUALIZING ANCHORS ############################################################
 # num_levels = len(backbone_shapes)

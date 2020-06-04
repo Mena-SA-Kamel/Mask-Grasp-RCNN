@@ -1109,7 +1109,7 @@ def norm_boxes(boxes, shape, mode=''):
         return np.divide((boxes - shift), scale).astype(np.float32)
 
 
-def denorm_boxes(boxes, shape):
+def denorm_boxes(boxes, shape, mode=''):
     """Converts boxes from normalized coordinates to pixel coordinates.
     boxes: [N, (y1, x1, y2, x2)] in normalized coordinates
     shape: [..., (height, width)] in pixels
@@ -1121,9 +1121,14 @@ def denorm_boxes(boxes, shape):
         [N, (y1, x1, y2, x2)] in pixel coordinates
     """
     h, w = shape
-    scale = np.array([h - 1, w - 1, h - 1, w - 1])
-    shift = np.array([0, 0, 1, 1])
-    return np.around(np.multiply(boxes, scale) + shift).astype(np.int32)
+    if mode == 'grasping_points':
+        scale = np.array([w - 1, h - 1, w - 1, h - 1, 90])
+        # return np.around(np.multiply(boxes, scale)).astype(np.float32)
+        return (np.multiply(boxes, scale)).astype(np.float32)
+    else:
+        scale = np.array([h - 1, w - 1, h - 1, w - 1])
+        shift = np.array([0, 0, 1, 1])
+        return np.around(np.multiply(boxes, scale) + shift).astype(np.int32)
 
 
 def resize(image, output_shape, order=1, mode='constant', cval=0, clip=True,
