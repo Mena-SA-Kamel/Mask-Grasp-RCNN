@@ -1027,8 +1027,11 @@ def grasping_rpn_graph(feature_map, anchors_per_location, anchor_stride):
 
     # Bounding box refinement. [batch, H, W, anchors per location * depth]
     # where depth is [dx, dy, log(dw), log(dh), dtheta]
+    x = KL.Conv2D(512, (3, 3), padding='same', activation='relu',
+                       strides=anchor_stride,
+                       name='grasp_rpn_bbox_pred_1')(shared)
     x = KL.Conv2D(anchors_per_location * 5, (1, 1), padding="valid",
-                  activation='linear', name='grasp_rpn_bbox_pred')(shared)
+                  activation='linear', name='grasp_rpn_bbox_pred_2')(x)
 
     # Reshape to [batch, anchors, 5]
     rpn_bbox = KL.Lambda(lambda t: tf.reshape(t, [tf.shape(t)[0], -1, 5]))(x)

@@ -54,7 +54,7 @@ class InferenceConfig(GraspingPointsConfig):
 
 class GraspingPointsDataset(Dataset):
 
-    def load_dataset(self, type = 'train_set', dataset_dir = 'cornell_grasping_dataset'):
+    def load_dataset(self, type = 'train_set', dataset_dir = 'cornell_grasping_dataset', augmentation=None):
         self.add_class(GraspingPointsConfig().NAME, 1, "graspable_location")
         dataset_path = os.path.join(dataset_dir, type)
         image_list = glob.glob(dataset_path + '/**/rgb/*.png', recursive=True)
@@ -339,11 +339,13 @@ class GraspingPointsDataset(Dataset):
         boxes_denorm = utils.denorm_boxes(all_boxes, config.IMAGE_SHAPE[:2], mode='grasping_points')
         boxes_denorm[:, -1] = boxes_denorm[:, -1] / (2 * 360)
 
-        # want to get n boxes with highest probabilities (n = config.PRE_NMS_LIMIT)
+        # want to get n boxes with highest probabilities (n = 1000)
         # Ascending order, need to get largest n
-        sorting_ix = np.argsort(probabilities[:, 1])[::-1][:config.PRE_NMS_LIMIT]
-        top_boxes = boxes_denorm[sorting_ix]
-        top_box_probabilities = probabilities[sorting_ix]
+        # sorting_ix = np.argsort(probabilities[:, 1])[::-1][:1000]
+        # top_boxes = boxes_denorm[sorting_ix]
+        # top_box_probabilities = probabilities[sorting_ix]
+        top_boxes = boxes_denorm[probabilities[:,1] > 0.95]
+        top_box_probabilities = probabilities[probabilities[:,1] > 0.95]
 
         # Remove boxes with dimensions larger than image
         large_width_ix = top_boxes[:, 2] > config.IMAGE_SHAPE[1]
@@ -359,6 +361,8 @@ class GraspingPointsDataset(Dataset):
         boxes_to_keep = np.logical_not(np.logical_or(large_box_ix, small_box_ix))
         top_boxes = top_boxes[boxes_to_keep]
         top_box_probabilities = top_box_probabilities[boxes_to_keep]
+
+        print(top_box_probabilities)
 
         filtered_proposals = top_boxes
         ix = 0
@@ -380,18 +384,25 @@ class GraspingPointsDataset(Dataset):
             # To remove, two conditions need to be met:
             # 1. box vertices are within the boundary of the current box
             # 2. Angle difference is less than 30 (Need to implement this)
-            # Step #1 filtering
+            # 3. Distance between centers is less than 5% of the diagonal
+            # Condition #1 filtering
             vertices_path = Path(box_vertices)
             other_box_vertices = filtered_proposals[:, 0:2]
             boxes_within_boundary = vertices_path.contains_points(other_box_vertices)
-            # Step #2 filtering
+            # Condition #2 filtering
             box_angles = filtered_proposals[:, -1]
             angle_differences = np.abs(theta - box_angles)%360
             angle_threshold = 30
             boxes_within_angle = angle_differences < angle_threshold
+            # Condition #3 filtering
+            distance_threshold = 0.05*((w**2 + h**2)**0.5)
+            box_x = filtered_proposals[:, 0]
+            box_y = filtered_proposals[:, 1]
+            box_distances = ((box_x - x)**2 + (box_y - y)**2)**0.5
+            boxes_within_distance = box_distances < distance_threshold
 
             # Enforcing both conditions for a box to match
-            matching_boxes = np.logical_and(boxes_within_boundary, boxes_within_angle)
+            matching_boxes = np.all((boxes_within_boundary, boxes_within_angle, boxes_within_distance), axis=0)
             filtered_proposals = np.delete(filtered_proposals, np.where(matching_boxes == True), axis=0)
             ix += 1
 
@@ -421,12 +432,12 @@ validating_dataset = GraspingPointsDataset()
 validating_dataset.load_dataset(type='val_set')
 validating_dataset.prepare()
 
-# Create model in inference mode
-with tf.device(DEVICE):
-    model = modellib.MaskRCNN(mode="inference", model_dir=MODEL_DIR,
-                              config=config, task="grasping_points")
-
-# Load weights
+# # Create model in training mode
+# with tf.device(DEVICE):
+#     model = modellib.MaskRCNN(mode="training", model_dir=MODEL_DIR,
+#                               config=config, task="grasping_points")
+#
+# # Load weights
 # weights_path = MASKRCNN_MODEL_PATH
 # print("Loading weights ", weights_path)
 # model.load_weights(weights_path, by_name=True,
@@ -434,18 +445,28 @@ with tf.device(DEVICE):
 #                                 "rpn_class ", "rpn_bbox "])
 # model.train(training_dataset, validating_dataset,
 #                learning_rate=config.LEARNING_RATE,
-#                epochs=300,
+#                epochs=50,
 #                layers=r"(conv1)|(grasp_rpn\_.*)|(fpn\_.*)",
 #                task=mode)
 #
 # model.train(training_dataset, validating_dataset,
 #                learning_rate=config.LEARNING_RATE/3,
-#                epochs=400,
+#                epochs=200,
 #                layers="all",
 #                task=mode)
 #
-# model_path = os.path.join(MODEL_DIR, "grasp_rcnn_attempt_2.h5")
+# model_path = os.path.join(MODEL_DIR, "grasp_rcnn_attempt_3.h5")
 # model.keras_model.save_weights(model_path)
+# ######################################################################################################
+# # Create model in inference mode
+with tf.device(DEVICE):
+    model = modellib.MaskRCNN(mode="inference", model_dir=MODEL_DIR,
+                              config=config, task="grasping_points")
+
+# Load weights
+weights_path = os.path.join(MODEL_DIR, "mask_rcnn_grasping_points_0080.h5")
+print("Loading weights ", weights_path)
+model.load_weights(weights_path, by_name=True)
 
 image_ids = random.choices(training_dataset.image_ids, k=10)
 for image_id in image_ids:
@@ -466,9 +487,10 @@ for image_id in image_ids:
 import code;
 code.interact(local=dict(globals(), **locals()))
     # plt.savefig(os.path.join('Grasping_anchors','P'+str(level+2)+ 'center_anchors.png'))
-
+    #
     # training_dataset.visualize_bbox(image_id, bounding_box[0], gt_class_id[i], gt_bbox[i], rgbd_image=image)
 
+# ######################################################################################################
 # normalized_anchors = model.get_anchors(config.IMAGE_SHAPE, mode='grasping_points', angles=config.RPN_GRASP_ANGLES)
 #
 # # Generate Anchors
