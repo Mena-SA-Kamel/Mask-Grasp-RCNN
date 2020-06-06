@@ -433,59 +433,63 @@ validating_dataset.load_dataset(type='val_set')
 validating_dataset.prepare()
 
 # # Create model in training mode
+with tf.device(DEVICE):
+    model = modellib.MaskRCNN(mode="training", model_dir=MODEL_DIR,
+                              config=config, task="grasping_points")
+
+tf.keras.utils.plot_model(
+        model.keras_model, to_file='model.png', show_shapes=False, show_layer_names=True
+    )
+import code; code.interact(local=dict(globals(), **locals()))
+# Load weights
+weights_path = MASKRCNN_MODEL_PATH
+print("Loading weights ", weights_path)
+model.load_weights(weights_path, by_name=True,
+                       exclude=["conv1", "rpn_model", "rpn_class_logits",
+                                "rpn_class ", "rpn_bbox "])
+model.train(training_dataset, validating_dataset,
+               learning_rate=config.LEARNING_RATE,
+               epochs=50,
+               layers=r"(conv1)|(grasp_rpn\_.*)|(fpn\_.*)",
+               task=mode)
+
+model.train(training_dataset, validating_dataset,
+               learning_rate=config.LEARNING_RATE/3,
+               epochs=200,
+               layers="all",
+               task=mode)
+
+model_path = os.path.join(MODEL_DIR, "grasp_rcnn_attempt_3.h5")
+model.keras_model.save_weights(model_path)
+# ######################################################################################################
+# # Create model in inference mode
 # with tf.device(DEVICE):
-#     model = modellib.MaskRCNN(mode="training", model_dir=MODEL_DIR,
+#     model = modellib.MaskRCNN(mode="inference", model_dir=MODEL_DIR,
 #                               config=config, task="grasping_points")
 #
 # # Load weights
-# weights_path = MASKRCNN_MODEL_PATH
+# weights_path = os.path.join(MODEL_DIR, "mask_rcnn_grasping_points_0080.h5")
 # print("Loading weights ", weights_path)
-# model.load_weights(weights_path, by_name=True,
-#                        exclude=["conv1", "rpn_model", "rpn_class_logits",
-#                                 "rpn_class ", "rpn_bbox "])
-# model.train(training_dataset, validating_dataset,
-#                learning_rate=config.LEARNING_RATE,
-#                epochs=50,
-#                layers=r"(conv1)|(grasp_rpn\_.*)|(fpn\_.*)",
-#                task=mode)
+# model.load_weights(weights_path, by_name=True)
 #
-# model.train(training_dataset, validating_dataset,
-#                learning_rate=config.LEARNING_RATE/3,
-#                epochs=200,
-#                layers="all",
-#                task=mode)
+# image_ids = random.choices(training_dataset.image_ids, k=10)
+# for image_id in image_ids:
+#     image, image_meta, gt_class_id, gt_bbox, gt_mask =\
+#         modellib.load_image_gt(training_dataset, config, image_id, use_mini_mask=False, mode='grasping_points')
+#     results = model.detect([image], verbose=1, task=mode)
+#     r = results[0]
+#     proposals = r['rois']
+#     proposals = training_dataset.refine_results(r, model._anchor_cache)
+#     fig, ax = plt.subplots(1, figsize=(10, 10))
+#     ax.imshow(image)
+#     for i, rect in enumerate(proposals):
+#         rect = training_dataset.bbox_convert_to_four_vertices(rect)
+#         p = patches.Polygon(rect[0], linewidth=1,edgecolor='r',facecolor='none')
+#         ax.add_patch(p)
+#     plt.show(block=False)
 #
-# model_path = os.path.join(MODEL_DIR, "grasp_rcnn_attempt_3.h5")
-# model.keras_model.save_weights(model_path)
-# ######################################################################################################
-# # Create model in inference mode
-with tf.device(DEVICE):
-    model = modellib.MaskRCNN(mode="inference", model_dir=MODEL_DIR,
-                              config=config, task="grasping_points")
-
-# Load weights
-weights_path = os.path.join(MODEL_DIR, "mask_rcnn_grasping_points_0080.h5")
-print("Loading weights ", weights_path)
-model.load_weights(weights_path, by_name=True)
-
-image_ids = random.choices(training_dataset.image_ids, k=10)
-for image_id in image_ids:
-    image, image_meta, gt_class_id, gt_bbox, gt_mask =\
-        modellib.load_image_gt(training_dataset, config, image_id, use_mini_mask=False, mode='grasping_points')
-    results = model.detect([image], verbose=1, task=mode)
-    r = results[0]
-    proposals = r['rois']
-    proposals = training_dataset.refine_results(r, model._anchor_cache)
-    fig, ax = plt.subplots(1, figsize=(10, 10))
-    ax.imshow(image)
-    for i, rect in enumerate(proposals):
-        rect = training_dataset.bbox_convert_to_four_vertices(rect)
-        p = patches.Polygon(rect[0], linewidth=1,edgecolor='r',facecolor='none')
-        ax.add_patch(p)
-    plt.show(block=False)
-
-import code;
-code.interact(local=dict(globals(), **locals()))
+# import code;
+# code.interact(local=dict(globals(), **locals()))
     # plt.savefig(os.path.join('Grasping_anchors','P'+str(level+2)+ 'center_anchors.png'))
     #
     # training_dataset.visualize_bbox(image_id, bounding_box[0], gt_class_id[i], gt_bbox[i], rgbd_image=image)

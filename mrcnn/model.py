@@ -947,6 +947,13 @@ class DetectionLayer(KE.Layer):
 #  Region Proposal Network (RPN)
 ############################################################
 
+def ohem_graph(rpn_ohem_class_losses, rpn_ohem_bbox_losses):
+    total_loss = KL.Add()([rpn_ohem_class_losses, rpn_ohem_bbox_losses])
+    top_losses_ix = tf.nn.top_k(tf.reshape(total_loss, (-1,)), 128, sorted=True, name="rpn_top_losses").indices
+    top_losses_ix = tf.reshape(top_losses_ix, (-1, 128, 1))
+    top_losses_ix = K.cast(top_losses_ix, tf.int32)
+    return top_losses_ix
+
 def rpn_graph(feature_map, anchors_per_location, anchor_stride):
     """Builds the computation graph of Region Proposal Network.
 
@@ -1038,7 +1045,7 @@ def grasping_rpn_graph(feature_map, anchors_per_location, anchor_stride):
     return [rpn_class_logits, rpn_probs, rpn_bbox]
 
 
-def build_rpn_model(anchor_stride, anchors_per_location, depth, task=''):
+def build_rpn_model(anchor_stride, anchors_per_location, depth, task='', name='input_rpn_feature_map'):
     """Builds a Keras model of the Region Proposal Network.
     It wraps the RPN graph so it can be used multiple times with shared
     weights.
@@ -1055,8 +1062,9 @@ def build_rpn_model(anchor_stride, anchors_per_location, depth, task=''):
                 applied to anchors.
     """
     input_feature_map = KL.Input(shape=[None, None, depth],
-                                 name="input_rpn_feature_map")
+                                 name=name)
     if task == 'grasping_points':
+        ## This is the native RPN graph - No OHEM
         outputs = grasping_rpn_graph(input_feature_map, anchors_per_location, anchor_stride)
     else:
         outputs = rpn_graph(input_feature_map, anchors_per_location, anchor_stride)
@@ -1216,6 +1224,30 @@ def rpn_class_loss_graph(rpn_match, rpn_class_logits):
     loss = K.switch(tf.size(loss) > 0, K.mean(loss), tf.constant(0.0))
     return loss
 
+def rpn_ohem_class_loss_graph(rpn_match, rpn_class_logits):
+    """RPN anchor classifier loss.
+
+    rpn_match: [batch, anchors, 1]. Anchor match type. 1=positive,
+               -1=negative, 0=neutral anchor.
+    rpn_class_logits: [batch, anchors, 2]. RPN classifier logits for BG/FG.
+    returns the losses for all samples
+    """
+    # Squeeze last dim to simplify
+    rpn_match = tf.squeeze(rpn_match, -1)
+    # Get anchor classes. Convert the -1/+1 match to 0/1 values.
+    anchor_class = K.cast(K.equal(rpn_match, 1), tf.int32)
+    # Positive and Negative anchors contribute to the loss,
+    # but neutral anchors (match value = 0) don't.
+    indices = tf.where(K.not_equal(rpn_match, 0))
+    # Pick rows that contribute to the loss and filter out the rest.
+    rpn_class_logits = tf.gather_nd(rpn_class_logits, indices)
+    anchor_class = tf.gather_nd(anchor_class, indices)
+    # Cross entropy loss
+    loss = K.sparse_categorical_crossentropy(target=anchor_class,
+                                             output=rpn_class_logits,
+                                             from_logits=True)
+    loss = tf.reshape(loss, [-1, 1])
+    return loss
 
 def rpn_bbox_loss_graph(config, target_bbox, rpn_match, rpn_bbox):
     """Return the RPN bounding box loss graph.
@@ -1243,6 +1275,32 @@ def rpn_bbox_loss_graph(config, target_bbox, rpn_match, rpn_bbox):
     loss = smooth_l1_loss(target_bbox, rpn_bbox)
 
     loss = K.switch(tf.size(loss) > 0, K.mean(loss), tf.constant(0.0))
+    return loss
+
+def rpn_ohem_bbox_loss_graph(config, target_bbox, rpn_match, rpn_bbox):
+    """Return the RPN bounding box loss graph.
+
+    config: the model config object.
+    target_bbox: [batch, max positive anchors, (dy, dx, log(dh), log(dw))].
+        Uses 0 padding to fill in unsed bbox deltas.
+    rpn_match: [batch, anchors, 1]. Anchor match type. 1=positive,
+               -1=negative, 0=neutral anchor.
+    rpn_bbox: [batch, anchors, (dy, dx, log(dh), log(dw))]
+    """
+    # Positive anchors contribute to the loss, but negative and
+    # neutral anchors (match value of 0 or -1) don't.
+    rpn_match = K.squeeze(rpn_match, -1)
+    indices = tf.where(K.equal(rpn_match, 1))
+    # Pick bbox deltas that contribute to the loss
+    rpn_bbox = tf.gather_nd(rpn_bbox, indices)
+
+    # Trim target bounding box deltas to the same length as rpn_bbox.
+    batch_counts = K.sum(K.cast(K.equal(rpn_match, 1), tf.int32), axis=1)
+    target_bbox = batch_pack_graph(target_bbox, batch_counts,
+                                   config.IMAGES_PER_GPU)
+
+    loss = smooth_l1_loss(target_bbox, rpn_bbox)
+    loss = K.mean(loss, axis=1, keepdims=True)
     return loss
 
 
@@ -2556,8 +2614,10 @@ class MaskRCNN():
 
         # RPN Model
         anchors_per_location = len(config.RPN_ANCHOR_RATIOS) * len(config.RPN_GRASP_ANGLES)
+
         rpn = build_rpn_model(config.RPN_ANCHOR_STRIDE,
-                              anchors_per_location, config.TOP_DOWN_PYRAMID_SIZE, task='grasping_points')
+                              anchors_per_location, config.TOP_DOWN_PYRAMID_SIZE, task='grasping_points',
+                              name='input_rpn_feature_map')
 
         # Loop through pyramid layers
         layer_outputs = []  # list of lists
@@ -2575,36 +2635,66 @@ class MaskRCNN():
 
         rpn_class_logits, rpn_class, rpn_bbox = outputs
 
-        # Generate proposals
-        # Proposals are [batch, N, (x, y, w, h, theta)] in normalized coordinates
-        # and zero padded.
-        proposal_count = config.POST_NMS_ROIS_TRAINING if mode == "training" \
-            else config.POST_NMS_ROIS_INFERENCE
-        rpn_rois = GraspProposalLayer(
-            proposal_count=proposal_count,
-            nms_threshold=config.RPN_NMS_THRESHOLD,
-            name="ROI",
-            config=config)([rpn_class, rpn_bbox, anchors])
-
         if mode == 'training':
             # Losses
             # Classification loss
-            rpn_class_loss = KL.Lambda(lambda x: rpn_class_loss_graph(*x), name="rpn_class_loss")(
+            rpn_ohem_class_losses = KL.Lambda(lambda x: rpn_ohem_class_loss_graph(*x), name="rpn_ohem_class_losses")(
                 [input_rpn_match, rpn_class_logits])
 
             # Regression Loss
-            rpn_bbox_loss = KL.Lambda(lambda x: rpn_bbox_loss_graph(config, *x), name="rpn_bbox_loss")(
+            rpn_ohem_bbox_losses = KL.Lambda(lambda x: rpn_ohem_bbox_loss_graph(config, *x), name="rpn_ohem_bbox_losses")(
                 [input_rpn_bbox, input_rpn_match, rpn_bbox])
+
+            top_losses_ix = KL.Lambda(lambda x: ohem_graph(*x), name="rpn_ohem_bbox_losses")\
+                ([rpn_ohem_class_losses, rpn_ohem_bbox_losses])
+
+
+        # # Generate proposals
+        # # Proposals are [batch, N, (x, y, w, h, theta)] in normalized coordinates
+        # # and zero padded.
+        # proposal_count = config.POST_NMS_ROIS_TRAINING if mode == "training" \
+        #     else config.POST_NMS_ROIS_INFERENCE
+        # rpn_rois = GraspProposalLayer(
+        #     proposal_count=proposal_count,
+        #     nms_threshold=config.RPN_NMS_THRESHOLD,
+        #     name="ROI",
+        #     config=config)([rpn_class, rpn_bbox, anchors])
+
+        if mode == 'training':
+
+            input_rpn_match_filtered = KL.Lambda(lambda x: tf.gather_nd(*x), name="input_rpn_match_filtered")(
+                [input_rpn_match,top_losses_ix])
+
+            input_rpn_bbox_filtered = KL.Lambda(lambda x: tf.gather_nd(*x), name="input_rpn_bbox_filtered")(
+                [input_rpn_bbox, top_losses_ix])
+
+            rpn_class = KL.Lambda(lambda x: tf.gather_nd(*x), name="rpn_class_filtered")(
+                [rpn_class, top_losses_ix])
+            rpn_class_logits = KL.Lambda(lambda x: tf.gather_nd(*x), name="rpn_class_logits_filtered")(
+                [rpn_class_logits, top_losses_ix])
+            rpn_bbox = KL.Lambda(lambda x: tf.gather_nd(*x), name="rpn_bbox_filtered")(
+                [rpn_bbox, top_losses_ix])
+            # Losses
+            # Classification loss
+            rpn_class_loss = KL.Lambda(lambda x: rpn_class_loss_graph(*x), name="rpn_class_loss")(
+                [input_rpn_match_filtered, rpn_class_logits])
+
+            # Regression Loss
+            rpn_bbox_loss = KL.Lambda(lambda x: rpn_bbox_loss_graph(config, *x), name="rpn_bbox_loss")(
+                [input_rpn_bbox_filtered, input_rpn_match_filtered, rpn_bbox])
 
             # Model
             inputs = [input_image, input_image_meta, input_rpn_match, input_rpn_bbox]
-            outputs = [rpn_class_logits, rpn_class, rpn_bbox, rpn_rois, rpn_class_loss, rpn_bbox_loss]
+            # outputs = [rpn_class_logits, rpn_class, rpn_bbox, rpn_rois, rpn_class_loss, rpn_bbox_loss]
+            outputs = [rpn_class_logits, rpn_class, rpn_bbox, rpn_class_loss, rpn_bbox_loss]
+
             model = KM.Model(inputs, outputs, name='grasp_rcnn')
 
         else:
             # Model
             inputs = [input_image, input_image_meta, input_anchors]
-            outputs = [rpn_rois, rpn_class, rpn_bbox]
+            # outputs = [rpn_rois, rpn_class, rpn_bbox]
+            outputs = [rpn_class, rpn_bbox]
             model = KM.Model(inputs, outputs, name='grasp_rcnn')
 
         # Add multi-GPU support.
