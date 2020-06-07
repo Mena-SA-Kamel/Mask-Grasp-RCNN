@@ -1196,6 +1196,64 @@ def smooth_l1_loss(y_true, y_pred):
     loss = (less_than_one * 0.5 * diff**2) + (1 - less_than_one) * (diff - 0.5)
     return loss
 
+def rpn_combined_loss_graph(config, target_bbox, target_class, rpn_bbox, rpn_class_logits):
+
+    # CLASSIFICATION LOSS
+    # Squeeze last dim to simplify
+    target_class = tf.squeeze(target_class, -1)
+    # Get anchor classes. Convert the -1/+1 match to 0/1 values.
+    anchor_class = K.cast(K.equal(target_class, 1), tf.int32)
+    # Positive and Negative anchors contribute to the loss,
+    # but neutral anchors (match value = 0) don't.
+    indices = tf.where(K.not_equal(target_class[0], 0))
+    # Pick rows that contribute to the loss and filter out the rest.
+    rpn_class_logits = tf.gather_nd(rpn_class_logits, indices)
+    anchor_class = tf.gather_nd(anchor_class, indices)
+    # Cross entropy loss
+    classification_loss = K.sparse_categorical_crossentropy(target=anchor_class,
+                                             output=rpn_class_logits,
+                                             from_logits=True)
+
+    # loss should have the losses computed for each of the samples - Maybe this is where we can apply the Online
+    # hard example mining process
+
+    classification_loss = tf.reshape(classification_loss, [-1, 1])
+
+    # BBOX LOSS
+    # Positive anchors contribute to the loss, but negative and
+    # neutral anchors (match value of 0 or -1) don't.
+    positive_indices = tf.where(K.equal(target_class[0], 1))
+    negative_indices = tf.where(K.equal(target_class[0], -1))
+    combined_indices = indices
+
+    # Pick bbox deltas that contribute to the loss
+    rpn_bbox = tf.gather_nd(rpn_bbox, combined_indices)
+    target_bbox = tf.gather_nd(target_bbox, combined_indices)
+
+
+    # # Trim target bounding box deltas to the same length as rpn_bbox.
+    # batch_counts = K.sum(K.cast(K.equal(target_class, 1), tf.int32), axis=1)
+    # target_bbox = batch_pack_graph(target_bbox, batch_counts,
+    #                                config.IMAGES_PER_GPU)
+
+    bbox_loss = smooth_l1_loss(target_bbox[0], rpn_bbox[0])
+    bbox_loss = K.mean(bbox_loss, axis=1, keepdims=True)
+    inplace_array = tf.gather_nd(bbox_loss, negative_indices)
+    inplace_array = KL.Lambda(lambda x: x * 0.0)(inplace_array)
+    inplace_array = tf.reshape(inplace_array, [-1, 1])
+    ix = tf.cast(negative_indices, tf.int32)
+
+    bbox_loss = tf.tensor_scatter_nd_update(bbox_loss, ix, inplace_array)
+    total_loss = KL.Add()([bbox_loss, classification_loss])
+
+    top_losses_ix = tf.nn.top_k(tf.reshape(total_loss, (-1,)), 64, sorted=True, name="rpn_top_losses").indices
+
+    top_losses_ix = K.cast(top_losses_ix, tf.int32)
+    top_losses_ix = tf.reshape(top_losses_ix, [64, 1])
+
+    combined_loss = tf.gather_nd(total_loss, top_losses_ix)
+    combined_loss = K.switch(tf.size(combined_loss) > 0, K.mean(combined_loss), tf.constant(0.0))
+    return combined_loss
 
 def rpn_class_loss_graph(rpn_match, rpn_class_logits):
     """RPN anchor classifier loss.
@@ -1708,7 +1766,8 @@ def build_rpn_targets(image_shape, anchors, gt_class_ids, gt_boxes, config, mode
 
     if mode == 'grasping_points':
         # RPN bounding boxes: [max anchors per image, (dx, dy, log(dw), log(dh), dtheta)]
-        rpn_bbox = np.zeros((config.RPN_TRAIN_ANCHORS_PER_IMAGE, 5))
+        # rpn_bbox = np.zeros((config.RPN_TRAIN_ANCHORS_PER_IMAGE, 5))
+        rpn_bbox = np.zeros((anchors.shape[0], 5))
         overlaps = np.zeros((anchors.shape[0], gt_boxes.shape[0]))
 
         for i in range(gt_boxes.shape[0]):
@@ -1834,14 +1893,14 @@ def build_rpn_targets(image_shape, anchors, gt_class_ids, gt_boxes, config, mode
             gt_center_x, gt_center_y, gt_w, gt_h, gt_theta = gt
             a_center_x, a_center_y, a_w, a_h, a_theta = anchor
             # Compute the bbox refinement that the RPN should predict.
-            rpn_bbox[ix] = [
+            rpn_bbox[anchor_index] = [
                 (gt_center_x - a_center_x) / a_w,
                 (gt_center_y - a_center_y) / a_h,
                 np.log(gt_w / a_w),
                 np.log(gt_h / a_h),
                 (gt_theta - a_theta) / (180 / len(config.RPN_GRASP_ANGLES)),
             ]
-            rpn_bbox[ix] /= config.RPN_BBOX_STD_DEV  ## rpn_bbox[ix, :4]
+            rpn_bbox[anchor_index] /= config.RPN_BBOX_STD_DEV  ## rpn_bbox[ix, :4]
             ix += 1
 
     else:
@@ -2241,7 +2300,7 @@ def grasp_data_generator(dataset, config, shuffle=True, augment=False, augmentat
                 batch_rpn_match = np.zeros(
                     [batch_size, anchors.shape[0], 1], dtype=rpn_match.dtype)
                 batch_rpn_bbox = np.zeros(
-                    [batch_size, config.RPN_TRAIN_ANCHORS_PER_IMAGE, 5], dtype=rpn_bbox.dtype)
+                    [batch_size, anchors.shape[0], 5], dtype=rpn_bbox.dtype)
                 batch_images = np.zeros(
                     (batch_size,) + image.shape, dtype=np.float32)
 
@@ -2635,23 +2694,23 @@ class MaskRCNN():
 
         rpn_class_logits, rpn_class, rpn_bbox = outputs
 
-        if mode == 'training':
-            # Losses
-            # Classification loss
-            rpn_ohem_class_losses = KL.Lambda(lambda x: rpn_ohem_class_loss_graph(*x), name="rpn_ohem_class_losses")(
-                [input_rpn_match, rpn_class_logits])
+        # if mode == 'training':
+        #     # Losses
+        #     # Classification loss
+        #     rpn_ohem_class_losses = KL.Lambda(lambda x: rpn_ohem_class_loss_graph(*x), name="rpn_ohem_class_losses")(
+        #         [input_rpn_match, rpn_class_logits])
+        #
+        #     # Regression Loss
+        #     rpn_ohem_bbox_losses = KL.Lambda(lambda x: rpn_ohem_bbox_loss_graph(config, *x), name="rpn_ohem_bbox_losses")(
+        #         [input_rpn_bbox, input_rpn_match, rpn_bbox])
+        #
+        #    top_losses_ix = KL.Lambda(lambda x: ohem_graph(*x), name="rpn_ohem_bbox_losses")\
+        #         ([rpn_ohem_class_losses, rpn_ohem_bbox_losses])
 
-            # Regression Loss
-            rpn_ohem_bbox_losses = KL.Lambda(lambda x: rpn_ohem_bbox_loss_graph(config, *x), name="rpn_ohem_bbox_losses")(
-                [input_rpn_bbox, input_rpn_match, rpn_bbox])
 
-            top_losses_ix = KL.Lambda(lambda x: ohem_graph(*x), name="rpn_ohem_bbox_losses")\
-                ([rpn_ohem_class_losses, rpn_ohem_bbox_losses])
-
-
-        # # Generate proposals
-        # # Proposals are [batch, N, (x, y, w, h, theta)] in normalized coordinates
-        # # and zero padded.
+        # Generate proposals
+        # Proposals are [batch, N, (x, y, w, h, theta)] in normalized coordinates
+        # and zero padded.
         # proposal_count = config.POST_NMS_ROIS_TRAINING if mode == "training" \
         #     else config.POST_NMS_ROIS_INFERENCE
         # rpn_rois = GraspProposalLayer(
@@ -2662,31 +2721,34 @@ class MaskRCNN():
 
         if mode == 'training':
 
-            input_rpn_match_filtered = KL.Lambda(lambda x: tf.gather_nd(*x), name="input_rpn_match_filtered")(
-                [input_rpn_match,top_losses_ix])
-
-            input_rpn_bbox_filtered = KL.Lambda(lambda x: tf.gather_nd(*x), name="input_rpn_bbox_filtered")(
-                [input_rpn_bbox, top_losses_ix])
-
-            rpn_class = KL.Lambda(lambda x: tf.gather_nd(*x), name="rpn_class_filtered")(
-                [rpn_class, top_losses_ix])
-            rpn_class_logits = KL.Lambda(lambda x: tf.gather_nd(*x), name="rpn_class_logits_filtered")(
-                [rpn_class_logits, top_losses_ix])
-            rpn_bbox = KL.Lambda(lambda x: tf.gather_nd(*x), name="rpn_bbox_filtered")(
-                [rpn_bbox, top_losses_ix])
+            # input_rpn_match_filtered = KL.Lambda(lambda x: tf.gather_nd(*x), name="input_rpn_match_filtered")(
+            #     [input_rpn_match,top_losses_ix])
+            #
+            # input_rpn_bbox_filtered = KL.Lambda(lambda x: tf.gather_nd(*x), name="input_rpn_bbox_filtered")(
+            #     [input_rpn_bbox, top_losses_ix])
+            #
+            # rpn_class = KL.Lambda(lambda x: tf.gather_nd(*x), name="rpn_class_filtered")(
+            #     [rpn_class, top_losses_ix])
+            # rpn_class_logits = KL.Lambda(lambda x: tf.gather_nd(*x), name="rpn_class_logits_filtered")(
+            #     [rpn_class_logits, top_losses_ix])
+            # rpn_bbox = KL.Lambda(lambda x: tf.gather_nd(*x), name="rpn_bbox_filtered")(
+            #     [rpn_bbox, top_losses_ix])
             # Losses
             # Classification loss
-            rpn_class_loss = KL.Lambda(lambda x: rpn_class_loss_graph(*x), name="rpn_class_loss")(
-                [input_rpn_match_filtered, rpn_class_logits])
+            combined_loss = KL.Lambda(lambda x: rpn_combined_loss_graph(config, *x), name="rpn_loss")(
+                [input_rpn_bbox, input_rpn_match, rpn_bbox, rpn_class_logits])
 
-            # Regression Loss
-            rpn_bbox_loss = KL.Lambda(lambda x: rpn_bbox_loss_graph(config, *x), name="rpn_bbox_loss")(
-                [input_rpn_bbox_filtered, input_rpn_match_filtered, rpn_bbox])
+            # rpn_class_loss = KL.Lambda(lambda x: rpn_class_loss_graph(*x), name="rpn_class_loss")(
+            #     [input_rpn_match, rpn_class_logits])
+            #
+            # # Regression Loss
+            # rpn_bbox_loss = KL.Lambda(lambda x: rpn_bbox_loss_graph(config, *x), name="rpn_bbox_loss")(
+            #     [input_rpn_bbox, input_rpn_match, rpn_bbox])
 
             # Model
             inputs = [input_image, input_image_meta, input_rpn_match, input_rpn_bbox]
             # outputs = [rpn_class_logits, rpn_class, rpn_bbox, rpn_rois, rpn_class_loss, rpn_bbox_loss]
-            outputs = [rpn_class_logits, rpn_class, rpn_bbox, rpn_class_loss, rpn_bbox_loss]
+            outputs = [rpn_class_logits, rpn_class, rpn_bbox, combined_loss]
 
             model = KM.Model(inputs, outputs, name='grasp_rcnn')
 
@@ -2804,8 +2866,9 @@ class MaskRCNN():
         # self.keras_model.metrics_tensors = []
         self.keras_model._per_input_losses = {}
         if task == 'grasping_points':
-            loss_names = [
-                "rpn_class_loss", "rpn_bbox_loss"]
+            # loss_names = [
+            #     "rpn_class_loss", "rpn_bbox_loss"]
+            loss_names = ["rpn_loss"]
         else:
             loss_names = [
                 "rpn_class_loss",  "rpn_bbox_loss",

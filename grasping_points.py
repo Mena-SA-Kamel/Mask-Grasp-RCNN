@@ -432,7 +432,7 @@ validating_dataset = GraspingPointsDataset()
 validating_dataset.load_dataset(type='val_set')
 validating_dataset.prepare()
 
-# # Create model in training mode
+# Create model in training mode
 with tf.device(DEVICE):
     model = modellib.MaskRCNN(mode="training", model_dir=MODEL_DIR,
                               config=config, task="grasping_points")
@@ -440,7 +440,6 @@ with tf.device(DEVICE):
 tf.keras.utils.plot_model(
         model.keras_model, to_file='model.png', show_shapes=False, show_layer_names=True
     )
-import code; code.interact(local=dict(globals(), **locals()))
 # Load weights
 weights_path = MASKRCNN_MODEL_PATH
 print("Loading weights ", weights_path)
@@ -462,7 +461,7 @@ model.train(training_dataset, validating_dataset,
 model_path = os.path.join(MODEL_DIR, "grasp_rcnn_attempt_3.h5")
 model.keras_model.save_weights(model_path)
 # ######################################################################################################
-# # Create model in inference mode
+# Create model in inference mode
 # with tf.device(DEVICE):
 #     model = modellib.MaskRCNN(mode="inference", model_dir=MODEL_DIR,
 #                               config=config, task="grasping_points")
@@ -476,18 +475,18 @@ model.keras_model.save_weights(model_path)
 # for image_id in image_ids:
 #     image, image_meta, gt_class_id, gt_bbox, gt_mask =\
 #         modellib.load_image_gt(training_dataset, config, image_id, use_mini_mask=False, mode='grasping_points')
-#     results = model.detect([image], verbose=1, task=mode)
-#     r = results[0]
-#     proposals = r['rois']
-#     proposals = training_dataset.refine_results(r, model._anchor_cache)
-#     fig, ax = plt.subplots(1, figsize=(10, 10))
-#     ax.imshow(image)
-#     for i, rect in enumerate(proposals):
-#         rect = training_dataset.bbox_convert_to_four_vertices(rect)
-#         p = patches.Polygon(rect[0], linewidth=1,edgecolor='r',facecolor='none')
-#         ax.add_patch(p)
-#     plt.show(block=False)
-#
+    # results = model.detect([image], verbose=1, task=mode)
+    # r = results[0]
+    # proposals = r['rois']
+    # proposals = training_dataset.refine_results(r, model._anchor_cache)
+    # fig, ax = plt.subplots(1, figsize=(10, 10))
+    # ax.imshow(image)
+    # for i, rect in enumerate(proposals):
+    #     rect = training_dataset.bbox_convert_to_four_vertices(rect)
+    #     p = patches.Polygon(rect[0], linewidth=1,edgecolor='r',facecolor='none')
+    #     ax.add_patch(p)
+    # plt.show(block=False)
+
 # import code;
 # code.interact(local=dict(globals(), **locals()))
     # plt.savefig(os.path.join('Grasping_anchors','P'+str(level+2)+ 'center_anchors.png'))
@@ -496,8 +495,8 @@ model.keras_model.save_weights(model_path)
 
 # ######################################################################################################
 # normalized_anchors = model.get_anchors(config.IMAGE_SHAPE, mode='grasping_points', angles=config.RPN_GRASP_ANGLES)
-#
-# # Generate Anchors
+# #
+# # # Generate Anchors
 # mode= 'grasping_points'
 # backbone_shapes = modellib.compute_backbone_shapes(config, config.IMAGE_SHAPE)
 # anchors = utils.generate_pyramid_anchors(config.RPN_ANCHOR_SCALES,
@@ -524,13 +523,13 @@ model.keras_model.save_weights(model_path)
 # log("neutral anchors", neutral_anchors)
 #
 # # Apply refinement deltas to positive anchors
-# positive_anchor_indices = anchor_data[anchor_data[:,1] == 1][:,0]
-# positive_anchors = anchors[positive_anchor_indices]
+# # positive_anchor_indices = anchor_data[anchor_data[:,1] == 1][:,0]
+# # positive_anchors = anchors[positive_anchor_indices]
 #
 # gt_boxes = gt_bbox[gt_class_id == 1]
 #
-# deltas = target_rpn_bbox[:positive_anchors.shape[0]]* model.config.RPN_BBOX_STD_DEV
-# if not (deltas.shape[0] == len(positive_anchor_ix)):
+# deltas = target_rpn_bbox[positive_anchor_ix]* model.config.RPN_BBOX_STD_DEV
+# if not (deltas.shape == positive_anchors.shape):
 #     print ('$$$$$$$$$$$$$$$$$$$$$$$  ERRRORRRR $$$$$$$$$$$$$$$$$$$$$')
 #     import code;
 #     code.interact(local=dict(globals(), **locals()))
@@ -540,13 +539,7 @@ model.keras_model.save_weights(model_path)
 # # Display positive anchors before refinement (dotted) and
 # # after refinement (solid).
 # visualize.draw_boxes(image, boxes=positive_anchors, refined_boxes=refined_anchors, mode=mode)
-#
-# import code;
-# code.interact(local=dict(globals(), **locals()))
-#
-#
-#
-#
+
 
 ####################################### VISUALIZING ANCHORS ############################################################
 # num_levels = len(backbone_shapes)
