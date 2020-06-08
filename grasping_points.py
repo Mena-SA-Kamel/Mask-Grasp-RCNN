@@ -316,9 +316,8 @@ class GraspingPointsDataset(Dataset):
         '''
         Applies a NMS like refinement algorithm on the proposals output by the RPN
         '''
-        proposals = results['rois']
-        probabilities = results['scores'] # bg prob, fg prob
-        deltas = results['refinements']
+        probabilities = results['scores'][0] # bg prob, fg prob
+        deltas = results['refinements'][0]
         anchors = np.array(list(anchors.values()))[0]
         mode = 'grasping_points'
 
@@ -332,20 +331,25 @@ class GraspingPointsDataset(Dataset):
         invalid_x_coordinates = np.logical_or((all_boxes[:,0] < 0), (all_boxes[:,0] > 1))
         invalid_y_coordinates = np.logical_or((all_boxes[:,1] < 0), (all_boxes[:,1] > 1))
         boxes_to_keep = np.logical_not(np.logical_or(invalid_x_coordinates, invalid_y_coordinates))
+
         all_boxes = all_boxes[boxes_to_keep]
         probabilities = probabilities[boxes_to_keep]
 
         # Denormalizes the boxes - brings the values from [0,1] to pixel coordinates
         boxes_denorm = utils.denorm_boxes(all_boxes, config.IMAGE_SHAPE[:2], mode='grasping_points')
-        boxes_denorm[:, -1] = boxes_denorm[:, -1] / (2 * 360)
+
+        boxes_denorm[:, -1] = boxes_denorm[:, -1]%360
 
         # want to get n boxes with highest probabilities (n = 1000)
         # Ascending order, need to get largest n
-        # sorting_ix = np.argsort(probabilities[:, 1])[::-1][:1000]
-        # top_boxes = boxes_denorm[sorting_ix]
-        # top_box_probabilities = probabilities[sorting_ix]
-        top_boxes = boxes_denorm[probabilities[:,1] > 0.95]
-        top_box_probabilities = probabilities[probabilities[:,1] > 0.95]
+        sorting_ix = np.argsort(probabilities[:, 1])[::-1][:20]
+        top_boxes = boxes_denorm[sorting_ix]
+        top_box_probabilities = probabilities[sorting_ix]
+        # import code;
+        # code.interact(local=dict(globals(), **locals()))
+        #
+        # top_boxes = boxes_denorm[probabilities[:,1] > 0.995]
+        # top_box_probabilities = probabilities[probabilities[:,1] > 0.995]
 
         # Remove boxes with dimensions larger than image
         large_width_ix = top_boxes[:, 2] > config.IMAGE_SHAPE[1]
@@ -361,8 +365,6 @@ class GraspingPointsDataset(Dataset):
         boxes_to_keep = np.logical_not(np.logical_or(large_box_ix, small_box_ix))
         top_boxes = top_boxes[boxes_to_keep]
         top_box_probabilities = top_box_probabilities[boxes_to_keep]
-
-        print(top_box_probabilities)
 
         filtered_proposals = top_boxes
         ix = 0
@@ -432,71 +434,71 @@ validating_dataset = GraspingPointsDataset()
 validating_dataset.load_dataset(type='val_set')
 validating_dataset.prepare()
 
-# Create model in training mode
-with tf.device(DEVICE):
-    model = modellib.MaskRCNN(mode="training", model_dir=MODEL_DIR,
-                              config=config, task="grasping_points")
-
-tf.keras.utils.plot_model(
-        model.keras_model, to_file='model.png', show_shapes=False, show_layer_names=True
-    )
-# Load weights
-weights_path = MASKRCNN_MODEL_PATH
-print("Loading weights ", weights_path)
-model.load_weights(weights_path, by_name=True,
-                       exclude=["conv1", "rpn_model", "rpn_class_logits",
-                                "rpn_class ", "rpn_bbox "])
-model.train(training_dataset, validating_dataset,
-               learning_rate=config.LEARNING_RATE,
-               epochs=50,
-               layers=r"(conv1)|(grasp_rpn\_.*)|(fpn\_.*)",
-               task=mode)
-
-model.train(training_dataset, validating_dataset,
-               learning_rate=config.LEARNING_RATE/3,
-               epochs=200,
-               layers="all",
-               task=mode)
-
-model_path = os.path.join(MODEL_DIR, "grasp_rcnn_attempt_3.h5")
-model.keras_model.save_weights(model_path)
-# ######################################################################################################
-# Create model in inference mode
+# # Create model in training mode
 # with tf.device(DEVICE):
-#     model = modellib.MaskRCNN(mode="inference", model_dir=MODEL_DIR,
+#     model = modellib.MaskRCNN(mode="training", model_dir=MODEL_DIR,
 #                               config=config, task="grasping_points")
 #
-# # Load weights
-# weights_path = os.path.join(MODEL_DIR, "mask_rcnn_grasping_points_0080.h5")
-# print("Loading weights ", weights_path)
-# model.load_weights(weights_path, by_name=True)
+# tf.keras.utils.plot_model(
+#         model.keras_model, to_file='model.png', show_shapes=True, show_layer_names=True
+#     )
 #
-# image_ids = random.choices(training_dataset.image_ids, k=10)
-# for image_id in image_ids:
-#     image, image_meta, gt_class_id, gt_bbox, gt_mask =\
-#         modellib.load_image_gt(training_dataset, config, image_id, use_mini_mask=False, mode='grasping_points')
-    # results = model.detect([image], verbose=1, task=mode)
-    # r = results[0]
-    # proposals = r['rois']
-    # proposals = training_dataset.refine_results(r, model._anchor_cache)
-    # fig, ax = plt.subplots(1, figsize=(10, 10))
-    # ax.imshow(image)
-    # for i, rect in enumerate(proposals):
-    #     rect = training_dataset.bbox_convert_to_four_vertices(rect)
-    #     p = patches.Polygon(rect[0], linewidth=1,edgecolor='r',facecolor='none')
-    #     ax.add_patch(p)
-    # plt.show(block=False)
+# # Load weights
+# weights_path = MASKRCNN_MODEL_PATH
+# print("Loading weights ", weights_path)
+# model.load_weights(weights_path, by_name=True,
+#                        exclude=["conv1", "rpn_model", "rpn_class_logits",
+#                                 "rpn_class ", "rpn_bbox "])
+# model.train(training_dataset, validating_dataset,
+#                learning_rate=config.LEARNING_RATE,
+#                epochs=50,
+#                layers=r"(conv1)|(grasp_rpn\_.*)|(fpn\_.*)",
+#                task=mode)
+#
+# model.train(training_dataset, validating_dataset,
+#                learning_rate=config.LEARNING_RATE/3,
+#                epochs=200,
+#                layers="all",
+#                task=mode)
+#
+# model_path = os.path.join(MODEL_DIR, "grasp_rcnn_attempt_3.h5")
+# model.keras_model.save_weights(model_path)
+# ######################################################################################################
+# Create model in inference mode
+with tf.device(DEVICE):
+    model = modellib.MaskRCNN(mode="inference", model_dir=MODEL_DIR,
+                              config=config, task="grasping_points")
 
-# import code;
-# code.interact(local=dict(globals(), **locals()))
+# Load weights
+weights_path = os.path.join(MODEL_DIR, "mask_rcnn_grasping_points_0113.h5")
+print("Loading weights ", weights_path)
+model.load_weights(weights_path, by_name=True)
+
+image_ids = random.choices(validating_dataset.image_ids, k=20)
+for image_id in image_ids:
+    image, image_meta, gt_class_id, gt_bbox, gt_mask =\
+        modellib.load_image_gt(validating_dataset, config, image_id, use_mini_mask=False, mode='grasping_points')
+    results = model.detect([image], verbose=1, task=mode)
+    r = results[0]
+    proposals = validating_dataset.refine_results(r, model._anchor_cache)
+    fig, ax = plt.subplots(1, figsize=(10, 10))
+    ax.imshow(image)
+    for i, rect in enumerate(proposals):
+        rect = validating_dataset.bbox_convert_to_four_vertices(rect)
+        p = patches.Polygon(rect[0], linewidth=1,edgecolor='r',facecolor='none')
+        ax.add_patch(p)
+    plt.show(block=False)
+
+import code;
+code.interact(local=dict(globals(), **locals()))
     # plt.savefig(os.path.join('Grasping_anchors','P'+str(level+2)+ 'center_anchors.png'))
     #
     # training_dataset.visualize_bbox(image_id, bounding_box[0], gt_class_id[i], gt_bbox[i], rgbd_image=image)
 
 # ######################################################################################################
 # normalized_anchors = model.get_anchors(config.IMAGE_SHAPE, mode='grasping_points', angles=config.RPN_GRASP_ANGLES)
-# #
-# # # Generate Anchors
+#
+# Generate Anchors
 # mode= 'grasping_points'
 # backbone_shapes = modellib.compute_backbone_shapes(config, config.IMAGE_SHAPE)
 # anchors = utils.generate_pyramid_anchors(config.RPN_ANCHOR_SCALES,
@@ -528,7 +530,9 @@ model.keras_model.save_weights(model_path)
 #
 # gt_boxes = gt_bbox[gt_class_id == 1]
 #
-# deltas = target_rpn_bbox[positive_anchor_ix]* model.config.RPN_BBOX_STD_DEV
+# image_final_anchors = np.where(np.logical_not(target_rpn_match[:] == 0))[0]
+# positive_anchors_mask = np.in1d(image_final_anchors, positive_anchor_ix)
+# deltas = target_rpn_bbox[positive_anchors_mask]* model.config.RPN_BBOX_STD_DEV
 # if not (deltas.shape == positive_anchors.shape):
 #     print ('$$$$$$$$$$$$$$$$$$$$$$$  ERRRORRRR $$$$$$$$$$$$$$$$$$$$$')
 #     import code;

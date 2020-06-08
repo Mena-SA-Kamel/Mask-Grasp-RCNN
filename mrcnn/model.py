@@ -16,6 +16,7 @@ import logging
 from collections import OrderedDict
 import multiprocessing
 import numpy as np
+import bisect
 import tensorflow as tf
 import keras
 
@@ -1197,7 +1198,6 @@ def smooth_l1_loss(y_true, y_pred):
     return loss
 
 def rpn_combined_loss_graph(config, target_bbox, target_class, rpn_bbox, rpn_class_logits):
-
     # CLASSIFICATION LOSS
     # Squeeze last dim to simplify
     target_class = tf.squeeze(target_class, -1)
@@ -1205,7 +1205,7 @@ def rpn_combined_loss_graph(config, target_bbox, target_class, rpn_bbox, rpn_cla
     anchor_class = K.cast(K.equal(target_class, 1), tf.int32)
     # Positive and Negative anchors contribute to the loss,
     # but neutral anchors (match value = 0) don't.
-    indices = tf.where(K.not_equal(target_class[0], 0))
+    indices = tf.where(K.not_equal(target_class, 0))
     # Pick rows that contribute to the loss and filter out the rest.
     rpn_class_logits = tf.gather_nd(rpn_class_logits, indices)
     anchor_class = tf.gather_nd(anchor_class, indices)
@@ -1214,45 +1214,43 @@ def rpn_combined_loss_graph(config, target_bbox, target_class, rpn_bbox, rpn_cla
                                              output=rpn_class_logits,
                                              from_logits=True)
 
-    # loss should have the losses computed for each of the samples - Maybe this is where we can apply the Online
-    # hard example mining process
-
-    classification_loss = tf.reshape(classification_loss, [-1, 1])
+    classification_loss = tf.reshape(classification_loss, [-1, 1]) ####**
 
     # BBOX LOSS
-    # Positive anchors contribute to the loss, but negative and
-    # neutral anchors (match value of 0 or -1) don't.
-    positive_indices = tf.where(K.equal(target_class[0], 1))
-    negative_indices = tf.where(K.equal(target_class[0], -1))
-    combined_indices = indices
-
-    # Pick bbox deltas that contribute to the loss
-    rpn_bbox = tf.gather_nd(rpn_bbox, combined_indices)
-    target_bbox = tf.gather_nd(target_bbox, combined_indices)
-
+    # Pick bbox deltas that contribute to the loss (both positive and negative)
+    rpn_bbox = tf.gather_nd(rpn_bbox, indices)
 
     # # Trim target bounding box deltas to the same length as rpn_bbox.
     # batch_counts = K.sum(K.cast(K.equal(target_class, 1), tf.int32), axis=1)
     # target_bbox = batch_pack_graph(target_bbox, batch_counts,
     #                                config.IMAGES_PER_GPU)
 
-    bbox_loss = smooth_l1_loss(target_bbox[0], rpn_bbox[0])
-    bbox_loss = K.mean(bbox_loss, axis=1, keepdims=True)
+    bbox_loss = smooth_l1_loss(target_bbox, rpn_bbox)
+    bbox_loss = K.mean(bbox_loss, axis=2, keepdims=True)
+
+    # Set bbox loss for negative anchors to zero
+    # Positive anchors contribute to the loss, but negative and
+    # neutral anchors (match value of 0 or -1) don't.
+    positive_indices = tf.where(K.equal(anchor_class, 1))
+    negative_indices = tf.where(K.equal(anchor_class, 0))
+
     inplace_array = tf.gather_nd(bbox_loss, negative_indices)
     inplace_array = KL.Lambda(lambda x: x * 0.0)(inplace_array)
-    inplace_array = tf.reshape(inplace_array, [-1, 1])
+    # inplace_array = tf.reshape(inplace_array, [-1, 1])
     ix = tf.cast(negative_indices, tf.int32)
 
     bbox_loss = tf.tensor_scatter_nd_update(bbox_loss, ix, inplace_array)
-    total_loss = KL.Add()([bbox_loss, classification_loss])
+    total_loss = KL.Add()([tf.reshape(bbox_loss, [-1, 1]), classification_loss])
 
-    top_losses_ix = tf.nn.top_k(tf.reshape(total_loss, (-1,)), 64, sorted=True, name="rpn_top_losses").indices
-
+    top_losses_ix = tf.nn.top_k(tf.reshape(total_loss, (1,-1)), 64, sorted=True, name="rpn_top_losses").indices
     top_losses_ix = K.cast(top_losses_ix, tf.int32)
-    top_losses_ix = tf.reshape(top_losses_ix, [64, 1])
+    top_losses_ix = tf.reshape(top_losses_ix, [-1, 1])
 
     combined_loss = tf.gather_nd(total_loss, top_losses_ix)
-    combined_loss = K.switch(tf.size(combined_loss) > 0, K.mean(combined_loss), tf.constant(0.0))
+
+    combined_loss_mean = K.sum(combined_loss) / 64.0
+
+    combined_loss = K.switch(tf.size(combined_loss) > 0, combined_loss_mean, tf.constant(0.0))
     return combined_loss
 
 def rpn_class_loss_graph(rpn_match, rpn_class_logits):
@@ -1766,8 +1764,7 @@ def build_rpn_targets(image_shape, anchors, gt_class_ids, gt_boxes, config, mode
 
     if mode == 'grasping_points':
         # RPN bounding boxes: [max anchors per image, (dx, dy, log(dw), log(dh), dtheta)]
-        # rpn_bbox = np.zeros((config.RPN_TRAIN_ANCHORS_PER_IMAGE, 5))
-        rpn_bbox = np.zeros((anchors.shape[0], 5))
+        rpn_bbox = np.zeros((config.RPN_TRAIN_ANCHORS_PER_IMAGE, 5))
         overlaps = np.zeros((anchors.shape[0], gt_boxes.shape[0]))
 
         for i in range(gt_boxes.shape[0]):
@@ -1862,46 +1859,31 @@ def build_rpn_targets(image_shape, anchors, gt_class_ids, gt_boxes, config, mode
     # For positive anchors, compute shift and scale needed to transform them
     # to match the corresponding GT boxes.
     if mode == 'grasping_points':
-        # positive_anchors = anchor_data[anchor_data[:, 1] == 1]
-        # positive_gt_ids = positive_anchors[:, -1]
-        # positive_anchor_ids = positive_anchors[:, 0]
-        # ix = 0
-        # import code;
-        # code.interact(local=dict(globals(), **locals()))
-        # for i, a in zip(positive_gt_ids, anchors[positive_anchor_ids]):
-        #     gt = gt_boxes[i]
-        #     gt_center_x, gt_center_y, gt_w, gt_h, gt_theta = gt
-        #     a_center_x, a_center_y, a_w, a_h, a_theta = a
-        #     # Compute the bbox refinement that the RPN should predict.
-        #     rpn_bbox[ix] = [
-        #         (gt_center_x - a_center_x) / a_w,
-        #         (gt_center_y - a_center_y) / a_h,
-        #         np.log(gt_w / a_w),
-        #         np.log(gt_h / a_h),
-        #         (gt_theta - a_theta)/(180/len(config.RPN_GRASP_ANGLES)),
-        #     ]
-        #     rpn_bbox[ix] /= config.RPN_BBOX_STD_DEV ## rpn_bbox[ix, :4]
-        #     ix+=1
+        positive_anchor_ids = np.where(rpn_match == 1)[0]
+        final_id_set = np.where(np.logical_not(rpn_match == 0))[0]
 
-        positive_anchor_ids = np.where(rpn_match == 1)
-        ix = 0
-        for anchor in anchors[positive_anchor_ids]:
-            anchor_index = positive_anchor_ids[0][ix]
-            gt_box_index = np.where(anchor_data[:,0] == anchor_index)
-            gt_box_index = np.random.choice(gt_box_index[0])
-            gt = gt_boxes[gt_box_index]
-            gt_center_x, gt_center_y, gt_w, gt_h, gt_theta = gt
-            a_center_x, a_center_y, a_w, a_h, a_theta = anchor
-            # Compute the bbox refinement that the RPN should predict.
-            rpn_bbox[anchor_index] = [
-                (gt_center_x - a_center_x) / a_w,
-                (gt_center_y - a_center_y) / a_h,
-                np.log(gt_w / a_w),
-                np.log(gt_h / a_h),
-                (gt_theta - a_theta) / (180 / len(config.RPN_GRASP_ANGLES)),
-            ]
-            rpn_bbox[anchor_index] /= config.RPN_BBOX_STD_DEV  ## rpn_bbox[ix, :4]
-            ix += 1
+        j = 0
+        for ix in final_id_set:
+            # For negative samples, rpn_bbox stays all zero [0,0,0,0,0]
+            if not (ix in positive_anchor_indices):
+                j += 1
+                continue
+            # For positive samples
+            else:
+                anchor = anchors[ix]
+                gt = gt_boxes[(anchor_data[:,0] == ix)]
+                gt_center_x, gt_center_y, gt_w, gt_h, gt_theta = gt[0]
+                a_center_x, a_center_y, a_w, a_h, a_theta = anchor
+                # Compute the bbox refinement that the RPN should predict.
+                rpn_bbox[j] = [
+                    (gt_center_x - a_center_x) / a_w,
+                    (gt_center_y - a_center_y) / a_h,
+                    np.log(gt_w / a_w),
+                    np.log(gt_h / a_h),
+                    (gt_theta - a_theta) / (180 / len(config.RPN_GRASP_ANGLES)),
+                ]
+                rpn_bbox[j] /= config.RPN_BBOX_STD_DEV  ## rpn_bbox[ix, :4]
+            j += 1
 
     else:
         ids = np.where(rpn_match == 1)[0]
@@ -1932,6 +1914,7 @@ def build_rpn_targets(image_shape, anchors, gt_class_ids, gt_boxes, config, mode
             # Normalize
             rpn_bbox[ix] /= config.RPN_BBOX_STD_DEV
             ix += 1
+
     return rpn_match, rpn_bbox, anchor_data
 
 
@@ -2300,7 +2283,7 @@ def grasp_data_generator(dataset, config, shuffle=True, augment=False, augmentat
                 batch_rpn_match = np.zeros(
                     [batch_size, anchors.shape[0], 1], dtype=rpn_match.dtype)
                 batch_rpn_bbox = np.zeros(
-                    [batch_size, anchors.shape[0], 5], dtype=rpn_bbox.dtype)
+                    [batch_size, config.RPN_TRAIN_ANCHORS_PER_IMAGE, 5], dtype=rpn_bbox.dtype)
                 batch_images = np.zeros(
                     (batch_size,) + image.shape, dtype=np.float32)
 
@@ -2693,31 +2676,6 @@ class MaskRCNN():
                    for o, n in zip(outputs, output_names)]
 
         rpn_class_logits, rpn_class, rpn_bbox = outputs
-
-        # if mode == 'training':
-        #     # Losses
-        #     # Classification loss
-        #     rpn_ohem_class_losses = KL.Lambda(lambda x: rpn_ohem_class_loss_graph(*x), name="rpn_ohem_class_losses")(
-        #         [input_rpn_match, rpn_class_logits])
-        #
-        #     # Regression Loss
-        #     rpn_ohem_bbox_losses = KL.Lambda(lambda x: rpn_ohem_bbox_loss_graph(config, *x), name="rpn_ohem_bbox_losses")(
-        #         [input_rpn_bbox, input_rpn_match, rpn_bbox])
-        #
-        #    top_losses_ix = KL.Lambda(lambda x: ohem_graph(*x), name="rpn_ohem_bbox_losses")\
-        #         ([rpn_ohem_class_losses, rpn_ohem_bbox_losses])
-
-
-        # Generate proposals
-        # Proposals are [batch, N, (x, y, w, h, theta)] in normalized coordinates
-        # and zero padded.
-        # proposal_count = config.POST_NMS_ROIS_TRAINING if mode == "training" \
-        #     else config.POST_NMS_ROIS_INFERENCE
-        # rpn_rois = GraspProposalLayer(
-        #     proposal_count=proposal_count,
-        #     nms_threshold=config.RPN_NMS_THRESHOLD,
-        #     name="ROI",
-        #     config=config)([rpn_class, rpn_bbox, anchors])
 
         if mode == 'training':
 
@@ -3275,15 +3233,14 @@ class MaskRCNN():
             log("anchors", anchors)
         # Run object detection
         if task == 'grasping_points':
-            rpn_rois, rpn_class, rpn_bbox = self.keras_model.predict([molded_images, image_metas, anchors], verbose=0)
+            rpn_class, rpn_bbox = self.keras_model.predict([molded_images, image_metas, anchors], verbose=0)
             results = []
             for i, image in enumerate(images):
-                boxes, rpn_class, rpn_bbox =\
-                    self.unmold_grasping_detections(rpn_rois[i], rpn_class[i], rpn_bbox[i],
-                                           image.shape, molded_images[i].shape,
-                                           windows[i])
+                # boxes, rpn_class, rpn_bbox =\
+                #     self.unmold_grasping_detections(rpn_rois[i], rpn_class[i], rpn_bbox[i],
+                #                            image.shape, molded_images[i].shape,
+                #                            windows[i])
                 results.append({
-                    "rois": boxes,
                     "scores": rpn_class,
                     "refinements": rpn_bbox,
                 })
