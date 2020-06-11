@@ -425,7 +425,7 @@ def draw_boxes(image, boxes=None, refined_boxes=None,
                 # Skip this instance. Has no bbox. Likely lost in cropping.
                 continue
             if mode == 'grasping_points':
-                rect = utils.bbox_convert_to_four_vertices(boxes[i])
+                rect = utils.bbox_convert_to_four_vertices([boxes[i]])
                 p = patches.Polygon(rect[0], linewidth=2, alpha=alpha, linestyle=style,
                                     edgecolor=color,facecolor='none')
                 x1, y1 = rect[0][0]
@@ -440,7 +440,7 @@ def draw_boxes(image, boxes=None, refined_boxes=None,
         # Refined boxes
         if refined_boxes is not None and visibility > 0:
             if mode == 'grasping_points':
-                refined_rect = utils.bbox_convert_to_four_vertices(refined_boxes[i])
+                refined_rect = utils.bbox_convert_to_four_vertices([refined_boxes[i]])
                 p = patches.Polygon(refined_rect[0], linewidth=2, edgecolor=color, facecolor='none')
                 rx1, ry1 = refined_rect[0][0]
                 rx2, ry2 = refined_rect[0][2]
@@ -450,8 +450,8 @@ def draw_boxes(image, boxes=None, refined_boxes=None,
                                    edgecolor=color, facecolor='none')
             ax.add_patch(p)
             # Connect the top-left corners of the anchor and proposal
-            if boxes is not None:
-                ax.add_line(lines.Line2D([x1, rx1], [y1, ry1], color=color))
+            # if boxes is not None:
+            #     ax.add_line(lines.Line2D([x1, rx1], [y1, ry1], color=color))
 
         # Captions
         if captions is not None:

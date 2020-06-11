@@ -117,17 +117,20 @@ def compute_grasping_training_anchors(gt_box, anchors, config):
     euclidean_distance = (euclidean_distance / np.max(euclidean_distance))
     euclidean_distance = np.interp(euclidean_distance, (euclidean_distance.min(), euclidean_distance.max()), (0, 1))
     anchor_match_score = 1 - euclidean_distance
-    overlaps[anchor_match_score < 0.3] = -1
+    overlaps[anchor_match_score < 0.6] = -1
 
     # print('Anchors before filtering: ', str(anchors.shape[0]))
 
     # Filtering based on center position
-    gt_bbox_vertices = bbox_convert_to_four_vertices(gt_box)
+
+    gt_bbox_vertices = bbox_convert_to_four_vertices([gt_box])
     gt_bbox_vertices = gt_bbox_vertices[0]
     vertices_path = Path(gt_bbox_vertices)
     anchor_vertices = anchors[:, 0:2]
     matching_anchors_index1 = vertices_path.contains_points(anchor_vertices)
     anchors_step1 = anchors[matching_anchors_index1]
+    if len(anchors_step1) == 0:
+        anchors_step1 = anchors[np.where(euclidean_distance == 0)]
     # print('Anchors left after step 1 (Center Position): ', str(anchors_step1.shape[0]))
 
     # Filtering based on area / scale
@@ -135,6 +138,7 @@ def compute_grasping_training_anchors(gt_box, anchors, config):
     anchor_areas = anchors_step1[:, 2] * anchors_step1[:, 3]
     available_areas = np.unique(anchor_areas)
     matching_area = available_areas[0]
+
     min_diff = abs(matching_area - gt_area)
     for area in available_areas:
         difference = abs(area - gt_area)
@@ -195,40 +199,47 @@ def compute_grasping_training_anchors(gt_box, anchors, config):
     # fig, ax = plt.subplots(1, figsize=(10, 10))
     # ax.imshow(image)
     # for i, rect in enumerate(anchors_step3):
-    #     rect = bbox_convert_to_four_vertices(rect[0:5])
+    #     rect = bbox_convert_to_four_vertices([rect[0:5]])
+    #     p = patches.Polygon(rect[0], linewidth=1,edgecolor='c',facecolor='none')
+    #     ax.add_patch(p)
+    # for i, rect in enumerate(anchors[overlaps == -1]):
+    #     rect = bbox_convert_to_four_vertices([rect[0:5]])
     #     p = patches.Polygon(rect[0], linewidth=1,edgecolor='r',facecolor='none')
     #     ax.add_patch(p)
     # # plt.savefig(os.path.join('Grasping_anchors','P'+str(level+2)+ 'center_anchors.png'))
     # p = patches.Polygon(gt_bbox_vertices, linewidth=1.5, edgecolor='b', facecolor='none')
     # ax.add_patch(p)
-    # matching_anchor_vertices = bbox_convert_to_four_vertices(final_anchor[0:5])
+    # matching_anchor_vertices = bbox_convert_to_four_vertices([final_anchor[0:5]])
     # p = patches.Polygon(matching_anchor_vertices[0], linewidth=1.5, edgecolor='k', facecolor='none')
     # ax.add_patch(p)
-    # plt.show(block=False)
+    # plt.show()
     return overlaps
 
 def bbox_convert_to_four_vertices(bbox_5_dimension):
-    x, y, w, h, theta = bbox_5_dimension
-    original_points = np.float32([[0, 0], [w - 1, 0], [w - 1, h - 1], [0, h - 1]])
-    original_points = np.array([np.float32(original_points)])
+    rotated_points = []
+    for i in range(len(bbox_5_dimension)):
+        x, y, w, h, theta = bbox_5_dimension[i]
+        original_points = np.float32([[0, 0], [w - 1, 0], [w - 1, h - 1], [0, h - 1]])
+        original_points = np.array([np.float32(original_points)])
 
-    translational_matrix = np.array([[1, 0, x - (w / 2)],
-                                     [0, 1, y - (h / 2)]])
+        translational_matrix = np.array([[1, 0, x - (w / 2)],
+                                         [0, 1, y - (h / 2)]])
 
-    original_points_translated = cv2.transform(original_points, translational_matrix)
-    scale = 1
-    angle = theta
-    if np.sign(theta) == 1:
-        angle = angle + 90
-        if angle > 180:
-            angle = angle - 360
-    else:
-        angle = angle + 90
+        original_points_translated = cv2.transform(original_points, translational_matrix)
+        scale = 1
+        angle = theta
+        if np.sign(theta) == 1:
+            angle = angle + 90
+            if angle > 180:
+                angle = angle - 360
+        else:
+            angle = angle + 90
 
-    rotational_matrix = cv2.getRotationMatrix2D((x, y), angle + 90, scale)
-    original_points_rotated = cv2.transform(original_points_translated, rotational_matrix)
+        rotational_matrix = cv2.getRotationMatrix2D((x, y), angle + 90, scale)
+        original_points_rotated = cv2.transform(original_points_translated, rotational_matrix)
+        rotated_points.append(original_points_rotated[0])
 
-    return original_points_rotated
+    return np.array(rotated_points)
 
 
 def compute_overlaps_masks(masks1, masks2):
