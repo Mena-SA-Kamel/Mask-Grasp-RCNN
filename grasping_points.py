@@ -412,7 +412,6 @@ class GraspingPointsDataset(Dataset):
 
         all_boxes = utils.apply_box_deltas(anchors, deltas, mode,
                                            len(config.RPN_GRASP_ANGLES))
-
         # Filter out boxes with center coordinates out of the image
         invalid_x_coordinates = np.logical_or((all_boxes[:,0] < 0), (all_boxes[:,0] > config.IMAGE_SHAPE[1]))
         invalid_y_coordinates = np.logical_or((all_boxes[:,1] < 0), (all_boxes[:,1] > config.IMAGE_SHAPE[0]))
@@ -427,7 +426,6 @@ class GraspingPointsDataset(Dataset):
         sorting_ix = np.argsort(probabilities[:, 1])[::-1][:25]
         top_boxes = all_boxes[sorting_ix]
         top_box_probabilities = probabilities[sorting_ix]
-
         # top_boxes = boxes_denorm[probabilities[:,1] > 0.99]
         # top_box_probabilities = probabilities[probabilities[:,1] > 0.99]
 
@@ -541,6 +539,7 @@ validating_dataset = GraspingPointsDataset()
 validating_dataset.load_dataset(dataset_dir='../../../Datasets/jacquard_dataset', type='val_set')
 # validating_dataset.load_dataset(type='val_set')
 validating_dataset.prepare()
+
 
 # # Create model in training mode
 # with tf.device(DEVICE):
