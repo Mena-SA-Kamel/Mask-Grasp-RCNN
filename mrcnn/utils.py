@@ -83,24 +83,54 @@ def compute_iou(box, boxes, box_area, boxes_area):
     return iou
 
 
-def compute_overlaps(boxes1, boxes2):
+def compute_overlaps(boxes1, boxes2, mode=''):
     """Computes IoU overlaps between two sets of boxes.
     boxes1, boxes2: [N, (y1, x1, y2, x2)].
 
     For better performance, pass the largest set first and the smaller second.
     """
     # Areas of anchors and GT boxes
+    if mode == 'grasping_points':
+        # need anchor vertices to be in the form y1, x1, y2, x2
+        xs = boxes1[:, 0]
+        ys = boxes1[:, 1]
+        ws = boxes1[:, 2]
+        hs = boxes1[:, 3]
+        thetas = boxes1[:, 4]
+        anchor_areas = ws * hs
 
-    # Change area calculation for mode = 'grasping_points'
-    area1 = (boxes1[:, 2] - boxes1[:, 0]) * (boxes1[:, 3] - boxes1[:, 1])
-    area2 = (boxes2[:, 2] - boxes2[:, 0]) * (boxes2[:, 3] - boxes2[:, 1])
+        anchor_vertices = np.zeros((boxes1.shape[0], 4))
+        anchor_vertices[:, 0] = ys - hs / 2
+        anchor_vertices[:, 1] = xs - ws / 2
+        anchor_vertices[:, 2] = ys + hs / 2
+        anchor_vertices[:, 3] = xs + ws / 2
 
-    # Compute overlaps to generate matrix [boxes1 count, boxes2 count]
-    # Each cell contains the IoU value.
-    overlaps = np.zeros((boxes1.shape[0], boxes2.shape[0]))
-    for i in range(overlaps.shape[1]):
-        box2 = boxes2[i]
-        overlaps[:, i] = compute_iou(box2, boxes1, area2[i], area1)
+        overlaps = np.zeros((boxes1.shape[0], boxes2.shape[0]))
+        for i in range(overlaps.shape[1]):
+            box2 = boxes2[i]
+            # need gt vertices to be in the form y1, x1, y2, x2
+            x, y, w, h, theta = box2
+            gt_box_vertices = [y - h / 2, x - w / 2, y + h / 2, x + w / 2]
+            gt_box_area = w * h
+            # computing angle-related IoU (Based on Learning a Rotation Invariant Detector with Rotatable Bounding Box)
+            iou = compute_iou(gt_box_vertices, anchor_vertices, gt_box_area, anchor_areas)
+            angle_differences = np.cos(np.radians(thetas) - np.radians(theta))
+            angle_differences[angle_differences < 0] = 0
+            arIoU = iou * angle_differences
+            arIoU = np.interp(arIoU, (arIoU.min(), arIoU.max()), (0, 1))
+            overlaps[:, i] = arIoU
+
+    else:
+        # Change area calculation for mode = 'grasping_points'
+        area1 = (boxes1[:, 2] - boxes1[:, 0]) * (boxes1[:, 3] - boxes1[:, 1])
+        area2 = (boxes2[:, 2] - boxes2[:, 0]) * (boxes2[:, 3] - boxes2[:, 1])
+
+        # Compute overlaps to generate matrix [boxes1 count, boxes2 count]
+        # Each cell contains the IoU value.
+        overlaps = np.zeros((boxes1.shape[0], boxes2.shape[0]))
+        for i in range(overlaps.shape[1]):
+            box2 = boxes2[i]
+            overlaps[:, i] = compute_iou(box2, boxes1, area2[i], area1)
     return overlaps
 
 def compute_grasping_training_anchors(gt_box, anchors, config):
@@ -113,11 +143,12 @@ def compute_grasping_training_anchors(gt_box, anchors, config):
     angle_threshold = 30
 
     # anchors_out_of_boundary = anchors[np.logical_not(matching_anchors_index1)]
+    # Negative Anchor if the distance between the centers are greater than 10% of the max distance (what if object is at a corner?)
     euclidean_distance = np.sqrt((anchors[:, 0] - x) ** 2 + (anchors[:, 1] - y) ** 2)
     euclidean_distance = (euclidean_distance / np.max(euclidean_distance))
     euclidean_distance = np.interp(euclidean_distance, (euclidean_distance.min(), euclidean_distance.max()), (0, 1))
     anchor_match_score = 1 - euclidean_distance
-    overlaps[anchor_match_score < 0.6] = -1
+    overlaps[anchor_match_score < 0.9] = -1
 
     # print('Anchors before filtering: ', str(anchors.shape[0]))
 
@@ -151,7 +182,6 @@ def compute_grasping_training_anchors(gt_box, anchors, config):
     # print('Anchors left after step 2 (Scale): ', str(anchors_step2.shape[0]))
 
     # Filtering based on angle
-
     anchor_angles = anchors_step2[:,4]
     angle_ranges = np.array([theta - angle_threshold, theta + angle_threshold])
     allowable_angles = np.array([angle_ranges - 180,

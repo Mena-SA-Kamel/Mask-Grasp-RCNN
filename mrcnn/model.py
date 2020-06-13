@@ -1215,7 +1215,7 @@ def rpn_combined_loss_graph(config, target_bbox, target_class, rpn_bbox, rpn_cla
                                              output=rpn_class_logits,
                                              from_logits=True)
 
-    classification_loss = tf.reshape(classification_loss, [-1, 1]) ####**
+    classification_loss = tf.reshape(classification_loss, [-1, 1])
 
     # BBOX LOSS
     # Pick bbox deltas that contribute to the loss (both positive and negative)
@@ -1228,7 +1228,6 @@ def rpn_combined_loss_graph(config, target_bbox, target_class, rpn_bbox, rpn_cla
 
     bbox_loss = smooth_l1_loss(target_bbox, rpn_bbox)
     bbox_loss = K.mean(bbox_loss, axis=2, keepdims=True)
-    # bbox_loss = tf.reshape(bbox_loss, [-1, 1])  ####**
 
     # Set bbox loss for negative anchors to zero
     # Positive anchors contribute to the loss, but negative and
@@ -1238,12 +1237,12 @@ def rpn_combined_loss_graph(config, target_bbox, target_class, rpn_bbox, rpn_cla
 
     inplace_array = tf.gather_nd(bbox_loss, negative_indices)
     inplace_array = KL.Lambda(lambda x: x * 0.0)(inplace_array)
-    # inplace_array = tf.reshape(inplace_array, [-1, 1])
     ix = tf.cast(negative_indices, tf.int32)
 
     bbox_loss = tf.tensor_scatter_nd_update(bbox_loss, ix, inplace_array)
     total_loss = KL.Add()([tf.reshape(bbox_loss, [-1, 1]), classification_loss])
 
+    # Select top_k proposal losses
     top_losses_ix = tf.nn.top_k(tf.reshape(total_loss, (1,-1)),
                                 config.RPN_OHEM_NUM_SAMPLES, sorted=True, name="rpn_top_losses").indices
     top_losses_ix = K.cast(top_losses_ix, tf.int32)
@@ -1768,17 +1767,22 @@ def build_rpn_targets(image_shape, anchors, gt_class_ids, gt_boxes, config, mode
     if mode == 'grasping_points':
         # RPN bounding boxes: [max anchors per image, (dx, dy, log(dw), log(dh), dtheta)]
         rpn_bbox = np.zeros((config.RPN_TRAIN_ANCHORS_PER_IMAGE, 5))
-        overlaps = np.zeros((anchors.shape[0], gt_boxes.shape[0]))
-        for i in range(gt_boxes.shape[0]):
-            overlaps[:, i] = utils.compute_grasping_training_anchors(gt_boxes[i], anchors, config)
-        matching_anchor_indices = np.argmax(overlaps, axis = 0)
-        positive_anchor_indices = matching_anchor_indices[gt_class_ids == 1]
-        hard_negative_indices = matching_anchor_indices[gt_class_ids == 0]
+        overlaps = utils.compute_overlaps(anchors, gt_boxes, mode='grasping_points')
 
-        anchor_data = np.append(matching_anchor_indices.reshape(1, -1), gt_class_ids.reshape(1, -1), axis=0).T
-        gt_ids = np.arange(len(gt_class_ids)).reshape(1, -1).T
-        anchor_data = np.append(anchor_data, gt_ids, axis = 1)
-        rpn_match = np.amax(overlaps, axis=1)
+        fg_neg_thresh = 0.2
+        fg_pos_thresh = 0.7
+        # 1. Set negative anchors first. They get overwritten below if a GT box is
+        # matched to them. Skip boxes in crowd areas.
+        anchor_iou_argmax = np.argmax(overlaps, axis=1)
+        anchor_iou_max = overlaps[np.arange(overlaps.shape[0]), anchor_iou_argmax]
+
+        rpn_match[(anchor_iou_max < fg_neg_thresh)] = -1
+        # 2. Set an anchor for each GT box (regardless of IoU value).
+        # If multiple anchors have the same IoU match all of them
+        gt_iou_argmax = np.argwhere(overlaps == np.max(overlaps, axis=0))[:, 0]
+        rpn_match[gt_iou_argmax] = 1
+        # 3. Set anchors with high overlap as positive.
+        rpn_match[anchor_iou_max >= fg_pos_thresh] = 1
     else:
         # Handle COCO crowds
         # A crowd box in COCO is a bounding box around several instances. Exclude
@@ -1823,8 +1827,7 @@ def build_rpn_targets(image_shape, anchors, gt_class_ids, gt_boxes, config, mode
         rpn_match[anchor_iou_max >= 0.7] = 1
 
     if mode == 'grasping_points':
-
-        rpn_match[positive_anchor_indices] = 1
+        # rpn_match[positive_anchor_indices] = 1
         positive_ids = np.where(rpn_match == 1)[0]
         # ids = positive_anchor_indices
         extra = len(positive_ids) - (config.RPN_TRAIN_ANCHORS_PER_IMAGE // 2)
@@ -1834,7 +1837,7 @@ def build_rpn_targets(image_shape, anchors, gt_class_ids, gt_boxes, config, mode
             rpn_match[extra_ids] = 0
 
         easy_negative_indices = np.where(rpn_match == -1)[0]
-        total_num_negative = len(easy_negative_indices) + len(hard_negative_indices)
+        total_num_negative = len(easy_negative_indices)
 
         # Case where an image has no negative samples
         if total_num_negative == 0:
@@ -1847,10 +1850,10 @@ def build_rpn_targets(image_shape, anchors, gt_class_ids, gt_boxes, config, mode
             extra = (total_num_negative + np.sum(rpn_match == 1)) - config.RPN_TRAIN_ANCHORS_PER_IMAGE
             if extra > 0:
                 # Rest the extra ones to neutral
-                ids = np.random.choice(easy_negative_indices, extra - len(hard_negative_indices), replace=False)
+                ids = np.random.choice(easy_negative_indices, extra, replace=False)
                 # forcing hard negative examples to be in the final 256 anchors to be used for training
                 rpn_match[ids] = 0
-                rpn_match[hard_negative_indices] = -1
+                # rpn_match[hard_negative_indices] = -1
             else:
                 neutral_ids = np.where(rpn_match == 0)[0]
                 negative_ids = np.random.choice(neutral_ids, abs(extra),replace=False)
@@ -1877,6 +1880,8 @@ def build_rpn_targets(image_shape, anchors, gt_class_ids, gt_boxes, config, mode
     # to match the corresponding GT boxes.
     if mode == 'grasping_points':
         final_id_set = np.where(np.logical_not(rpn_match == 0))[0]
+        positive_ids = np.where(rpn_match == 1)[0]
+        anchor_iou_argmax_filtered = anchor_iou_argmax[final_id_set]
 
         j = 0
         for ix in final_id_set:
@@ -1887,8 +1892,9 @@ def build_rpn_targets(image_shape, anchors, gt_class_ids, gt_boxes, config, mode
             # For positive samples
             else:
                 anchor = anchors[ix]
-                gt = gt_boxes[(anchor_data[:,0] == ix)]
-                gt_center_x, gt_center_y, gt_w, gt_h, gt_theta = gt[0]
+                gt = gt_boxes[anchor_iou_argmax_filtered[j]]
+                # gt = gt_boxes[(anchor_data[:,0] == ix)]
+                gt_center_x, gt_center_y, gt_w, gt_h, gt_theta = gt
                 a_center_x, a_center_y, a_w, a_h, a_theta = anchor
                 if (a_w == 0 or a_h == 0):
                     print("ZERO DIMENSION - model.py line 1881")
@@ -1939,7 +1945,7 @@ def build_rpn_targets(image_shape, anchors, gt_class_ids, gt_boxes, config, mode
     if not (np.count_nonzero(rpn_match == 1) + np.count_nonzero(rpn_match == -1) == config.RPN_TRAIN_ANCHORS_PER_IMAGE):
         import code;
         code.interact(local=dict(globals(), **locals()))
-    return rpn_match, rpn_bbox, anchor_data
+    return rpn_match, rpn_bbox
 
 
 def generate_random_rois(image_shape, count, gt_class_ids, gt_boxes):
@@ -2104,7 +2110,7 @@ def data_generator(dataset, config, shuffle=True, augment=False, augmentation=No
                 continue
 
             # RPN Targets
-            rpn_match, rpn_bbox, _ = build_rpn_targets(image.shape, anchors,
+            rpn_match, rpn_bbox = build_rpn_targets(image.shape, anchors,
                                                     gt_class_ids, gt_boxes, config)
 
             # Mask R-CNN Targets
@@ -2254,6 +2260,9 @@ def grasp_data_generator(dataset, config, shuffle=True, augment=False, augmentat
     # Anchors
     # [anchor_count, (y1, x1, y2, x2)]
     backbone_shapes = compute_backbone_shapes(config, config.IMAGE_SHAPE)
+
+    # Anchors that are out of image boundaries need to be filtered out based on Faster RCNN paper
+    # Needs generate_pyramid_anchors and load_image_gt to be modified
     anchors = utils.generate_pyramid_anchors(config.RPN_ANCHOR_SCALES,
                                              config.RPN_ANCHOR_RATIOS,
                                              backbone_shapes,
@@ -2296,8 +2305,7 @@ def grasp_data_generator(dataset, config, shuffle=True, augment=False, augmentat
                 continue
 
             # RPN Targets
-
-            rpn_match, rpn_bbox, anchor_data = build_rpn_targets(image.shape, anchors,
+            rpn_match, rpn_bbox = build_rpn_targets(image.shape, anchors,
                                                        gt_class_ids, gt_boxes, config, mode)
 
             # Init batch arrays
