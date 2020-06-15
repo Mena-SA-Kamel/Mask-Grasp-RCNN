@@ -245,6 +245,56 @@ def compute_grasping_training_anchors(gt_box, anchors, config):
     # plt.show()
     return overlaps
 
+def compute_grasping_training_anchors_new(gt_box, anchors, config):
+    matches = np.zeros(anchors.shape[0])
+
+    # need gt vertices to be in the form y1, x1, y2, x2
+    x, y, w, h, theta = gt_box.copy()
+    gt_box_vertices = [y - h/2, x - w/2, y + h/2, x + w/2]
+    gt_box_area = gt_box[2] * gt_box[3]
+
+    # need anchor vertices to be in the form y1, x1, y2, x2
+    xs = anchors[:, 0]
+    ys = anchors[:, 1]
+    ws = anchors[:, 2]
+    hs = anchors[:, 3]
+    thetas = anchors[:, 4]
+    anchor_areas = ws * hs
+
+    anchor_vertices = np.zeros((anchors.shape[0], 4))
+    anchor_vertices[:, 0] = ys - hs/2
+    anchor_vertices[:, 1] = xs - ws/2
+    anchor_vertices[:, 2] = ys + hs/2
+    anchor_vertices[:, 3] = xs + ws/2
+
+    # computing angle-related IoU (Based on Learning a Rotation Invariant Detector with Rotatable Bounding Box)
+    iou = compute_iou(gt_box_vertices, anchor_vertices, gt_box_area, anchor_areas)
+    angle_differences = np.cos(np.radians(thetas) - np.radians(theta))
+    arIoU = iou*angle_differences
+    import code;
+    code.interact(local=dict(globals(), **locals()))
+
+    # final_anchors_ix = np.where(arIoU > 0)[0]
+
+    # final_anchors_ix = np.argsort(arIoU)[::-1][:25]
+    final_anchors_ix = np.argmax(arIoU)
+    final_anchors = anchors[final_anchors_ix]
+
+    # Visulaizing anchors
+    image = np.zeros(config.IMAGE_SHAPE)
+    fig, ax = plt.subplots(1, figsize=(10, 10))
+    ax.imshow(image)
+    for i, rect in enumerate([final_anchors]):
+        rect = bbox_convert_to_four_vertices([rect])
+        p = patches.Polygon(rect[0], linewidth=1,edgecolor='c',facecolor='none')
+        ax.add_patch(p)
+
+    matching_anchor_vertices = bbox_convert_to_four_vertices([gt_box])
+    p = patches.Polygon(matching_anchor_vertices[0], linewidth=1.5, edgecolor='k', facecolor='none')
+    ax.add_patch(p)
+    plt.show()
+    return matches
+
 def bbox_convert_to_four_vertices(bbox_5_dimension):
     rotated_points = []
     for i in range(len(bbox_5_dimension)):
@@ -913,8 +963,8 @@ def generate_pyramid_anchors(scales, ratios, feature_shapes, feature_strides,
     #     # Add the patch to the Axes
     #     ax.add_patch(rect)
     # plt.show()
-
-    return np.concatenate(anchors, axis=0)
+    anchors = np.concatenate(anchors, axis=0)
+    return anchors
 
 
 ############################################################
