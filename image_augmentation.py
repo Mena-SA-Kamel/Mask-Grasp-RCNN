@@ -15,10 +15,12 @@ def validate_box(bbox, image_shape):
 
     return not(len(invalid_x) + len(invalid_y) > 0)
 
-def rotate_bboxes(bboxes, rotation_angle, image_shape, scale=1):
+def rotate_bboxes(bboxes, rotation_angle, image_shape, class_ids, scale=1):
     bbox_new = []
+    invalid_indices = []
     img_center_y, img_center_x = np.array(image_shape[:2]) / 2
     rotational_matrix = cv2.getRotationMatrix2D((img_center_x, img_center_y), rotation_angle, scale)
+
     for i in range(bboxes.shape[0]):
         x, y, w, h, theta = bboxes[i]
         center_location = bboxes[i,:2]
@@ -29,16 +31,23 @@ def rotate_bboxes(bboxes, rotation_angle, image_shape, scale=1):
 
         if validate_box(transformed_bbox, image_shape):
             bbox_new.append(transformed_bbox)
-    return np.array(bbox_new)
+        else:
+            invalid_indices.append(i)
+    class_ids = np.delete(class_ids, invalid_indices)
+    return np.array(bbox_new), class_ids
 
-def translate_bbox(bboxes, dx, dy, image_shape):
+def translate_bbox(bboxes, dx, dy, image_shape, class_ids):
     bbox_new = []
+    invalid_indices = []
     for i in range(bboxes.shape[0]):
         x, y, w, h, theta = bboxes[i]
         transformed_bbox = [x + dx, y + dy, w, h, theta]
         if validate_box(transformed_bbox, image_shape):
             bbox_new.append(transformed_bbox)
-    return np.array(bbox_new)
+        else:
+            invalid_indices.append(i)
+    class_ids = np.delete(class_ids, invalid_indices)
+    return np.array(bbox_new), class_ids
 
 def flip_bbox(bboxes, flip_code, image_shape):
     bbox_new = []

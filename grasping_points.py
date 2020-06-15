@@ -16,6 +16,7 @@ import math
 import matplotlib.patches as patches
 import cv2
 from random import randrange
+import image_augmentation
 
 os.environ["PATH"] += os.pathsep + 'D:/Software/graphviz-2.38/release/bin'
 
@@ -77,7 +78,7 @@ class GraspingPointsDataset(Dataset):
                     for i in range(config.NUM_AUGMENTATIONS):
                         self.add_image("grasping_points", image_id=id, path=rgb_path,
                                        depth_path=depth_path, positive_points=positive_grasp_points,
-                                       augmentation = self.generate_anotations())
+                                       augmentation = self.generate_augmentations())
                         id = id + 1
 
             elif 'cornell_grasping_dataset' in dataset_dir:
@@ -90,7 +91,7 @@ class GraspingPointsDataset(Dataset):
                                negative_points = negative_grasp_points)
             id = id + 1
 
-    def generate_anotations(self):
+    def generate_augmentations(self):
         augmentation_types = ['angle', 'dx', 'dy', 'flip']
         augmentations = random.sample(list(augmentation_types), 2)
         augmentations_list = np.zeros(4)
@@ -100,11 +101,11 @@ class GraspingPointsDataset(Dataset):
             augmentations_list[0] = angle
 
         if 'dx' in augmentations:
-            dx = randrange(0, 50)
+            dx = randrange(0, 100)
             augmentations_list[1] = dx
 
         if 'dy' in augmentations:
-            dy = randrange(0, 50)
+            dy = randrange(0, 100)
             augmentations_list[2] = dy
 
         if 'flip' in augmentations:
@@ -113,22 +114,29 @@ class GraspingPointsDataset(Dataset):
 
         return augmentations_list
 
-    # def decode_augmentation_label(self, augmentation_label):
-    #     # returns an array that specifies the value of augmentations [angle, dx, dy, flip]
-    #     augmentation_types = ['angle', 'dx', 'dy', 'flip']
-    #     augmentation_decode = np.zeros(4)
-    #     i = 0
-    #     for augmentation_type in augmentation_types:
-    #         if augmentation_type in augmentation_label:
-    #             augmentation_decode[i] = int(augmentation_label.split(augmentation_type)[1].split('_')[1])
-    #         i += 1
-    #     return augmentation_decode
+    def apply_augmentation_to_image(self, image, augmentation):
+        # ['angle', 'dx', 'dy', 'flip']
+        angle, dx, dy, flip_code = augmentation
 
-    def load_image(self, image_id, augmentation=None):
+        rgbd_image = image_augmentation.rotate_image(image, angle, scale=1)
+        rgbd_image = image_augmentation.translate_image(rgbd_image, dx, dy)
+        if flip_code != 2:
+            rgbd_image = image_augmentation.flip_image(rgbd_image, int(flip_code))
+        return rgbd_image
+
+    def apply_augmentation_to_box(self, boxes, class_ids, augmentation):
+        # ['angle', 'dx', 'dy', 'flip']
+        angle, dx, dy, flip_code = augmentation
+        image_shape = plt.imread(self.image_info[image_id]['path']).shape[:2]
+        transformed_boxes, class_ids = image_augmentation.rotate_bboxes(boxes, angle, image_shape, class_ids)
+        transformed_boxes, class_ids = image_augmentation.translate_bbox(transformed_boxes, dx, dy, image_shape, class_ids)
+        if flip_code != 2:
+            transformed_boxes = image_augmentation.flip_bbox(transformed_boxes, int(flip_code), image_shape)
+
+        return transformed_boxes, class_ids
+
+    def load_image(self, image_id, augmentation=[]):
         image_path = self.image_info[image_id]['path']
-        if len(augmentation) != 0:
-            import code;
-            code.interact(local=dict(globals(), **locals()))
         image = skimage.io.imread(image_path)
         try:
             depth = skimage.io.imread(self.image_info[image_id]['depth_path'])
@@ -144,6 +152,8 @@ class GraspingPointsDataset(Dataset):
         rgbd_image[:, :, 0:3] = image
         rgbd_image[:, :, 3] = depth
         rgbd_image = np.array(rgbd_image).astype('uint8')
+        if len(augmentation) != 0:
+            rgbd_image = self.apply_augmentation_to_image(rgbd_image, augmentation)
         return rgbd_image
 
     def rescale_depth_image(self, depth_image):
@@ -413,15 +423,13 @@ class GraspingPointsDataset(Dataset):
         return bbox_5_dimensional
 
 
-    def load_bounding_boxes(self, image_id, augmentation=None):
+    def load_bounding_boxes(self, image_id, augmentation=[]):
         # bounding boxes here have a shape of N x 4 x 2, consisting of four vertices per rectangle given N rectangles
-
         # loading jacquard style bboxes. NOTE: class_ids will all be 1 since jacquard only has positive boxes
         if 'jacquard' in self.image_info[image_id]['path']:
-            if augmentation != None:
-                import code;
-                code.interact(local=dict(globals(), **locals()))
             bbox_5_dimensional, class_ids = self.load_jacquard_gt_boxes(image_id)
+            if len(augmentation) != 0:
+                bbox_5_dimensional, class_ids = self.apply_augmentation_to_box(bbox_5_dimensional, class_ids, augmentation)
             bounding_box_vertices = self.bbox_convert_to_four_vertices(bbox_5_dimensional)
         else:
             bounding_box_vertices, class_ids = self.load_ground_truth_bbox_files(image_id)
@@ -626,35 +634,35 @@ validating_dataset.prepare()
 # model.keras_model.save_weights(model_path)
 # ######################################################################################################
 # Create model in inference mode
-with tf.device(DEVICE):
-    model = modellib.MaskRCNN(mode="inference", model_dir=MODEL_DIR,
-                              config=config, task="grasping_points")
-
-# Load weights
-weights_path = os.path.join(MODEL_DIR, "mask_rcnn_grasping_points_0190.h5")
-print("Loading weights ", weights_path)
-model.load_weights(weights_path, by_name=True)
-
-image_ids = random.choices(validating_dataset.image_ids, k=15)
-for image_id in image_ids:
-    image, image_meta, gt_class_id, gt_bbox, gt_mask =\
-        modellib.load_image_gt(validating_dataset, config, image_id, use_mini_mask=False, mode='grasping_points')
-    results = model.detect([image], verbose=1, task=mode)
-    r = results[0]
-    proposals = validating_dataset.refine_results(r, model.anchors)
-    fig, ax = plt.subplots(1, figsize=(10, 10))
-    ax.imshow(image)
-    for i, rect in enumerate(proposals):
-        rect = validating_dataset.bbox_convert_to_four_vertices([rect])
-        p = patches.Polygon(rect[0], linewidth=1,edgecolor='r',facecolor='none')
-        ax.add_patch(p)
-    # for i, rect in enumerate(gt_bbox):
-    #     rect = validating_dataset.bbox_convert_to_four_vertices([rect])
-    #     p = patches.Polygon(rect[0], linewidth=1,edgecolor='g',facecolor='none')
-    #     ax.add_patch(p)
-    ax.set_title(validating_dataset.image_info[image_id]['path'])
-    plt.show(block=False)
-
+# with tf.device(DEVICE):
+#     model = modellib.MaskRCNN(mode="inference", model_dir=MODEL_DIR,
+#                               config=config, task="grasping_points")
+#
+# # Load weights
+# weights_path = os.path.join(MODEL_DIR, "mask_rcnn_grasping_points_0190.h5")
+# print("Loading weights ", weights_path)
+# model.load_weights(weights_path, by_name=True)
+# image_ids = random.choices(validating_dataset.image_ids, k=15)
+# for image_id in image_ids:
+#     # validating_dataset.load_image(image_id, validating_dataset.image_info[image_id]['augmentation'])
+#     image, image_meta, gt_class_id, gt_bbox, gt_mask =\
+#         modellib.load_image_gt(validating_dataset, config, image_id, use_mini_mask=False, mode='grasping_points')
+#     # results = model.detect([image], verbose=1, task=mode)
+#     # r = results[0]
+#     # proposals = validating_dataset.refine_results(r, model.anchors)
+#     fig, ax = plt.subplots(1, figsize=(10, 10))
+#     ax.imshow(image)
+#     # for i, rect in enumerate(proposals):
+#     #     rect = validating_dataset.bbox_convert_to_four_vertices([rect])
+#     #     p = patches.Polygon(rect[0], linewidth=1,edgecolor='r',facecolor='none')
+#     #     ax.add_patch(p)
+#     for i, rect in enumerate(gt_bbox):
+#         rect = validating_dataset.bbox_convert_to_four_vertices([rect])
+#         p = patches.Polygon(rect[0], linewidth=1,edgecolor='g',facecolor='none')
+#         ax.add_patch(p)
+#     ax.set_title(validating_dataset.image_info[image_id]['path'])
+#     plt.show(block=False)
+#
 # import code;
 # code.interact(local=dict(globals(), **locals()))
     # plt.savefig(os.path.join('Grasping_anchors','P'+str(level+2)+ 'center_anchors.png'))
