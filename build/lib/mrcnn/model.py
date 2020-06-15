@@ -1685,7 +1685,8 @@ def data_generator(dataset, config, shuffle=True, augment=False, augmentation=No
                                              config.RPN_ANCHOR_RATIOS,
                                              backbone_shapes,
                                              config.BACKBONE_STRIDES,
-                                             config.RPN_ANCHOR_STRIDE)
+                                             config.RPN_ANCHOR_STRIDE,
+                                             config.IMAGE_SHAPE)
 
     # Keras requires a generator to run indefinitely.
     while True:
@@ -2612,7 +2613,8 @@ class MaskRCNN():
                 self.config.RPN_ANCHOR_RATIOS,
                 backbone_shapes,
                 self.config.BACKBONE_STRIDES,
-                self.config.RPN_ANCHOR_STRIDE)
+                self.config.RPN_ANCHOR_STRIDE,
+                self.config.IMAGE_SHAPE)
             # Keep a copy of the latest anchors in pixel coordinates because
             # it's used in inspect_model notebooks.
             # TODO: Remove this after the notebook are refactored to not use it

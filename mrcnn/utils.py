@@ -923,7 +923,7 @@ def generate_grasping_anchors(scales, ratios, shape, feature_stride, anchor_stri
 
 
 def generate_pyramid_anchors(scales, ratios, feature_shapes, feature_strides,
-                             anchor_stride, mode='', angles=[]):
+                             anchor_stride, image_shape, mode='', angles=[]):
     """Generate anchors at different levels of a feature pyramid. Each scale
     is associated with a level of the pyramid, but each ratio is used in
     all levels of the pyramid.
@@ -939,33 +939,36 @@ def generate_pyramid_anchors(scales, ratios, feature_shapes, feature_strides,
     for i in range(len(scales)):
         anchors.append(generate_anchors(scales[i], ratios, feature_shapes[i],
                                         feature_strides[i], anchor_stride, mode, angles))
-    # bbox_resized_reconstructed = dataset.bbox_convert_to_four_vertices(bbox_resize_5_dimensional[i])
-    #     dataset.visualize_bbox(image_id, bbox_resized[i], class_ids[i], bbox_resize_5_dimensional[i], image)
-    #     dataset.visualize_bbox(image_id, bbox_resized_reconstructed[0], class_ids[i], bbox_resize_5_dimensional[i], image)
-    #     import code;
-    #     code.interact(local=dict(globals(), **locals()))
-    # Visualizing Anchor locations and sizes
-    # import matplotlib.pyplot as plt
-    # import matplotlib.patches as patches
-    # import numpy as np
-    # img = np.zeros([384, 384, 3], dtype=np.uint8)
-    # img.fill(255)
-    # fig, ax = plt.subplots(1)
-    # ax.imshow(img)
-    # count = 0
-    # for k in anchors[4][4:9]:
-    #     y1, x1, y2, x2 = k
-    #     w = np.abs(x2-x1)
-    #     h = np.abs(y2-y1)
-    #     x = int((x1 + x2)/2)
-    #     y = int((y1+y2)/2)
-    #     rect = patches.Rectangle((x, y), w, h, linewidth=1, edgecolor='r', facecolor='none')
-    #     # Add the patch to the Axes
-    #     ax.add_patch(rect)
-    # plt.show()
-    anchors = np.concatenate(anchors, axis=0)
-    return anchors
 
+    anchors = np.concatenate(anchors, axis=0)
+    # Filter out anchors that have boundaries that are crossing the image boundary. Those anchors prevents convergence
+    # when training based on Faster RCNN's paper. This can be simplified by checking if an anchor rotated at 90 degrees
+    # cross the boundary of the image
+
+    x = anchors[:, 0]
+    y = anchors[:, 1]
+    w = anchors[:, 2]
+    h = anchors[:, 3]
+
+    anchors = np.delete(anchors, np.where(x + (0.5 * h) > image_shape[1])[0], axis=0)
+    anchors = np.delete(anchors, np.where(y + (0.5 * w) > image_shape[0])[0], axis=0)
+    anchors = np.delete(anchors, np.where(x + (0.5 * w) > image_shape[1])[0], axis=0)
+    anchors = np.delete(anchors, np.where(y + (0.5 * h) > image_shape[0])[0], axis=0)
+    anchors = np.delete(anchors, np.where(x - (0.5 * h) < 0)[0], axis=0)
+    anchors = np.delete(anchors, np.where(y - (0.5 * w) < 0)[0], axis=0)
+    anchors = np.delete(anchors, np.where(x - (0.5 * w) < 0)[0], axis=0)
+    anchors = np.delete(anchors, np.where(y - (0.5 * h) < 0)[0], axis=0)
+
+    fig, ax = plt.subplots(1, figsize=(10, 10))
+    ax.imshow(np.zeros((500, 500)))
+
+
+    for i, rect2 in enumerate(anchors):
+        rect2 = bbox_convert_to_four_vertices([rect2])
+        p = patches.Polygon(rect2[0], linewidth=1,edgecolor='r',facecolor='none')
+        ax.add_patch(p)
+    plt.show()
+    return anchors
 
 ############################################################
 #  Miscellaneous

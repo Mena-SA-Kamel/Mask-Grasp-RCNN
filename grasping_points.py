@@ -2,6 +2,7 @@ from mrcnn.config import Config
 from mrcnn.utils import Dataset
 import mrcnn.utils as utils
 import mrcnn.model as modellib
+from mrcnn import visualize
 
 import random
 import numpy as np
@@ -634,14 +635,14 @@ validating_dataset.prepare()
 # model.keras_model.save_weights(model_path)
 # ######################################################################################################
 # Create model in inference mode
-# with tf.device(DEVICE):
-#     model = modellib.MaskRCNN(mode="inference", model_dir=MODEL_DIR,
-#                               config=config, task="grasping_points")
-#
-# # Load weights
-# weights_path = os.path.join(MODEL_DIR, "mask_rcnn_grasping_points_0190.h5")
-# print("Loading weights ", weights_path)
-# model.load_weights(weights_path, by_name=True)
+with tf.device(DEVICE):
+    model = modellib.MaskRCNN(mode="inference", model_dir=MODEL_DIR,
+                              config=config, task="grasping_points")
+
+# Load weights
+weights_path = os.path.join(MODEL_DIR, "mask_rcnn_grasping_points_0190.h5")
+print("Loading weights ", weights_path)
+model.load_weights(weights_path, by_name=True)
 # image_ids = random.choices(validating_dataset.image_ids, k=15)
 # for image_id in image_ids:
 #     # validating_dataset.load_image(image_id, validating_dataset.image_info[image_id]['augmentation'])
@@ -670,19 +671,20 @@ validating_dataset.prepare()
     # training_dataset.visualize_bbox(image_id, bounding_box[0], gt_class_id[i], gt_bbox[i], rgbd_image=image)
 
 # ######################################################################################################
-# normalized_anchors = model.get_anchors(config.IMAGE_SHAPE, mode='grasping_points', angles=config.RPN_GRASP_ANGLES)
-#
-# # Generate Anchors
-# mode= 'grasping_points'
-# backbone_shapes = modellib.compute_backbone_shapes(config, config.IMAGE_SHAPE)
-# anchors = utils.generate_pyramid_anchors(config.RPN_ANCHOR_SCALES,
-#                                           config.RPN_ANCHOR_RATIOS,
-#                                           backbone_shapes,
-#                                           config.BACKBONE_STRIDES,
-#                                           config.RPN_ANCHOR_STRIDE,
-#                                           mode,
-#                                           config.RPN_GRASP_ANGLES)
-#
+normalized_anchors = model.get_anchors(config.IMAGE_SHAPE, mode='grasping_points', angles=config.RPN_GRASP_ANGLES)
+
+# Generate Anchors
+mode= 'grasping_points'
+backbone_shapes = modellib.compute_backbone_shapes(config, config.IMAGE_SHAPE)
+anchors = utils.generate_pyramid_anchors(config.RPN_ANCHOR_SCALES,
+                                          config.RPN_ANCHOR_RATIOS,
+                                          backbone_shapes,
+                                          config.BACKBONE_STRIDES,
+                                          config.RPN_ANCHOR_STRIDE,
+                                          config.IMAGE_SHAPE,
+                                          mode,
+                                          config.RPN_GRASP_ANGLES)
+
 # image_ids = random.choices(validating_dataset.image_ids, k=10)
 # for image_id in image_ids:
 #     image, image_meta, gt_class_id, gt_bbox, gt_mask =\
@@ -774,6 +776,7 @@ validating_dataset.prepare()
 # import code; code.interact(local=dict(globals(), **locals()))
 
 ####################################### VISUALIZING ANCHORS ############################################################
+#
 # num_levels = len(backbone_shapes)
 # anchors_per_cell = len(config.RPN_ANCHOR_RATIOS) * len(config.RPN_GRASP_ANGLES)
 # anchors_per_level = []
@@ -799,7 +802,7 @@ validating_dataset.prepare()
 #     fig, ax = plt.subplots(1, figsize=(10, 10))
 #     ax.imshow(image)
 #     for i, rect in enumerate(anchors_to_show):
-#         rect = training_dataset.bbox_convert_to_four_vertices(rect)
+#         rect = training_dataset.bbox_convert_to_four_vertices([rect])
 #         p = patches.Polygon(rect[0], linewidth=1,edgecolor='r',facecolor='none')
 #         ax.add_patch(p)
 #     plt.savefig(os.path.join('Grasping_anchors','P'+str(level+2)+ 'center_anchors.png'))

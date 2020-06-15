@@ -8,7 +8,8 @@ anchors = utils.generate_pyramid_anchors(config.RPN_ANCHOR_SCALES,
                                           config.RPN_ANCHOR_RATIOS,
                                           backbone_shapes,
                                           config.BACKBONE_STRIDES,
-                                          config.RPN_ANCHOR_STRIDE)
+                                          config.RPN_ANCHOR_STRIDE,
+                                          config.IMAGE_SHAPE)
 num_levels = len(backbone_shapes)
 anchors_per_cell = len(config.RPN_ANCHOR_RATIOS)
 print("Count: ", anchors.shape[0])
