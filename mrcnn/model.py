@@ -1499,9 +1499,14 @@ def load_image_gt(dataset, config, image_id, augment=False, augmentation=None,
         defined in MINI_MASK_SHAPE.
     """
     # Load image and mask
-    image = dataset.load_image(image_id)
+    image_path = dataset.image_info[image_id]['path']
+
+    if len(dataset.image_info[image_id]['augmentation']) != 0:
+        import code;
+        code.interact(local=dict(globals(), **locals()))
+    image = dataset.load_image(image_id, augmentation)
     if mode == 'grasping_points':
-        bbox_vertices, bbox_5_dimensional, class_ids = dataset.load_bounding_boxes(image_id)
+        bbox_vertices, bbox_5_dimensional, class_ids = dataset.load_bounding_boxes(image_id, augmentation)
         mask = []
     else:
         mask, class_ids = dataset.load_mask(image_id)

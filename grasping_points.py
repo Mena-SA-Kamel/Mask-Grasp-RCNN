@@ -1,11 +1,7 @@
-import mrcnn
 from mrcnn.config import Config
 from mrcnn.utils import Dataset
-from mrcnn import visualize
-from mrcnn.visualize import display_images
 import mrcnn.utils as utils
 import mrcnn.model as modellib
-from mrcnn.model import log
 
 import random
 import numpy as np
@@ -13,13 +9,13 @@ import os
 import glob
 from shutil import copyfile
 import matplotlib.pyplot as plt
-from matplotlib.path import Path
 import skimage.io
 from PIL import Image
 import open3d as o3d
 import math
 import matplotlib.patches as patches
 import cv2
+from random import randrange
 
 os.environ["PATH"] += os.pathsep + 'D:/Software/graphviz-2.38/release/bin'
 
@@ -50,6 +46,7 @@ class GraspingPointsConfig(Config):
     RPN_OHEM_NUM_SAMPLES = 500
     LEARNING_RATE = 0.003
     LEARNING_MOMENTUM = 0.8
+    NUM_AUGMENTATIONS = 15
 
 class InferenceConfig(GraspingPointsConfig):
     GPU_COUNT = 1
@@ -57,7 +54,7 @@ class InferenceConfig(GraspingPointsConfig):
 
 class GraspingPointsDataset(Dataset):
 
-    def load_dataset(self, type='train_set', dataset_dir='cornell_grasping_dataset', augmentation=None):
+    def load_dataset(self, type='train_set', dataset_dir='cornell_grasping_dataset', augmentation=False):
         self.add_class(GraspingPointsConfig().NAME, 1, "graspable_location")
         dataset_path = os.path.join(dataset_dir, type)
         image_list = glob.glob(dataset_path + '/**/rgb/*.png', recursive=True)
@@ -69,8 +66,20 @@ class GraspingPointsDataset(Dataset):
                 rgb_path = image
                 depth_path = image.replace('rgb', 'depth')
                 positive_grasp_points = image.replace('_RGB.png', '_grasps.txt').replace('rgb', 'grasp_rectangles')
+
                 self.add_image("grasping_points", image_id=id, path=rgb_path,
-                               depth_path=depth_path, positive_points=positive_grasp_points)
+                                depth_path=depth_path, positive_points=positive_grasp_points, augmentation = [])
+
+                if augmentation:
+                    # Augmentation will create hypothetical paths that load_image_gt() uses to construct the different
+                    # image variants
+                    image_name = image.split('\\')[-1].strip('_RGB.png')
+                    for i in range(config.NUM_AUGMENTATIONS):
+                        self.add_image("grasping_points", image_id=id, path=rgb_path,
+                                       depth_path=depth_path, positive_points=positive_grasp_points,
+                                       augmentation = self.generate_anotations())
+                        id = id + 1
+
             elif 'cornell_grasping_dataset' in dataset_dir:
                 rgb_path = image
                 depth_path = image.replace('rgb', 'depth')
@@ -81,8 +90,46 @@ class GraspingPointsDataset(Dataset):
                                negative_points = negative_grasp_points)
             id = id + 1
 
-    def load_image(self, image_id):
-        image = skimage.io.imread(self.image_info[image_id]['path'])
+    def generate_anotations(self):
+        augmentation_types = ['angle', 'dx', 'dy', 'flip']
+        augmentations = random.sample(list(augmentation_types), 2)
+        augmentations_list = np.zeros(4)
+
+        if 'angle' in augmentations:
+            angle = randrange(-30, 30)
+            augmentations_list[0] = angle
+
+        if 'dx' in augmentations:
+            dx = randrange(0, 50)
+            augmentations_list[1] = dx
+
+        if 'dy' in augmentations:
+            dy = randrange(0, 50)
+            augmentations_list[2] = dy
+
+        if 'flip' in augmentations:
+            flip = randrange(0, 3) # 0 -> vertical flip, 1 -> horizontal flip, 2 -> no flip
+            augmentations_list[3] = flip
+
+        return augmentations_list
+
+    # def decode_augmentation_label(self, augmentation_label):
+    #     # returns an array that specifies the value of augmentations [angle, dx, dy, flip]
+    #     augmentation_types = ['angle', 'dx', 'dy', 'flip']
+    #     augmentation_decode = np.zeros(4)
+    #     i = 0
+    #     for augmentation_type in augmentation_types:
+    #         if augmentation_type in augmentation_label:
+    #             augmentation_decode[i] = int(augmentation_label.split(augmentation_type)[1].split('_')[1])
+    #         i += 1
+    #     return augmentation_decode
+
+    def load_image(self, image_id, augmentation=None):
+        image_path = self.image_info[image_id]['path']
+        if len(augmentation) != 0:
+            import code;
+            code.interact(local=dict(globals(), **locals()))
+        image = skimage.io.imread(image_path)
         try:
             depth = skimage.io.imread(self.image_info[image_id]['depth_path'])
         except:
@@ -366,11 +413,14 @@ class GraspingPointsDataset(Dataset):
         return bbox_5_dimensional
 
 
-    def load_bounding_boxes(self, image_id):
+    def load_bounding_boxes(self, image_id, augmentation=None):
         # bounding boxes here have a shape of N x 4 x 2, consisting of four vertices per rectangle given N rectangles
 
         # loading jacquard style bboxes. NOTE: class_ids will all be 1 since jacquard only has positive boxes
         if 'jacquard' in self.image_info[image_id]['path']:
+            if augmentation != None:
+                import code;
+                code.interact(local=dict(globals(), **locals()))
             bbox_5_dimensional, class_ids = self.load_jacquard_gt_boxes(image_id)
             bounding_box_vertices = self.bbox_convert_to_four_vertices(bbox_5_dimensional)
         else:
@@ -531,14 +581,14 @@ mode = "grasping_points"
 training_dataset = GraspingPointsDataset()
 # training_dataset.construct_jacquard_dataset()
 # training_dataset.load_dataset()
-training_dataset.load_dataset(dataset_dir='../../../Datasets/jacquard_dataset')
+training_dataset.load_dataset(dataset_dir='../../../Datasets/jacquard_dataset', augmentation=True)
 training_dataset.prepare()
 # channel_means = np.array(training_dataset.get_channel_means())
 # config.MEAN_PIXEL = np.around(channel_means, decimals = 1)
 
 
 validating_dataset = GraspingPointsDataset()
-validating_dataset.load_dataset(dataset_dir='../../../Datasets/jacquard_dataset', type='val_set')
+validating_dataset.load_dataset(dataset_dir='../../../Datasets/jacquard_dataset', type='val_set', augmentation=True)
 # validating_dataset.load_dataset(type='val_set')
 validating_dataset.prepare()
 
@@ -576,35 +626,35 @@ validating_dataset.prepare()
 # model.keras_model.save_weights(model_path)
 # ######################################################################################################
 # Create model in inference mode
-# with tf.device(DEVICE):
-#     model = modellib.MaskRCNN(mode="inference", model_dir=MODEL_DIR,
-#                               config=config, task="grasping_points")
-#
-# # Load weights
-# weights_path = os.path.join(MODEL_DIR, "mask_rcnn_grasping_points_0190.h5")
-# print("Loading weights ", weights_path)
-# model.load_weights(weights_path, by_name=True)
-#
-# image_ids = random.choices(validating_dataset.image_ids, k=15)
-# for image_id in image_ids:
-#     image, image_meta, gt_class_id, gt_bbox, gt_mask =\
-#         modellib.load_image_gt(validating_dataset, config, image_id, use_mini_mask=False, mode='grasping_points')
-#     results = model.detect([image], verbose=1, task=mode)
-#     r = results[0]
-#     proposals = validating_dataset.refine_results(r, model.anchors)
-#     fig, ax = plt.subplots(1, figsize=(10, 10))
-#     ax.imshow(image)
-#     for i, rect in enumerate(proposals):
-#         rect = validating_dataset.bbox_convert_to_four_vertices([rect])
-#         p = patches.Polygon(rect[0], linewidth=1,edgecolor='r',facecolor='none')
-#         ax.add_patch(p)
-#     # for i, rect in enumerate(gt_bbox):
-#     #     rect = validating_dataset.bbox_convert_to_four_vertices([rect])
-#     #     p = patches.Polygon(rect[0], linewidth=1,edgecolor='g',facecolor='none')
-#     #     ax.add_patch(p)
-#     ax.set_title(validating_dataset.image_info[image_id]['path'])
-#     plt.show(block=False)
-#
+with tf.device(DEVICE):
+    model = modellib.MaskRCNN(mode="inference", model_dir=MODEL_DIR,
+                              config=config, task="grasping_points")
+
+# Load weights
+weights_path = os.path.join(MODEL_DIR, "mask_rcnn_grasping_points_0190.h5")
+print("Loading weights ", weights_path)
+model.load_weights(weights_path, by_name=True)
+
+image_ids = random.choices(validating_dataset.image_ids, k=15)
+for image_id in image_ids:
+    image, image_meta, gt_class_id, gt_bbox, gt_mask =\
+        modellib.load_image_gt(validating_dataset, config, image_id, use_mini_mask=False, mode='grasping_points')
+    results = model.detect([image], verbose=1, task=mode)
+    r = results[0]
+    proposals = validating_dataset.refine_results(r, model.anchors)
+    fig, ax = plt.subplots(1, figsize=(10, 10))
+    ax.imshow(image)
+    for i, rect in enumerate(proposals):
+        rect = validating_dataset.bbox_convert_to_four_vertices([rect])
+        p = patches.Polygon(rect[0], linewidth=1,edgecolor='r',facecolor='none')
+        ax.add_patch(p)
+    # for i, rect in enumerate(gt_bbox):
+    #     rect = validating_dataset.bbox_convert_to_four_vertices([rect])
+    #     p = patches.Polygon(rect[0], linewidth=1,edgecolor='g',facecolor='none')
+    #     ax.add_patch(p)
+    ax.set_title(validating_dataset.image_info[image_id]['path'])
+    plt.show(block=False)
+
 # import code;
 # code.interact(local=dict(globals(), **locals()))
     # plt.savefig(os.path.join('Grasping_anchors','P'+str(level+2)+ 'center_anchors.png'))
