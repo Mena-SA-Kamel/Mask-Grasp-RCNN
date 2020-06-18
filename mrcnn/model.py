@@ -19,6 +19,7 @@ import numpy as np
 import bisect
 import tensorflow as tf
 import keras
+from math import pi
 
 import keras.backend as K
 import keras.layers as KL
@@ -353,6 +354,75 @@ class GraspProposalLayer(KE.Layer):
         # for small objects, so we're skipping it.
 
         # Non-max suppression - skip for now, apply non-max suppression on the output
+        def compute_iou(box, boxes, box_area, boxes_area):
+            """Calculates IoU of the given box with the array of the given boxes.
+            box: 1D vector [y1, x1, y2, x2]
+            boxes: [boxes_count, (y1, x1, y2, x2)]
+            box_area: float. the area of 'box'
+            boxes_area: array of length boxes_count.
+
+            Note: the areas are passed in rather than calculated here for
+            efficiency. Calculate once in the caller to avoid duplicate work.
+            """
+            # Calculate intersection areas
+
+            y1 = tf.maximum(box[0], boxes[:, 0])
+            y2 = tf.minimum(box[2], boxes[:, 2])
+            x1 = tf.maximum(box[1], boxes[:, 1])
+            x2 = tf.minimum(box[3], boxes[:, 3])
+            intersection = tf.maximum(x2 - x1, 0) * tf.maximum(y2 - y1, 0)
+            union = box_area + boxes_area[:] - intersection[:]
+            iou = intersection / union
+            return iou
+
+        def tf_deg2rad(angle):
+            pi_over_180 = pi /180
+            return angle * pi_over_180
+
+        def oriented_bbox_nms(boxes, scores):
+            """Applies the given deltas to the given oriented rectangleboxes.
+            boxes: [N, (x, y, w, h, theta)] boxes to update
+            deltas: [N, (dx, dy, log(dw), log(dh), dtheta)] refinements to apply
+            num_angles: number of different anchor angles
+            """
+            boxes = tf.cast(boxes, tf.float32)
+            xs = boxes[:, 0]
+            ys = boxes[:, 1]
+            ws = boxes[:, 2]
+            hs = boxes[:, 3]
+            thetas = boxes[:, 4]
+            anchor_areas = ws * hs
+
+            y1 = ys - hs / 2
+            x1 = xs - ws / 2
+            y2 = ys + hs / 2
+            x2 = xs + ws / 2
+            anchor_vertices = tf.stack([y1, x1, y2, x2], axis=1)
+
+            while True:
+                max_score_box = tf.gather(boxes, K.argmax(scores))
+                x = max_score_box[0]
+                y = max_score_box[1]
+                w = max_score_box[2]
+                h = max_score_box[3]
+                theta = max_score_box[4]
+                gt_box_vertices = tf.stack([y - h / 2, x - w / 2, y + h / 2, x + w / 2])
+                gt_box_area = w * h
+                iou = compute_iou(gt_box_vertices, anchor_vertices, gt_box_area, anchor_areas)
+                angle_differences = tf.cos(tf_deg2rad(thetas) - tf_deg2rad(theta))
+                angle_differences = tf.maximum(angle_differences, 0)
+                arIoU = iou * angle_differences
+                ix_to_omit = tf.where(tf.greater(arIoU, 0.5))
+
+                import code;
+                code.interact(local=dict(globals(), **locals()))
+
+
+
+
+            # result = tf.stack([center_x, center_y, width, height, theta], axis=1, name="apply_box_deltas_out")
+            # return result
+
         # def nms(boxes, scores):
         #     indices = tf.image.non_max_suppression(
         #         boxes, scores, self.proposal_count,
@@ -362,10 +432,10 @@ class GraspProposalLayer(KE.Layer):
         #     padding = tf.maximum(self.proposal_count - tf.shape(proposals)[0], 0)
         #     proposals = tf.pad(proposals, [(0, padding), (0, 0)])
         #     return proposals
-        #
-        # proposals = utils.batch_slice([boxes, scores], nms,
-        #                               self.config.IMAGES_PER_GPU)
-        return boxes
+
+        proposals = utils.batch_slice([boxes, scores], oriented_bbox_nms,
+                                      self.config.IMAGES_PER_GPU)
+        return proposals
 
     def compute_output_shape(self, input_shape):
         return (None, self.proposal_count, 5)
@@ -2725,6 +2795,17 @@ class MaskRCNN():
                    for o, n in zip(outputs, output_names)]
 
         rpn_class_logits, rpn_class, rpn_bbox = outputs
+
+        # Generate proposals
+        # Proposals are [batch, N, (y1, x1, y2, x2)] in normalized coordinates
+        # and zero padded.
+        proposal_count = config.POST_NMS_ROIS_TRAINING if mode == "training" \
+            else config.POST_NMS_ROIS_INFERENCE
+        rpn_rois = GraspProposalLayer(
+            proposal_count=proposal_count,
+            nms_threshold=config.RPN_NMS_THRESHOLD,
+            name="ROI",
+            config=config)([rpn_class, rpn_bbox, anchors])
 
         if mode == 'training':
 
