@@ -117,7 +117,7 @@ def compute_overlaps(boxes1, boxes2, mode=''):
             angle_differences = np.cos(np.radians(thetas) - np.radians(theta))
             angle_differences[angle_differences < 0] = 0
             arIoU = iou * angle_differences
-            arIoU = np.interp(arIoU, (arIoU.min(), arIoU.max()), (0, 1))
+            # arIoU = np.interp(arIoU, (arIoU.min(), arIoU.max()), (0, 1))
             overlaps[:, i] = arIoU
 
     else:
@@ -945,29 +945,35 @@ def generate_pyramid_anchors(scales, ratios, feature_shapes, feature_strides,
     # when training based on Faster RCNN's paper. This can be simplified by checking if an anchor rotated at 90 degrees
     # cross the boundary of the image
 
-    x = anchors[:, 0]
-    y = anchors[:, 1]
-    w = anchors[:, 2]
-    h = anchors[:, 3]
+    radius = ((0.5 * anchors[:, 2]) ** 2 + (0.5 * anchors[:, 3]) ** 2) ** 0.5
 
-    anchors = np.delete(anchors, np.where(x + (0.5 * h) > image_shape[1])[0], axis=0)
-    anchors = np.delete(anchors, np.where(y + (0.5 * w) > image_shape[0])[0], axis=0)
-    anchors = np.delete(anchors, np.where(x + (0.5 * w) > image_shape[1])[0], axis=0)
-    anchors = np.delete(anchors, np.where(y + (0.5 * h) > image_shape[0])[0], axis=0)
-    anchors = np.delete(anchors, np.where(x - (0.5 * h) < 0)[0], axis=0)
-    anchors = np.delete(anchors, np.where(y - (0.5 * w) < 0)[0], axis=0)
-    anchors = np.delete(anchors, np.where(x - (0.5 * w) < 0)[0], axis=0)
-    anchors = np.delete(anchors, np.where(y - (0.5 * h) < 0)[0], axis=0)
+    invalid_x = np.where(anchors[:, 0] + radius > image_shape[1])[0]
+    anchors = np.delete(anchors, invalid_x, axis = 0)
+    radius = np.delete(radius, invalid_x)
 
-    fig, ax = plt.subplots(1, figsize=(10, 10))
-    ax.imshow(np.zeros((500, 500)))
+    invalid_x = np.where(anchors[:, 0] - radius < 0)[0]
+    anchors = np.delete(anchors, invalid_x, axis=0)
+    radius = np.delete(radius, invalid_x)
 
+    invalid_y = np.where(anchors[:, 1] + radius > image_shape[0])[0]
+    anchors = np.delete(anchors, invalid_y, axis = 0)
+    radius = np.delete(radius, invalid_y)
 
-    for i, rect2 in enumerate(anchors):
-        rect2 = bbox_convert_to_four_vertices([rect2])
-        p = patches.Polygon(rect2[0], linewidth=1,edgecolor='r',facecolor='none')
-        ax.add_patch(p)
-    plt.show()
+    invalid_y = np.where(anchors[:, 1] - radius < 0)[0]
+    anchors = np.delete(anchors, invalid_y, axis=0)
+    # radius = np.delete(radius, invalid_y)
+    # fig, ax = plt.subplots(1, figsize=(10, 10))
+    # ax.imshow(np.zeros((500, 500)))
+    # import code;
+    # code.interact(local=dict(globals(), **locals()))
+    #
+    #
+    # for i, rect2 in enumerate(anchors):
+    #     rect2 = bbox_convert_to_four_vertices([rect2])
+    #     p = patches.Polygon(rect2[0], linewidth=1,edgecolor='r',facecolor='none')
+    #     ax.add_patch(p)
+    # plt.show()
+
     return anchors
 
 ############################################################

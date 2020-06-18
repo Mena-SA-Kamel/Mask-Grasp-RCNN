@@ -297,6 +297,12 @@ class GraspingPointsDataset(Dataset):
             # Minimum dimension allowed is 2 pixels
             if (h < 5 or w < 5):
                 continue
+
+            # Theta re-adjustments:
+            if theta > 90:
+                theta  = theta - 180
+            elif theta < -90:
+                theta = theta + 180
             bounding_boxes.append([x, y, w, h, theta])
             class_ids.append(1)
         return np.array(bounding_boxes), np.array(class_ids)
@@ -367,7 +373,9 @@ class GraspingPointsDataset(Dataset):
         deltaY = gripper_orientation[0][1] - gripper_orientation[1][1]
         deltaX = gripper_orientation[0][0] - gripper_orientation[1][0]
         theta = -1 * np.arctan2(deltaY, deltaX) * 180 / math.pi
-        if theta < -90:
+        if theta > 90:
+            theta = theta - 180
+        elif theta < -90:
             theta = theta + 180
         return [x, y, w, h, theta]
 
@@ -414,7 +422,7 @@ class GraspingPointsDataset(Dataset):
         return np.array(rotated_points)
 
 
-    def bbox_convert_to_five_dimension(self, bounding_box_vertices, image_id = 0):
+    def bbox_convert_to_five_dimension(self, bounding_box_vertices, image_id=0):
         bbox_5_dimensional = []
         for bounding_box in bounding_box_vertices:
             x, y, w, h, theta = self.get_five_dimensional_box(bounding_box)
@@ -685,59 +693,61 @@ anchors = utils.generate_pyramid_anchors(config.RPN_ANCHOR_SCALES,
                                           mode,
                                           config.RPN_GRASP_ANGLES)
 
-# image_ids = random.choices(validating_dataset.image_ids, k=10)
-# for image_id in image_ids:
-#     image, image_meta, gt_class_id, gt_bbox, gt_mask =\
-#         modellib.load_image_gt(validating_dataset, config, image_id, use_mini_mask=False, mode='grasping_points')
-#
-#     target_rpn_match, target_rpn_bbox = modellib.build_rpn_targets(
-#         image.shape, model.anchors, gt_class_id, gt_bbox, model.config, mode)
-#
-#     positive_anchor_ix = np.where(target_rpn_match[:] == 1)[0]
-#     negative_anchor_ix = np.where(target_rpn_match[:] == -1)[0]
-#     neutral_anchor_ix = np.where(target_rpn_match[:] == 0)[0]
-#     positive_anchors = model.anchors[positive_anchor_ix]
-#     negative_anchors = model.anchors[negative_anchor_ix]
-#     neutral_anchors = model.anchors[neutral_anchor_ix]
-#
-#     image_final_anchors = np.where(np.logical_not(target_rpn_match[:] == 0))[0]
-#     positive_anchors_mask = np.in1d(image_final_anchors, positive_anchor_ix)
-#     deltas = target_rpn_bbox[positive_anchors_mask] * model.config.RPN_BBOX_STD_DEV
-#     refined_anchors = utils.apply_box_deltas(positive_anchors, deltas, mode, len(config.RPN_GRASP_ANGLES))
-#
-#     fig, ax = plt.subplots(1, figsize=(10, 10))
-#     ax.imshow(image)
-#
-#     for i, rect in enumerate(gt_bbox):
-#         rect = validating_dataset.bbox_convert_to_four_vertices([rect])
-#         p = patches.Polygon(rect[0], linewidth=1,edgecolor='g',facecolor='none')
-#         ax.add_patch(p)
-#     ax.set_title(validating_dataset.image_info[image_id]['path'])
-#     plt.show(block=False)
-#
-#     fig, ax = plt.subplots(1, figsize=(10, 10))
-#     ax.imshow(image)
-#
-#
-#     for i, rect2 in enumerate(negative_anchors):
-#         rect2 = validating_dataset.bbox_convert_to_four_vertices([rect2])
-#         p = patches.Polygon(rect2[0], linewidth=1,edgecolor='r',facecolor='none')
-#         ax.add_patch(p)
-#
-#     for i, rect2 in enumerate(positive_anchors):
-#         rect2 = validating_dataset.bbox_convert_to_four_vertices([rect2])
-#         p = patches.Polygon(rect2[0], linewidth=1, edgecolor='g', facecolor='none')
-#         ax.add_patch(p)
-#
-#     for i, rect2 in enumerate(refined_anchors):
-#         rect2 = validating_dataset.bbox_convert_to_four_vertices([rect2])
-#         p = patches.Polygon(rect2[0], linewidth=1, edgecolor='b', facecolor='none')
-#         ax.add_patch(p)
-#     ax.set_title(validating_dataset.image_info[image_id]['path'])
-#     plt.show(block=False)
-#     import code;
-#
-#     code.interact(local=dict(globals(), **locals()))
+image_ids = random.choices(validating_dataset.image_ids, k=10)
+for image_id in image_ids:
+    image, image_meta, gt_class_id, gt_bbox, gt_mask =\
+        modellib.load_image_gt(validating_dataset, config, image_id, use_mini_mask=False, mode='grasping_points')
+
+    target_rpn_match, target_rpn_bbox = modellib.build_rpn_targets(
+        image.shape, model.anchors, gt_class_id, gt_bbox, model.config, mode='grasping_points')
+    positive_anchor_ix = np.where(target_rpn_match[:] == 1)[0]
+    negative_anchor_ix = np.where(target_rpn_match[:] == -1)[0]
+    neutral_anchor_ix = np.where(target_rpn_match[:] == 0)[0]
+    positive_anchors = model.anchors[positive_anchor_ix]
+    negative_anchors = model.anchors[negative_anchor_ix]
+    neutral_anchors = model.anchors[neutral_anchor_ix]
+    # import code;
+    #
+    # code.interact(local=dict(globals(), **locals()))
+    image_final_anchors = np.where(np.logical_not(target_rpn_match[:] == 0))[0]
+    positive_anchors_mask = np.in1d(image_final_anchors, positive_anchor_ix)
+    deltas = target_rpn_bbox[positive_anchors_mask] * model.config.RPN_BBOX_STD_DEV
+    refined_anchors = utils.apply_box_deltas(positive_anchors, deltas, mode, len(config.RPN_GRASP_ANGLES))
+
+    fig, ax = plt.subplots(1, figsize=(10, 10))
+    ax.imshow(image)
+
+    for i, rect in enumerate(gt_bbox):
+        rect = validating_dataset.bbox_convert_to_four_vertices([rect])
+        p = patches.Polygon(rect[0], linewidth=1,edgecolor='g',facecolor='none')
+        ax.add_patch(p)
+    ax.set_title(validating_dataset.image_info[image_id]['path'])
+    plt.show(block=False)
+
+    fig, ax = plt.subplots(1, figsize=(10, 10))
+    ax.imshow(image)
+    print (len(positive_anchor_ix), len(negative_anchor_ix))
+
+
+    for i, rect2 in enumerate(negative_anchors):
+        rect2 = validating_dataset.bbox_convert_to_four_vertices([rect2])
+        p = patches.Polygon(rect2[0], linewidth=1,edgecolor='r',facecolor='none')
+        ax.add_patch(p)
+
+    for i, rect3 in enumerate(model.anchors[positive_anchor_ix]):
+        rect3= validating_dataset.bbox_convert_to_four_vertices([rect3])
+        q = patches.Polygon(rect3[0], linewidth=1, edgecolor='g', facecolor='none')
+        ax.add_patch(q)
+
+    for i, rect4 in enumerate(refined_anchors):
+        rect4 = validating_dataset.bbox_convert_to_four_vertices([rect4])
+        r = patches.Polygon(rect4[0], linewidth=1, edgecolor='b', facecolor='none')
+        ax.add_patch(r)
+    ax.set_title(validating_dataset.image_info[image_id]['path'])
+    plt.show(block=False)
+import code;
+
+code.interact(local=dict(globals(), **locals()))
 
 
 

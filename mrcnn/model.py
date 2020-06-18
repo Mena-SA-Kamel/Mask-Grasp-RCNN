@@ -1745,8 +1745,20 @@ def build_detection_targets(rpn_rois, gt_class_ids, gt_boxes, gt_masks, config):
 
     return rois, roi_gt_class_ids, bboxes, masks
 
+# def build_grasp_rpn_targets(image_shape, anchors, gt_class_ids, gt_boxes, config):
+#     # RPN bounding boxes: [max anchors per image, (dx, dy, log(dw), log(dh), dtheta)]
+#     rpn_bbox = np.zeros((config.RPN_TRAIN_ANCHORS_PER_IMAGE, 5))
+#     overlaps = utils.compute_overlaps(anchors, gt_boxes, mode='grasping_points')
+#
+#     fg_neg_thresh = 0.3
+#     fg_pos_thresh = 0.7
+#     print (np.max(overlaps, axis=0))
+
+
+
 
 def build_rpn_targets(image_shape, anchors, gt_class_ids, gt_boxes, config, mode=''):
+
     """Given the anchors and GT boxes, compute overlaps and identify positive
     anchors and deltas to refine them to match their corresponding GT boxes.
 
@@ -1769,8 +1781,9 @@ def build_rpn_targets(image_shape, anchors, gt_class_ids, gt_boxes, config, mode
         rpn_bbox = np.zeros((config.RPN_TRAIN_ANCHORS_PER_IMAGE, 5))
         overlaps = utils.compute_overlaps(anchors, gt_boxes, mode='grasping_points')
 
-        fg_neg_thresh = 0.2
-        fg_pos_thresh = 0.7
+        fg_neg_thresh = 0.01
+        fg_pos_thresh = 0.5
+
         # 1. Set negative anchors first. They get overwritten below if a GT box is
         # matched to them. Skip boxes in crowd areas.
         anchor_iou_argmax = np.argmax(overlaps, axis=1)
@@ -1779,6 +1792,8 @@ def build_rpn_targets(image_shape, anchors, gt_class_ids, gt_boxes, config, mode
         rpn_match[(anchor_iou_max < fg_neg_thresh)] = -1
         # 2. Set an anchor for each GT box (regardless of IoU value).
         # If multiple anchors have the same IoU match all of them
+        # import code;
+        # code.interact(local=dict(globals(), **locals()))
         gt_iou_argmax = np.argwhere(overlaps == np.max(overlaps, axis=0))[:, 0]
         rpn_match[gt_iou_argmax] = 1
         # 3. Set anchors with high overlap as positive.
