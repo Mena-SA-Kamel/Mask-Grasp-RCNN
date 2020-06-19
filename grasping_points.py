@@ -45,7 +45,7 @@ class GraspingPointsConfig(Config):
     RPN_GRASP_ANGLES = [-60, -30, 0, 30, 60]
     RPN_BBOX_STD_DEV = np.array([0.1, 0.1, 0.2, 0.2, 1])
     RPN_TRAIN_ANCHORS_PER_IMAGE = 1000
-    RPN_OHEM_NUM_SAMPLES = 500
+    RPN_OHEM_NUM_SAMPLES = 256
     LEARNING_RATE = 0.005
     LEARNING_MOMENTUM = 0.8
     NUM_AUGMENTATIONS = 15
@@ -125,7 +125,7 @@ class GraspingPointsDataset(Dataset):
             rgbd_image = image_augmentation.flip_image(rgbd_image, int(flip_code))
         return rgbd_image
 
-    def apply_augmentation_to_box(self, boxes, class_ids, augmentation):
+    def apply_augmentation_to_box(self, boxes, class_ids, image_id, augmentation):
         # ['angle', 'dx', 'dy', 'flip']
         angle, dx, dy, flip_code = augmentation
         image_shape = plt.imread(self.image_info[image_id]['path']).shape[:2]
@@ -438,7 +438,7 @@ class GraspingPointsDataset(Dataset):
         if 'jacquard' in self.image_info[image_id]['path']:
             bbox_5_dimensional, class_ids = self.load_jacquard_gt_boxes(image_id)
             if len(augmentation) != 0:
-                bbox_5_dimensional, class_ids = self.apply_augmentation_to_box(bbox_5_dimensional, class_ids, augmentation)
+                bbox_5_dimensional, class_ids = self.apply_augmentation_to_box(bbox_5_dimensional, class_ids, image_id, augmentation)
             bounding_box_vertices = self.bbox_convert_to_four_vertices(bbox_5_dimensional)
         else:
             bounding_box_vertices, class_ids = self.load_ground_truth_bbox_files(image_id)

@@ -399,6 +399,7 @@ class GraspProposalLayer(KE.Layer):
             x2 = xs + ws / 2
             anchor_vertices = tf.stack([y1, x1, y2, x2], axis=1)
 
+
             while True:
                 max_score_box = tf.gather(boxes, K.argmax(scores))
                 x = max_score_box[0]
@@ -414,8 +415,7 @@ class GraspProposalLayer(KE.Layer):
                 arIoU = iou * angle_differences
                 ix_to_omit = tf.where(tf.greater(arIoU, 0.5))
 
-                import code;
-                code.interact(local=dict(globals(), **locals()))
+
 
 
 
@@ -1259,6 +1259,117 @@ def build_fpn_mask_graph(rois, feature_maps, image_meta,
 #  Loss Functions
 ############################################################
 
+# Non-max suppression - skip for now, apply non-max suppression on the output
+def compute_iou(box, boxes, box_area, boxes_area):
+    """Calculates IoU of the given box with the array of the given boxes.
+    box: 1D vector [y1, x1, y2, x2]
+    boxes: [boxes_count, (y1, x1, y2, x2)]
+    box_area: float. the area of 'box'
+    boxes_area: array of length boxes_count.
+
+    Note: the areas are passed in rather than calculated here for
+    efficiency. Calculate once in the caller to avoid duplicate work.
+    """
+    # Calculate intersection areas
+
+    y1 = tf.maximum(box[0], boxes[:, 0])
+    y2 = tf.minimum(box[2], boxes[:, 2])
+    x1 = tf.maximum(box[1], boxes[:, 1])
+    x2 = tf.minimum(box[3], boxes[:, 3])
+    intersection = tf.maximum(x2 - x1, 0) * tf.maximum(y2 - y1, 0)
+    union = box_area + boxes_area[:] - intersection[:]
+    iou = intersection / union
+    return iou
+
+def tf_deg2rad(angle):
+    pi_over_180 = pi /180
+    return angle * pi_over_180
+
+def compute_iou(box, boxes, box_area, boxes_area):
+    """Calculates IoU of the given box with the array of the given boxes.
+    box: 1D vector [y1, x1, y2, x2]
+    boxes: [boxes_count, (y1, x1, y2, x2)]
+    box_area: float. the area of 'box'
+    boxes_area: array of length boxes_count.
+
+    Note: the areas are passed in rather than calculated here for
+    efficiency. Calculate once in the caller to avoid duplicate work.
+    """
+    # Calculate intersection areas
+
+    y1 = tf.maximum(box[0], boxes[:, 0])
+    y2 = tf.minimum(box[2], boxes[:, 2])
+    x1 = tf.maximum(box[1], boxes[:, 1])
+    x2 = tf.minimum(box[3], boxes[:, 3])
+    intersection = tf.maximum(x2 - x1, 0) * tf.maximum(y2 - y1, 0)
+    union = box_area + boxes_area[:] - intersection[:]
+    iou = intersection / union
+    return iou
+
+def tf_deg2rad(angle):
+    pi_over_180 = pi /180
+    return angle * pi_over_180
+
+def body(filtered_anchors, sorted_scores, anchor_vertices, anchor_areas, thetas, ix, num_samples):
+    max_score_box = tf.gather(filtered_anchors, ix)
+    x = max_score_box[0]
+    y = max_score_box[1]
+    w = max_score_box[2]
+    h = max_score_box[3]
+    theta = max_score_box[4]
+    # gt_box_vertices = tf.stack([y - h / 2, x - w / 2, y + h / 2, x + w / 2])
+    gt_box_vertices = tf.gather(anchor_vertices, ix)
+    gt_box_area = w * h
+    iou = compute_iou(gt_box_vertices, anchor_vertices, gt_box_area, anchor_areas)
+    angle_differences = tf.cos(tf_deg2rad(thetas) - tf_deg2rad(theta))
+    angle_differences = tf.maximum(angle_differences, 0)
+    arIoU = iou * angle_differences
+    # keep boxes with IoU less than 0.5
+    ix_to_keep = tf.where(tf.less(arIoU, 0.3))
+    filtered_anchors = tf.gather_nd(filtered_anchors, ix_to_keep)
+    sorted_scores = tf.gather_nd(sorted_scores, ix_to_keep)
+    ix = ix + 1
+    return [filtered_anchors, sorted_scores, anchor_vertices, anchor_areas, thetas, ix, num_samples]
+
+def condition(filtered_anchors, sorted_scores, anchor_vertices, anchor_areas, thetas, ix, num_samples):
+    return ix < num_samples
+
+def oriented_bbox_nms(boxes, scores, num_samples):
+    """Applies the given deltas to the given oriented rectangleboxes.
+    boxes: [N, (x, y, w, h, theta)] boxes to update
+    deltas: [N, (dx, dy, log(dw), log(dh), dtheta)] refinements to apply
+    num_angles: number of different anchor angles
+    """
+    boxes = tf.cast(boxes, tf.float32)
+    ix = tf.Variable(tf.constant(0))
+    num_samples = tf.Variable(tf.constant(num_samples))
+    filtered_anchors = tf.identity(boxes)
+    # Sorting the losses in descending order
+    sorted_scores_ix = tf.argsort(scores, direction='DESCENDING', axis = 0)
+    sorted_scores = tf.gather_nd(scores, sorted_scores_ix)
+    filtered_anchors = tf.gather_nd(filtered_anchors, sorted_scores_ix)
+
+    xs = boxes[:, 0]
+    ys = boxes[:, 1]
+    ws = boxes[:, 2]
+    hs = boxes[:, 3]
+    thetas = boxes[:, 4]
+    anchor_areas = ws * hs
+
+    y1 = ys - hs / 2
+    x1 = xs - ws / 2
+    y2 = ys + hs / 2
+    x2 = xs + ws / 2
+    anchor_vertices = tf.stack([y1, x1, y2, x2], axis=1)
+
+    # import code;
+    # code.interact(local=dict(globals(), **locals()))
+    # results = tf.map_fn(body, [filtered_anchors, sorted_scores, anchor_vertices, anchor_areas, thetas, ix])
+
+    result = tf.while_loop(condition, body, [filtered_anchors, sorted_scores, anchor_vertices, anchor_areas, thetas, ix, num_samples])
+    filtered_anchors, sorted_scores, _, _, _, _, _ = result
+    return [filtered_anchors, sorted_scores]
+
 def smooth_l1_loss(y_true, y_pred):
     """Implements Smooth-L1 loss.
     y_true and y_pred are typically: [N, 4], but could be any shape.
@@ -1268,7 +1379,7 @@ def smooth_l1_loss(y_true, y_pred):
     loss = (less_than_one * 0.5 * diff**2) + (1 - less_than_one) * (diff - 0.5)
     return loss
 
-def rpn_combined_loss_graph(config, target_bbox, target_class, rpn_bbox, rpn_class_logits):
+def rpn_combined_loss_graph(config, target_bbox, target_class, rpn_bbox, rpn_class_logits, anchors):
     # CLASSIFICATION LOSS
     # Squeeze last dim to simplify
     target_class = tf.squeeze(target_class, -1)
@@ -1280,6 +1391,7 @@ def rpn_combined_loss_graph(config, target_bbox, target_class, rpn_bbox, rpn_cla
     # Pick rows that contribute to the loss and filter out the rest.
     rpn_class_logits = tf.gather_nd(rpn_class_logits, indices)
     anchor_class = tf.gather_nd(anchor_class, indices)
+    anchors = tf.gather_nd(anchors, indices)
     # Cross entropy loss
     classification_loss = K.sparse_categorical_crossentropy(target=anchor_class,
                                              output=rpn_class_logits,
@@ -1311,18 +1423,22 @@ def rpn_combined_loss_graph(config, target_bbox, target_class, rpn_bbox, rpn_cla
 
     bbox_loss = tf.tensor_scatter_nd_update(bbox_loss, ix, inplace_array)
     total_loss = KL.Add()([tf.reshape(bbox_loss, [-1, 1]), classification_loss])
+    # Applying NMS before selecting top K losses to prevent loss double counting
+    filtered_anchors, total_loss = oriented_bbox_nms(anchors, total_loss, config.RPN_OHEM_NUM_SAMPLES)
 
     # Select top_k proposal losses
-    top_losses_ix = tf.nn.top_k(tf.reshape(total_loss, (1,-1)),
-                                config.RPN_OHEM_NUM_SAMPLES, sorted=True, name="rpn_top_losses").indices
-    top_losses_ix = K.cast(top_losses_ix, tf.int32)
-    top_losses_ix = tf.reshape(top_losses_ix, [-1, 1])
+    # top_losses_ix = tf.nn.top_k(tf.reshape(total_loss, (1,-1)),
+    #                             config.RPN_OHEM_NUM_SAMPLES, sorted=True, name="rpn_top_losses").indices
+    # top_losses_ix = K.cast(top_losses_ix, tf.int32)
+    # top_losses_ix = tf.reshape(top_losses_ix, [-1, 1])
+    #
+    # combined_loss = tf.gather_nd(total_loss, top_losses_ix)
+    # import code;
+    # code.interact(local=dict(globals(), **locals()))
 
-    combined_loss = tf.gather_nd(total_loss, top_losses_ix)
+    combined_loss_mean = K.sum(total_loss) / float(config.RPN_OHEM_NUM_SAMPLES)
 
-    combined_loss_mean = K.sum(combined_loss) / float(config.RPN_OHEM_NUM_SAMPLES)
-
-    combined_loss = K.switch(tf.size(combined_loss) > 0, combined_loss_mean, tf.constant(0.0))
+    combined_loss = K.switch(tf.size(total_loss) > 0, combined_loss_mean, tf.constant(0.0))
     return combined_loss
 
 def rpn_class_loss_graph(rpn_match, rpn_class_logits):
@@ -2801,11 +2917,11 @@ class MaskRCNN():
         # and zero padded.
         proposal_count = config.POST_NMS_ROIS_TRAINING if mode == "training" \
             else config.POST_NMS_ROIS_INFERENCE
-        rpn_rois = GraspProposalLayer(
-            proposal_count=proposal_count,
-            nms_threshold=config.RPN_NMS_THRESHOLD,
-            name="ROI",
-            config=config)([rpn_class, rpn_bbox, anchors])
+        # rpn_rois = GraspProposalLayer(
+        #     proposal_count=proposal_count,
+        #     nms_threshold=config.RPN_NMS_THRESHOLD,
+        #     name="ROI",
+        #     config=config)([rpn_class, rpn_bbox, anchors])
 
         if mode == 'training':
 
@@ -2824,7 +2940,7 @@ class MaskRCNN():
             # Losses
             # Classification loss
             combined_loss = KL.Lambda(lambda x: rpn_combined_loss_graph(config, *x), name="rpn_loss")(
-                [input_rpn_bbox, input_rpn_match, rpn_bbox, rpn_class_logits])
+                [input_rpn_bbox, input_rpn_match, rpn_bbox, rpn_class_logits, anchors])
 
             # rpn_class_loss = KL.Lambda(lambda x: rpn_class_loss_graph(*x), name="rpn_class_loss")(
             #     [input_rpn_match, rpn_class_logits])
