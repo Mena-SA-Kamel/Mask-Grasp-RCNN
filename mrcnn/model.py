@@ -1091,13 +1091,16 @@ def grasping_rpn_graph(feature_map, anchors_per_location, anchor_stride):
                        strides=anchor_stride,
                        name='grasp_rpn_conv_shared')(feature_map)
 
+    classification_1 = KL.Conv2D(512, (3, 3), padding='same', activation='relu',
+                  strides=anchor_stride,
+                  name='grasp_rpn_class_raw_1')(shared)
     # Anchor Score. [batch, height, width, anchors per location * 2].
-    x = KL.Conv2D(2 * anchors_per_location, (1, 1), padding='valid',
-                  activation='linear', name='grasp_rpn_class_raw')(shared)
+    classification_2 = KL.Conv2D(2 * anchors_per_location, (1, 1), padding='valid',
+                  activation='linear', name='grasp_rpn_class_raw_2')(classification_1)
 
     # Reshape to [batch, anchors, 2]
     rpn_class_logits = KL.Lambda(
-        lambda t: tf.reshape(t, [tf.shape(t)[0], -1, 2]))(x)
+        lambda t: tf.reshape(t, [tf.shape(t)[0], -1, 2]))(classification_2)
 
     # Softmax on last dimension of BG/FG.
     rpn_probs = KL.Activation(
@@ -1105,15 +1108,14 @@ def grasping_rpn_graph(feature_map, anchors_per_location, anchor_stride):
 
     # Bounding box refinement. [batch, H, W, anchors per location * depth]
     # where depth is [dx, dy, log(dw), log(dh), dtheta]
-    x = KL.Conv2D(512, (3, 3), padding='same', activation='relu',
+    regression_1 = KL.Conv2D(512, (3, 3), padding='same', activation='relu',
                        strides=anchor_stride,
                        name='grasp_rpn_bbox_pred_1')(shared)
-    x = KL.Conv2D(anchors_per_location * 5, (1, 1), padding="valid",
-                  activation='linear', name='grasp_rpn_bbox_pred_2')(x)
+    regression_2 = KL.Conv2D(anchors_per_location * 5, (1, 1), padding="valid",
+                  activation='linear', name='grasp_rpn_bbox_pred_2')(regression_1)
 
     # Reshape to [batch, anchors, 5]
-    rpn_bbox = KL.Lambda(lambda t: tf.reshape(t, [tf.shape(t)[0], -1, 5]))(x)
-    rpn_bbox = KL.Lambda(lambda t: tf.reshape(t, [tf.shape(t)[0], -1, 5]))(x)
+    rpn_bbox = KL.Lambda(lambda t: tf.reshape(t, [tf.shape(t)[0], -1, 5]))(regression_2)
     return [rpn_class_logits, rpn_probs, rpn_bbox]
 
 
@@ -1136,7 +1138,6 @@ def build_rpn_model(anchor_stride, anchors_per_location, depth, task='', name='i
     input_feature_map = KL.Input(shape=[None, None, depth],
                                  name=name)
     if task == 'grasping_points':
-        ## This is the native RPN graph - No OHEM
         outputs = grasping_rpn_graph(input_feature_map, anchors_per_location, anchor_stride)
     else:
         outputs = rpn_graph(input_feature_map, anchors_per_location, anchor_stride)
@@ -1317,8 +1318,8 @@ def body(filtered_anchors, sorted_scores, anchor_vertices, anchor_areas, thetas,
     w = max_score_box[2]
     h = max_score_box[3]
     theta = max_score_box[4]
-    # gt_box_vertices = tf.stack([y - h / 2, x - w / 2, y + h / 2, x + w / 2])
-    gt_box_vertices = tf.gather(anchor_vertices, ix)
+    gt_box_vertices = tf.stack([y - h / 2, x - w / 2, y + h / 2, x + w / 2])
+    # gt_box_vertices = tf.gather(anchor_vertices, ix)
     gt_box_area = w * h
     iou = compute_iou(gt_box_vertices, anchor_vertices, gt_box_area, anchor_areas)
     angle_differences = tf.cos(tf_deg2rad(thetas) - tf_deg2rad(theta))
@@ -1326,8 +1327,13 @@ def body(filtered_anchors, sorted_scores, anchor_vertices, anchor_areas, thetas,
     arIoU = iou * angle_differences
     # keep boxes with IoU less than 0.5
     ix_to_keep = tf.where(tf.less(arIoU, 0.3))
+    ix_new = tf.reshape(tf.cast(ix, 'int64'), [1, 1])
+    ix_to_keep = tf.concat([ix_new, ix_to_keep], axis = 0)
     filtered_anchors = tf.gather_nd(filtered_anchors, ix_to_keep)
     sorted_scores = tf.gather_nd(sorted_scores, ix_to_keep)
+    anchor_areas = tf.gather_nd(anchor_areas, ix_to_keep)
+    anchor_vertices = tf.gather_nd(anchor_vertices, ix_to_keep)
+    thetas = tf.gather_nd(thetas, ix_to_keep)
     ix = ix + 1
     return [filtered_anchors, sorted_scores, anchor_vertices, anchor_areas, thetas, ix, num_samples]
 
@@ -1346,14 +1352,14 @@ def oriented_bbox_nms(boxes, scores, num_samples):
     filtered_anchors = tf.identity(boxes)
     # Sorting the losses in descending order
     sorted_scores_ix = tf.argsort(scores, direction='DESCENDING', axis = 0)
-    sorted_scores = tf.gather_nd(scores, sorted_scores_ix)
+    filtered_scores = tf.gather_nd(scores, sorted_scores_ix)
     filtered_anchors = tf.gather_nd(filtered_anchors, sorted_scores_ix)
 
-    xs = boxes[:, 0]
-    ys = boxes[:, 1]
-    ws = boxes[:, 2]
-    hs = boxes[:, 3]
-    thetas = boxes[:, 4]
+    xs = filtered_anchors[:, 0]
+    ys = filtered_anchors[:, 1]
+    ws = filtered_anchors[:, 2]
+    hs = filtered_anchors[:, 3]
+    thetas = filtered_anchors[:, 4]
     anchor_areas = ws * hs
 
     y1 = ys - hs / 2
@@ -1366,7 +1372,7 @@ def oriented_bbox_nms(boxes, scores, num_samples):
     # code.interact(local=dict(globals(), **locals()))
     # results = tf.map_fn(body, [filtered_anchors, sorted_scores, anchor_vertices, anchor_areas, thetas, ix])
 
-    result = tf.while_loop(condition, body, [filtered_anchors, sorted_scores, anchor_vertices, anchor_areas, thetas, ix, num_samples])
+    result = tf.while_loop(condition, body, [filtered_anchors, filtered_scores, anchor_vertices, anchor_areas, thetas, ix, num_samples])
     filtered_anchors, sorted_scores, _, _, _, _, _ = result
     return [filtered_anchors, sorted_scores]
 
@@ -2895,7 +2901,9 @@ class MaskRCNN():
         rpn = build_rpn_model(config.RPN_ANCHOR_STRIDE,
                               anchors_per_location, config.TOP_DOWN_PYRAMID_SIZE, task='grasping_points',
                               name='input_rpn_feature_map')
-
+        tf.keras.utils.plot_model(
+            rpn, to_file='rpn_model.png', show_shapes=True, show_layer_names=True
+        )
         # Loop through pyramid layers
         layer_outputs = []  # list of lists
         for p in rpn_feature_maps:
@@ -2915,8 +2923,8 @@ class MaskRCNN():
         # Generate proposals
         # Proposals are [batch, N, (y1, x1, y2, x2)] in normalized coordinates
         # and zero padded.
-        proposal_count = config.POST_NMS_ROIS_TRAINING if mode == "training" \
-            else config.POST_NMS_ROIS_INFERENCE
+        # proposal_count = config.POST_NMS_ROIS_TRAINING if mode == "training" \
+        #     else config.POST_NMS_ROIS_INFERENCE
         # rpn_rois = GraspProposalLayer(
         #     proposal_count=proposal_count,
         #     nms_threshold=config.RPN_NMS_THRESHOLD,
