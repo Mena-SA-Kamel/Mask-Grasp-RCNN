@@ -522,12 +522,26 @@ class GraspingPointsDataset(Dataset):
         all_boxes = utils.apply_box_deltas(anchors, deltas, mode,
                                            len(config.RPN_GRASP_ANGLES))
         # Filter out boxes with center coordinates out of the image
-        invalid_x_coordinates = np.logical_or((all_boxes[:,0] < 0), (all_boxes[:,0] > config.IMAGE_SHAPE[1]))
-        invalid_y_coordinates = np.logical_or((all_boxes[:,1] < 0), (all_boxes[:,1] > config.IMAGE_SHAPE[0]))
-        boxes_to_keep = np.logical_not(np.logical_or(invalid_x_coordinates, invalid_y_coordinates))
+        radius = ((0.5 * all_boxes[:, 2]) ** 2 + (0.5 * all_boxes[:, 3]) ** 2) ** 0.5
 
-        all_boxes = all_boxes[boxes_to_keep]
-        probabilities = probabilities[boxes_to_keep]
+        invalid_x = np.where(all_boxes[:, 0] + radius > config.IMAGE_SHAPE[1])[0]
+        all_boxes = np.delete(all_boxes, invalid_x, axis = 0)
+        probabilities = np.delete(probabilities, invalid_x, axis = 0)
+        radius = np.delete(radius, invalid_x)
+
+        invalid_x = np.where(all_boxes[:, 0] - radius < 0)[0]
+        all_boxes = np.delete(all_boxes, invalid_x, axis=0)
+        probabilities = np.delete(probabilities, invalid_x, axis=0)
+        radius = np.delete(radius, invalid_x)
+
+        invalid_y = np.where(all_boxes[:, 1] + radius > config.IMAGE_SHAPE[0])[0]
+        all_boxes = np.delete(all_boxes, invalid_y, axis = 0)
+        probabilities = np.delete(probabilities, invalid_y, axis = 0)
+        radius = np.delete(radius, invalid_y)
+
+        invalid_y = np.where(all_boxes[:, 1] - radius < 0)[0]
+        all_boxes = np.delete(all_boxes, invalid_y, axis=0)
+        probabilities = np.delete(probabilities, invalid_y, axis=0)
 
         sorting_ix = np.argsort(probabilities[:, 1])[::-1][:20]
         # top_boxes = all_boxes[probabilities[:,1] > 0.9]
@@ -584,23 +598,21 @@ training_dataset.prepare()
 # channel_means = np.array(training_dataset.get_channel_means())
 # config.MEAN_PIXEL = np.around(channel_means, decimals = 1)
 
-
 validating_dataset = GraspingPointsDataset()
 validating_dataset.load_dataset(dataset_dir='../../../Datasets/jacquard_dataset', type='val_set', augmentation=True)
 # validating_dataset.load_dataset(type='val_set')
 validating_dataset.prepare()
-
-
-# # Create model in training mode
-with tf.device(DEVICE):
-    model = modellib.MaskRCNN(mode="training", model_dir=MODEL_DIR,
-                              config=config, task="grasping_points")
-tf.keras.utils.plot_model(
-        model.keras_model, to_file='model.png', show_shapes=True, show_layer_names=True
-    )
+#
+# # # Create model in training mode
+# with tf.device(DEVICE):
+#     model = modellib.MaskRCNN(mode="training", model_dir=MODEL_DIR,
+#                               config=config, task="grasping_points")
+# tf.keras.utils.plot_model(
+#         model.keras_model, to_file='model.png', show_shapes=True, show_layer_names=True
+#     )
 
 # # Load weights
-#
+
 # # weights_path = MASKRCNN_MODEL_PATH
 # weights_path = os.path.join(MODEL_DIR, "mask_rcnn_grasping_points_0060.h5")
 # print("Loading weights ", weights_path)
@@ -640,83 +652,7 @@ tf.keras.utils.plot_model(
 #
 # model_path = os.path.join(MODEL_DIR, "train_id#9.h5")
 # model.keras_model.save_weights(model_path)
-# ######################################################################################################
-# Create model in inference mode
->>>>>>> 994ef20b10c83f5ced2b46562d6b60e3af1698fd
-# with tf.device(DEVICE):
-#     model = modellib.MaskRCNN(mode="training", model_dir=MODEL_DIR,
-#                               config=config, task="grasping_points")
-# tf.keras.utils.plot_model(
-#         model.keras_model, to_file='model.png', show_shapes=True, show_layer_names=True
-#     )
-#
-# # # Load weights
-# #
-# weights_path = MASKRCNN_MODEL_PATH
-# # weights_path = os.path.join(MODEL_DIR, "mask_rcnn_grasping_points_0060.h5")
-# print("Loading weights ", weights_path)
-# # model.load_weights(weights_path, by_name=True)
-# model.load_weights(weights_path, by_name=True,
-#                        exclude=["conv1", "rpn_model", "rpn_class_logits",
-#                                 "rpn_class ", "rpn_bbox "])
-# # model.train(training_dataset, validating_dataset,
-# #                learning_rate=config.LEARNING_RATE,
-# #                epochs=50,
-# #                layers=r"(conv1)|(grasp_rpn\_.*)|(fpn\_.*)",
-# #                task=mode)
 
-# # Load weights
-# weights_path = os.path.join(MODEL_DIR, "train_id#9.h5")
-# print("Loading weights ", weights_path)
-# model.load_weights(weights_path, by_name=True)
-# image_ids = random.choices(validating_dataset.image_ids, k=15)
-# for image_id in image_ids:
-#     # validating_dataset.load_image(image_id, validating_dataset.image_info[image_id]['augmentation'])
-#     image, image_meta, gt_class_id, gt_bbox, gt_mask =\
-#         modellib.load_image_gt(validating_dataset, config, image_id, use_mini_mask=False, mode='grasping_points')
-#     results = model.detect([image], verbose=1, task=mode)
-#     r = results[0]
-#     post_nms_predictions, pre_nms_predictions = validating_dataset.refine_results(r, model.anchors)
-#     fig, (ax1, ax2) = plt.subplots(1, 2)
-#     ax1.imshow(image)
-#     ax2.imshow(image)
-#     for i, rect in enumerate(pre_nms_predictions):
-#         rect = validating_dataset.bbox_convert_to_four_vertices([rect])
-#         p = patches.Polygon(rect[0], linewidth=1,edgecolor='r',facecolor='none')
-#         ax1.add_patch(p)
-#     for i, rect2 in enumerate(post_nms_predictions):
-#         rect2 = validating_dataset.bbox_convert_to_four_vertices([rect2])
-#         p2 = patches.Polygon(rect2[0], linewidth=1,edgecolor='g',facecolor='none')
-#         ax2.add_patch(p2)
-#     plt.title(validating_dataset.image_info[image_id]['path'])
-#     plt.show(block=False)
-#
-# model.train(training_dataset, validating_dataset,
-#                learning_rate=config.LEARNING_RATE,
-#                epochs=80,
-#                layers="all",
-#                task=mode)
-#
-# model.train(training_dataset, validating_dataset,
-#                learning_rate=config.LEARNING_RATE/5,
-#                epochs=120,
-#                layers="all",
-#                task=mode)
-#
-# # model.train(training_dataset, validating_dataset,
-# #                learning_rate=config.LEARNING_RATE/10,
-# #                epochs=120,
-# #                layers="all",
-# #                task=mode)
-# #
-# # model.train(training_dataset, validating_dataset,
-# #                learning_rate=config.LEARNING_RATE/5,
-# #                epochs=200,
-# #                layers="all",
-# #                task=mode)
-#
-# model_path = os.path.join(MODEL_DIR, "train_id#9.h5")
-# model.keras_model.save_weights(model_path)
 # ######################################################################################################
 # Create model in inference mode
 with tf.device(DEVICE):
