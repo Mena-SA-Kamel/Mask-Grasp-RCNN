@@ -1369,10 +1369,6 @@ def oriented_bbox_nms(boxes, scores, num_samples):
     x2 = xs + ws / 2
     anchor_vertices = tf.stack([y1, x1, y2, x2], axis=1)
 
-    # import code;
-    # code.interact(local=dict(globals(), **locals()))
-    # results = tf.map_fn(body, [filtered_anchors, sorted_scores, anchor_vertices, anchor_areas, thetas, ix])
-
     result = tf.while_loop(condition, body, [filtered_anchors, filtered_scores, anchor_vertices, anchor_areas, thetas, ix, num_samples])
     filtered_anchors, sorted_scores, _, _, _, _, _ = result
     return [filtered_anchors, sorted_scores]
@@ -1410,11 +1406,6 @@ def rpn_combined_loss_graph(config, target_bbox, target_class, rpn_bbox, rpn_cla
     # Pick bbox deltas that contribute to the loss (both positive and negative)
     rpn_bbox = tf.gather_nd(rpn_bbox, indices)
 
-    # # Trim target bounding box deltas to the same length as rpn_bbox.
-    # batch_counts = K.sum(K.cast(K.equal(target_class, 1), tf.int32), axis=1)
-    # target_bbox = batch_pack_graph(target_bbox, batch_counts,
-    #                                config.IMAGES_PER_GPU)
-
     bbox_loss = smooth_l1_loss(target_bbox, rpn_bbox)
     bbox_loss = K.mean(bbox_loss, axis=2, keepdims=True)
 
@@ -1440,8 +1431,6 @@ def rpn_combined_loss_graph(config, target_bbox, target_class, rpn_bbox, rpn_cla
     # top_losses_ix = tf.reshape(top_losses_ix, [-1, 1])
     #
     # combined_loss = tf.gather_nd(total_loss, top_losses_ix)
-    # import code;
-    # code.interact(local=dict(globals(), **locals()))
 
     combined_loss_mean = K.sum(total_loss) / float(config.RPN_OHEM_NUM_SAMPLES)
 

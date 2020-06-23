@@ -602,56 +602,43 @@ validating_dataset = GraspingPointsDataset()
 validating_dataset.load_dataset(dataset_dir='../../../Datasets/jacquard_dataset', type='val_set', augmentation=True)
 # validating_dataset.load_dataset(type='val_set')
 validating_dataset.prepare()
-#
-# # # Create model in training mode
-# with tf.device(DEVICE):
-#     model = modellib.MaskRCNN(mode="training", model_dir=MODEL_DIR,
-#                               config=config, task="grasping_points")
-# tf.keras.utils.plot_model(
-#         model.keras_model, to_file='model.png', show_shapes=True, show_layer_names=True
-#     )
 
-# # Load weights
+# Create model in training mode
+with tf.device(DEVICE):
+    model = modellib.MaskRCNN(mode="training", model_dir=MODEL_DIR,
+                              config=config, task="grasping_points")
+tf.keras.utils.plot_model(
+        model.keras_model, to_file='model.png', show_shapes=True, show_layer_names=True
+    )
 
-# # weights_path = MASKRCNN_MODEL_PATH
-# weights_path = os.path.join(MODEL_DIR, "mask_rcnn_grasping_points_0060.h5")
-# print("Loading weights ", weights_path)
-# model.load_weights(weights_path, by_name=True)
-# # model.load_weights(weights_path, by_name=True,
-# #                        exclude=["conv1", "rpn_model", "rpn_class_logits",
-# #                                 "rpn_class ", "rpn_bbox "])
-# # model.train(training_dataset, validating_dataset,
-# #                learning_rate=config.LEARNING_RATE,
-# #                epochs=50,
-# #                layers=r"(conv1)|(grasp_rpn\_.*)|(fpn\_.*)",
-# #                task=mode)
-#
+# Load weights
+# weights_path = MASKRCNN_MODEL_PATH
+weights_path = os.path.join(MODEL_DIR, "mask_rcnn_grasping_points_0060.h5")
+print("Loading weights ", weights_path)
+model.load_weights(weights_path, by_name=True)
+# model.load_weights(weights_path, by_name=True,
+#                        exclude=["conv1", "rpn_model", "rpn_class_logits",
+#                                 "rpn_class ", "rpn_bbox "])
 # model.train(training_dataset, validating_dataset,
 #                learning_rate=config.LEARNING_RATE,
-#                epochs=30,
-#                layers="all",
+#                epochs=50,
+#                layers=r"(conv1)|(grasp_rpn\_.*)|(fpn\_.*)",
 #                task=mode)
-#
-# model.train(training_dataset, validating_dataset,
-#                learning_rate=config.LEARNING_RATE/5,
-#                epochs=60,
-#                layers="all",
-#                task=mode)
-#
-# # model.train(training_dataset, validating_dataset,
-# #                learning_rate=config.LEARNING_RATE/10,
-# #                epochs=120,
-# #                layers="all",
-# #                task=mode)
-# #
-# # model.train(training_dataset, validating_dataset,
-# #                learning_rate=config.LEARNING_RATE/5,
-# #                epochs=200,
-# #                layers="all",
-# #                task=mode)
-#
-# model_path = os.path.join(MODEL_DIR, "train_id#9.h5")
-# model.keras_model.save_weights(model_path)
+
+model.train(training_dataset, validating_dataset,
+               learning_rate=config.LEARNING_RATE,
+               epochs=30,
+               layers="all",
+               task=mode)
+
+model.train(training_dataset, validating_dataset,
+               learning_rate=config.LEARNING_RATE/5,
+               epochs=60,
+               layers="all",
+               task=mode)
+
+model_path = os.path.join(MODEL_DIR, "train_id#9.h5")
+model.keras_model.save_weights(model_path)
 
 # ######################################################################################################
 # Create model in inference mode
