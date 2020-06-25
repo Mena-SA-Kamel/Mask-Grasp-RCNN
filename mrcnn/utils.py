@@ -124,7 +124,7 @@ def compute_overlaps(boxes1, boxes2, mode=''):
         #     image = np.zeros((384, 384))
         #     fig, ax = plt.subplots(1, figsize=(10, 10))
         #     ax.imshow(image)
-        #     for rect in boxes1[np.where(arIoU>0.4)[0]]:
+        #     for rect in boxes1[np.where(arIoU>0.3)[0]]:
         #         rect = bbox_convert_to_four_vertices([rect])[0]
         #         p = patches.Polygon(rect, linewidth=1,edgecolor='c',facecolor='none')
         #         ax.add_patch(p)
@@ -979,17 +979,17 @@ def generate_pyramid_anchors(scales, ratios, feature_shapes, feature_strides,
     # invalid_y = np.where(anchors[:, 1] - radius < 0)[0]
     # anchors = np.delete(anchors, invalid_y, axis=0)
     # # radius = np.delete(radius, invalid_y)
-    # # fig, ax = plt.subplots(1, figsize=(10, 10))
-    # # ax.imshow(np.zeros((500, 500)))
-    # # import code;
-    # # code.interact(local=dict(globals(), **locals()))
-    # #
-    # #
-    # # for i, rect2 in enumerate(anchors):
-    # #     rect2 = bbox_convert_to_four_vertices([rect2])
-    # #     p = patches.Polygon(rect2[0], linewidth=1,edgecolor='r',facecolor='none')
-    # #     ax.add_patch(p)
-    # # plt.show()
+    # fig, ax = plt.subplots(1, figsize=(10, 10))
+    # ax.imshow(np.zeros((500, 500)))
+    #
+    # for i, rect2 in enumerate(anchors):
+    #     rect2 = bbox_convert_to_four_vertices([rect2])
+    #     p = patches.Polygon(rect2[0], linewidth=1,edgecolor='r',facecolor='none')
+    #     ax.add_patch(p)
+    # plt.show(block = False)
+    # import code;
+    # code.interact(local=dict(globals(), **locals()))
+
 
     return anchors
 

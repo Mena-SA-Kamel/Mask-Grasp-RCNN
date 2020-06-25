@@ -1088,7 +1088,7 @@ def grasping_rpn_graph(feature_map, anchors_per_location, anchor_stride):
     # Shared convolutional base of the RPN
 
     # 512 nodes -> 1024 nodes
-    shared = KL.Conv2D(1024, (3, 3), padding='same', activation='relu',
+    shared = KL.Conv2D(512, (3, 3), padding='same', activation='relu',
                        strides=anchor_stride,
                        name='grasp_rpn_conv_shared')(feature_map)
 
@@ -1963,8 +1963,8 @@ def build_rpn_targets(image_shape, anchors, gt_class_ids, gt_boxes, config, mode
         rpn_bbox = np.zeros((config.RPN_TRAIN_ANCHORS_PER_IMAGE, 5))
         overlaps = utils.compute_overlaps(anchors, gt_boxes, mode='grasping_points')
 
-        fg_neg_thresh = 0.01
-        fg_pos_thresh = 0.5
+        fg_neg_thresh = 0.001
+        fg_pos_thresh = 0.35
 
         # 1. Set negative anchors first. They get overwritten below if a GT box is
         # matched to them. Skip boxes in crowd areas.
@@ -1974,8 +1974,6 @@ def build_rpn_targets(image_shape, anchors, gt_class_ids, gt_boxes, config, mode
         rpn_match[(anchor_iou_max < fg_neg_thresh)] = -1
         # 2. Set an anchor for each GT box (regardless of IoU value).
         # If multiple anchors have the same IoU match all of them
-        # import code;
-        # code.interact(local=dict(globals(), **locals()))
         gt_iou_argmax = np.argwhere(overlaps == np.max(overlaps, axis=0))[:, 0]
         rpn_match[gt_iou_argmax] = 1
         # 3. Set anchors with high overlap as positive.
@@ -2013,6 +2011,7 @@ def build_rpn_targets(image_shape, anchors, gt_class_ids, gt_boxes, config, mode
         #
         # 1. Set negative anchors first. They get overwritten below if a GT box is
         # matched to them. Skip boxes in crowd areas.
+
         anchor_iou_argmax = np.argmax(overlaps, axis=1)
         anchor_iou_max = overlaps[np.arange(overlaps.shape[0]), anchor_iou_argmax]
         rpn_match[(anchor_iou_max < 0.3) & (no_crowd_bool)] = -1
@@ -2080,6 +2079,21 @@ def build_rpn_targets(image_shape, anchors, gt_class_ids, gt_boxes, config, mode
         positive_ids = np.where(rpn_match == 1)[0]
         anchor_iou_argmax_filtered = anchor_iou_argmax[final_id_set]
 
+        # overlaps_filtered = overlaps[positive_ids]
+        # top_gt_box_per_anchor = np.argsort(overlaps_filtered, axis = 1)
+        # num_repeats = np.zeros(gt_class_ids.shape)
+        # anchor_iou_argmax_new = np.zeros(positive_ids.shape[0])
+        # for i, gt_id in enumerate(top_gt_box_per_anchor[:, -1]):
+        #     num_repeats[gt_id] += 1
+        #     # This is the case when several anchors got assigned to the same ground truth box, if thats the case, assign
+        #     # anchor to second highest overlapping gt_box
+        #     if num_repeats[gt_id] > 1:
+        #         gt_id = top_gt_box_per_anchor[i, -int(num_repeats[gt_id])]
+        #     anchor_iou_argmax_new[i] = gt_id
+        # import code;
+        # code.interact(local=dict(globals(), **locals()))
+
+
         j = 0
         for ix in final_id_set:
             # For negative samples, rpn_bbox stays all zero [0,0,0,0,0]
@@ -2107,6 +2121,7 @@ def build_rpn_targets(image_shape, anchors, gt_class_ids, gt_boxes, config, mode
                 ]
                 rpn_bbox[j] /= config.RPN_BBOX_STD_DEV  ## rpn_bbox[ix, :4]
             j += 1
+
 
     else:
         ids = np.where(rpn_match == 1)[0]
@@ -3261,7 +3276,11 @@ class MaskRCNN():
             keras.callbacks.TensorBoard(log_dir=self.log_dir,
                                         histogram_freq=0, write_graph=True, write_images=False),
             keras.callbacks.ModelCheckpoint(self.checkpoint_path,
-                                            verbose=0, save_weights_only=True),
+                                            verbose=0, save_weights_only=True, period = 5),
+            # tf.keras.callbacks.ReduceLROnPlateau(
+            #     monitor='val_rpn_loss', factor=0.1, patience=15, verbose=0, mode='auto',
+            #     min_delta=0.0001, cooldown=0, min_lr=0
+            # )
         ]
 
         # Add custom callbacks to the list

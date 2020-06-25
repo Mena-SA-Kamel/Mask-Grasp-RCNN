@@ -28,24 +28,29 @@ class GraspingPointsConfig(Config):
     GPU_COUNT = 1
     IMAGES_PER_GPU = 1
     NUM_CLASSES = 1 + 1 # Object and background classes
-    IMAGE_MIN_DIM = 288
-    IMAGE_MAX_DIM = 384
+    # IMAGE_MIN_DIM = 288
+    # IMAGE_MAX_DIM = 384
     # IMAGE_MIN_DIM = 480
     # IMAGE_MAX_DIM = 640
+
+    IMAGE_MIN_DIM = 320
+    IMAGE_MAX_DIM = 320
+
     RPN_ANCHOR_SCALES = (8, 16, 32, 64, 128) # To modify based on image size
+    RPN_ANCHOR_RATIOS = [1] # To modify based on image size
     TRAIN_ROIS_PER_IMAGE = 200 # Default (Paper uses 512)
     RPN_NMS_THRESHOLD = 0.7 # Default Value. Update to increase the number of proposals out of the RPN
     STEPS_PER_EPOCH = 100
-    VALIDATION_STEPS = 20
+    VALIDATION_STEPS = 30
     IMAGE_CHANNEL_COUNT = 4 # For RGB-D images of 4 channels
     # MEAN_PIXEL = np.array([134.6, 125.7, 119.0, 147.6]) # Added a 4th channel. Modify the mean of the pixel depth
     # MEAN_PIXEL = np.array([112.7, 112.1, 113.5, 123.5]) # Added a 4th channel. Modify the mean of the pixel depth
-    MEAN_PIXEL = np.array([181.2, 179.9, 180.7, 229.4]) # Jacquard Dataset image mean, based on 1000 random images
+    MEAN_PIXEL = np.array([181.6, 180.0, 180.9, 224.3]) # Jacquard Dataset image mean, based on 1000 random images
     MAX_GT_INSTANCES = 1000
     RPN_GRASP_ANGLES = [-60, -30, 0, 30, 60]
     RPN_BBOX_STD_DEV = np.array([0.1, 0.1, 0.2, 0.2, 1])
-    RPN_TRAIN_ANCHORS_PER_IMAGE = 1000
-    RPN_OHEM_NUM_SAMPLES = 256
+    RPN_TRAIN_ANCHORS_PER_IMAGE = 5000
+    RPN_OHEM_NUM_SAMPLES = 320
     LEARNING_RATE = 0.005
     LEARNING_MOMENTUM = 0.9
     NUM_AUGMENTATIONS = 15
@@ -102,11 +107,11 @@ class GraspingPointsDataset(Dataset):
             augmentations_list[0] = angle
 
         if 'dx' in augmentations:
-            dx = randrange(0, 100)
+            dx = randrange(-100, 100)
             augmentations_list[1] = dx
 
         if 'dy' in augmentations:
-            dy = randrange(0, 100)
+            dy = randrange(-100, 100)
             augmentations_list[2] = dy
 
         if 'flip' in augmentations:
@@ -501,7 +506,7 @@ class GraspingPointsDataset(Dataset):
             arIoU = iou * angle_differences
 
             # Find all boxes that have a high IoU
-            ix_to_remove = np.where(np.delete(arIoU, ix) > 0.3)[0]
+            ix_to_remove = np.where(np.delete(arIoU, ix) > 0.4)[0]
             filtered_boxes = np.delete(filtered_boxes, ix_to_remove, axis=0)
             filtered_scores = np.delete(filtered_scores, ix_to_remove)
             box_areas = np.delete(box_areas, ix_to_remove)
@@ -602,55 +607,61 @@ validating_dataset = GraspingPointsDataset()
 validating_dataset.load_dataset(dataset_dir='../../../Datasets/jacquard_dataset', type='val_set', augmentation=True)
 # validating_dataset.load_dataset(type='val_set')
 validating_dataset.prepare()
-
-# Create model in training mode
-with tf.device(DEVICE):
-    model = modellib.MaskRCNN(mode="training", model_dir=MODEL_DIR,
-                              config=config, task="grasping_points")
-tf.keras.utils.plot_model(
-        model.keras_model, to_file='model.png', show_shapes=True, show_layer_names=True
-    )
-
-# Load weights
+#
+# # Create model in training mode
+# with tf.device(DEVICE):
+#     model = modellib.MaskRCNN(mode="training", model_dir=MODEL_DIR,
+#                               config=config, task="grasping_points")
+# tf.keras.utils.plot_model(
+#         model.keras_model, to_file='model.png', show_shapes=True, show_layer_names=True
+#     )
+#
+# # Load weights
 # weights_path = MASKRCNN_MODEL_PATH
-weights_path = os.path.join(MODEL_DIR, "mask_rcnn_grasping_points_0060.h5")
-print("Loading weights ", weights_path)
-model.load_weights(weights_path, by_name=True)
+# # weights_path = os.path.join(MODEL_DIR, "train_id#13.h5")
+# # model.load_weights(weights_path, by_name=True)
+# # print("Loading weights ", weights_path)
 # model.load_weights(weights_path, by_name=True,
 #                        exclude=["conv1", "rpn_model", "rpn_class_logits",
 #                                 "rpn_class ", "rpn_bbox "])
+# # model.train(training_dataset, validating_dataset,
+# #                learning_rate=config.LEARNING_RATE,
+# #                epochs=150,
+# #                layers=r"(conv1)|(grasp_rpn\_.*)|(fpn\_.*)",
+# #                task=mode)
+#
 # model.train(training_dataset, validating_dataset,
 #                learning_rate=config.LEARNING_RATE,
-#                epochs=50,
-#                layers=r"(conv1)|(grasp_rpn\_.*)|(fpn\_.*)",
+#                epochs=200,
+#                layers="all",
 #                task=mode)
-
-model.train(training_dataset, validating_dataset,
-               learning_rate=config.LEARNING_RATE,
-               epochs=30,
-               layers="all",
-               task=mode)
-
-model.train(training_dataset, validating_dataset,
-               learning_rate=config.LEARNING_RATE/5,
-               epochs=60,
-               layers="all",
-               task=mode)
-
-model_path = os.path.join(MODEL_DIR, "train_id#9.h5")
-model.keras_model.save_weights(model_path)
+#
+# # model.train(training_dataset, validating_dataset,
+# #                learning_rate=config.LEARNING_RATE/5,
+# #                epochs=200,
+# #                layers="all",
+# #                task=mode)
+#
+# # model.train(training_dataset, validating_dataset,
+# #                learning_rate=config.LEARNING_RATE/50,
+# #                epochs=300,
+# #                layers="all",
+# #                task=mode)
+#
+# model_path = os.path.join(MODEL_DIR, "train_id#15.h5")
+# model.keras_model.save_weights(model_path)
 
 # ######################################################################################################
-# Create model in inference mode
+# # Create model in inference mode
 with tf.device(DEVICE):
     model = modellib.MaskRCNN(mode="inference", model_dir=MODEL_DIR,
                               config=config, task="grasping_points")
 
 # Load weights
-weights_path = os.path.join(MODEL_DIR, "train_id#9.h5")
+weights_path = os.path.join(MODEL_DIR, "train_id#15.h5")
 print("Loading weights ", weights_path)
 model.load_weights(weights_path, by_name=True)
-image_ids = random.choices(validating_dataset.image_ids, k=15)
+image_ids = random.choices(validating_dataset.image_ids, k=25)
 for image_id in image_ids:
     # validating_dataset.load_image(image_id, validating_dataset.image_info[image_id]['augmentation'])
     image, image_meta, gt_class_id, gt_bbox, gt_mask =\
@@ -680,7 +691,7 @@ code.interact(local=dict(globals(), **locals()))
 
 # ######################################################################################################
 # normalized_anchors = model.get_anchors(config.IMAGE_SHAPE, mode='grasping_points', angles=config.RPN_GRASP_ANGLES)
-
+#
 # # Generate Anchors
 # mode= 'grasping_points'
 # backbone_shapes = modellib.compute_backbone_shapes(config, config.IMAGE_SHAPE)
@@ -700,50 +711,46 @@ code.interact(local=dict(globals(), **locals()))
 #
 #     target_rpn_match, target_rpn_bbox = modellib.build_rpn_targets(
 #         image.shape, model.anchors, gt_class_id, gt_bbox, model.config, mode='grasping_points')
-# #     positive_anchor_ix = np.where(target_rpn_match[:] == 1)[0]
+#     positive_anchor_ix = np.where(target_rpn_match[:] == 1)[0]
 #     negative_anchor_ix = np.where(target_rpn_match[:] == -1)[0]
 #     neutral_anchor_ix = np.where(target_rpn_match[:] == 0)[0]
 #     positive_anchors = model.anchors[positive_anchor_ix]
 #     negative_anchors = model.anchors[negative_anchor_ix]
 #     neutral_anchors = model.anchors[neutral_anchor_ix]
-#     # import code;
-#     #
-#     # code.interact(local=dict(globals(), **locals()))
 #     image_final_anchors = np.where(np.logical_not(target_rpn_match[:] == 0))[0]
 #     positive_anchors_mask = np.in1d(image_final_anchors, positive_anchor_ix)
 #     deltas = target_rpn_bbox[positive_anchors_mask] * model.config.RPN_BBOX_STD_DEV
 #     refined_anchors = utils.apply_box_deltas(positive_anchors, deltas, mode, len(config.RPN_GRASP_ANGLES))
 #
-#     fig, ax = plt.subplots(1, figsize=(10, 10))
-#     ax.imshow(image)
+#     fig, (ax1, ax2, ax3) = plt.subplots(1, 3)
+#     ax1.imshow(image)
+#     ax2.imshow(image)
+#     ax3.imshow(image)
 #
 #     for i, rect in enumerate(gt_bbox):
 #         rect = validating_dataset.bbox_convert_to_four_vertices([rect])
 #         p = patches.Polygon(rect[0], linewidth=1,edgecolor='g',facecolor='none')
-#         ax.add_patch(p)
-#     ax.set_title(validating_dataset.image_info[image_id]['path'])
-#     plt.show(block=False)
+#         ax1.add_patch(p)
+#     ax1.set_title(validating_dataset.image_info[image_id]['path'])
 #
-#     fig, ax = plt.subplots(1, figsize=(10, 10))
-#     ax.imshow(image)
 #     print (len(positive_anchor_ix), len(negative_anchor_ix))
 #
 #
 #     for i, rect2 in enumerate(negative_anchors):
 #         rect2 = validating_dataset.bbox_convert_to_four_vertices([rect2])
 #         p = patches.Polygon(rect2[0], linewidth=1,edgecolor='r',facecolor='none')
-#         ax.add_patch(p)
+#         ax2.add_patch(p)
 #
 #     for i, rect3 in enumerate(model.anchors[positive_anchor_ix]):
 #         rect3= validating_dataset.bbox_convert_to_four_vertices([rect3])
-#         q = patches.Polygon(rect3[0], linewidth=1, edgecolor='g', facecolor='none')
-#         ax.add_patch(q)
-#
-#     for i, rect4 in enumerate(refined_anchors):
-#         rect4 = validating_dataset.bbox_convert_to_four_vertices([rect4])
-#         r = patches.Polygon(rect4[0], linewidth=1, edgecolor='b', facecolor='none')
-#         ax.add_patch(r)
-#     ax.set_title(validating_dataset.image_info[image_id]['path'])
+#         q = patches.Polygon(rect3[0], linewidth=1, edgecolor='b', facecolor='none')
+#         ax3.add_patch(q)
+
+    # for i, rect4 in enumerate(refined_anchors):
+    #     rect4 = validating_dataset.bbox_convert_to_four_vertices([rect4])
+    #     r = patches.Polygon(rect4[0], linewidth=1, edgecolor='b', facecolor='none')
+    #     ax.add_patch(r)
+#     ax1.set_title(validating_dataset.image_info[image_id]['path'])
 #     plt.show(block=False)
 # import code;
 #
