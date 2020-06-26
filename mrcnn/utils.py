@@ -954,10 +954,15 @@ def generate_pyramid_anchors(scales, ratios, feature_shapes, feature_strides,
     # [anchor_count, (y1, x1, y2, x2)]
     anchors = []
     for i in range(len(scales)):
-        anchors.append(generate_anchors(scales[i], ratios, feature_shapes[i],
-                                        feature_strides[i], anchor_stride, mode, angles))
-
+        # Using only anchors for feature level #4
+        if i == 2:
+            anchors.append(generate_anchors(scales[i], ratios, feature_shapes[i],
+                                            feature_strides[i], anchor_stride, mode, angles))
+        else:
+            continue
     anchors = np.concatenate(anchors, axis=0)
+
+
     # Filter out anchors that have boundaries that are crossing the image boundary. Those anchors prevents convergence
     # when training based on Faster RCNN's paper. This can be simplified by checking if an anchor rotated at 90 degrees
     # cross the boundary of the image

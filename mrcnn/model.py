@@ -1404,7 +1404,11 @@ def rpn_combined_loss_graph(config, target_bbox, target_class, rpn_bbox, rpn_cla
 
     # BBOX LOSS
     # Pick bbox deltas that contribute to the loss (both positive and negative)
-    rpn_bbox = tf.gather_nd(rpn_bbox, indices)
+
+    # rpn_bbox = tf.gather_nd(rpn_bbox, indices)
+    rpn_bbox = tf.gather_nd(rpn_bbox, tf.reshape(indices, [config.BATCH_SIZE, -1, 2]))
+    # import code;
+    # code.interact(local=dict(globals(), **locals()))
 
     bbox_loss = smooth_l1_loss(target_bbox, rpn_bbox)
     bbox_loss = K.mean(bbox_loss, axis=2, keepdims=True)
@@ -1963,8 +1967,8 @@ def build_rpn_targets(image_shape, anchors, gt_class_ids, gt_boxes, config, mode
         rpn_bbox = np.zeros((config.RPN_TRAIN_ANCHORS_PER_IMAGE, 5))
         overlaps = utils.compute_overlaps(anchors, gt_boxes, mode='grasping_points')
 
-        fg_neg_thresh = 0.001
-        fg_pos_thresh = 0.35
+        fg_neg_thresh = 0.1
+        fg_pos_thresh = 0.25
 
         # 1. Set negative anchors first. They get overwritten below if a GT box is
         # matched to them. Skip boxes in crowd areas.
@@ -2910,20 +2914,21 @@ class MaskRCNN():
             rpn, to_file='rpn_model.png', show_shapes=True, show_layer_names=True
         )
         # Loop through pyramid layers
-        layer_outputs = []  # list of lists
-        for p in rpn_feature_maps:
-            layer_outputs.append(rpn([p]))
+        # layer_outputs = []  # list of lists
+        # for p in rpn_feature_maps:
+        #     layer_outputs.append(rpn([p]))
+        #
+        # # Concatenate layer outputs
+        # # Convert from list of lists of level outputs to list of lists
+        # # of outputs across levels.
+        # # e.g. [[a1, b1, c1], [a2, b2, c2]] => [[a1, a2], [b1, b2], [c1, c2]]
+        # output_names = ["rpn_class_logits", "rpn_class", "rpn_bbox"]
+        # outputs = list(zip(*layer_outputs))
+        # outputs = [KL.Concatenate(axis=1, name=n)(list(o))
+        #            for o, n in zip(outputs, output_names)]
 
-        # Concatenate layer outputs
-        # Convert from list of lists of level outputs to list of lists
-        # of outputs across levels.
-        # e.g. [[a1, b1, c1], [a2, b2, c2]] => [[a1, a2], [b1, b2], [c1, c2]]
-        output_names = ["rpn_class_logits", "rpn_class", "rpn_bbox"]
-        outputs = list(zip(*layer_outputs))
-        outputs = [KL.Concatenate(axis=1, name=n)(list(o))
-                   for o, n in zip(outputs, output_names)]
-
-        rpn_class_logits, rpn_class, rpn_bbox = outputs
+        # rpn_class_logits, rpn_class, rpn_bbox = outputs
+        rpn_class_logits, rpn_class, rpn_bbox = rpn([P4])
 
         # Generate proposals
         # Proposals are [batch, N, (y1, x1, y2, x2)] in normalized coordinates
@@ -3276,7 +3281,7 @@ class MaskRCNN():
             keras.callbacks.TensorBoard(log_dir=self.log_dir,
                                         histogram_freq=0, write_graph=True, write_images=False),
             keras.callbacks.ModelCheckpoint(self.checkpoint_path,
-                                            verbose=0, save_weights_only=True, period = 5),
+                                            verbose=0, save_weights_only=True),
             # tf.keras.callbacks.ReduceLROnPlateau(
             #     monitor='val_rpn_loss', factor=0.1, patience=15, verbose=0, mode='auto',
             #     min_delta=0.0001, cooldown=0, min_lr=0
