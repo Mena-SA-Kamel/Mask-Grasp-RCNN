@@ -625,11 +625,14 @@ tf.keras.utils.plot_model(
 # Load weights
 weights_path = MASKRCNN_MODEL_PATH
 # weights_path = os.path.join(MODEL_DIR, "mask_rcnn_grasping_points_0004.h5")
-# model.load_weights(weights_path, by_name=True)
+# weights_path = os.path.join(MODEL_DIR, 'train_id#17',"mask_rcnn_grasping_points_0004.h5")
+model.load_weights(weights_path, by_name=True)
 # print("Loading weights ", weights_path)
 model.load_weights(weights_path, by_name=True,
                        exclude=["conv1", "rpn_model", "rpn_class_logits",
                                 "rpn_class ", "rpn_bbox "])
+
+
 # model.train(training_dataset, validating_dataset,
 #                learning_rate=config.LEARNING_RATE,
 #                epochs=150,
@@ -638,19 +641,19 @@ model.load_weights(weights_path, by_name=True,
 
 model.train(training_dataset, validating_dataset,
                learning_rate=config.LEARNING_RATE,
-               epochs=10,
+               epochs=20,
                layers="all",
                task=mode)
 
 model.train(training_dataset, validating_dataset,
                learning_rate=config.LEARNING_RATE/10,
-               epochs=15,
+               epochs=5,
                layers="all",
                task=mode)
 
 model.train(training_dataset, validating_dataset,
                learning_rate=config.LEARNING_RATE/100,
-               epochs=20,
+               epochs=10,
                layers="all",
                task=mode)
 
@@ -666,7 +669,7 @@ model.train(training_dataset, validating_dataset,
 #                layers="all",
 #                task=mode)
 
-model_path = os.path.join(MODEL_DIR, "train_id#15.h5")
+model_path = os.path.join(MODEL_DIR, "train_id#18.h5")
 model.keras_model.save_weights(model_path)
 
 # ######################################################################################################
@@ -676,7 +679,7 @@ model.keras_model.save_weights(model_path)
 #                               config=inference_config, task="grasping_points")
 #
 # # Load weights
-# weights_path = os.path.join(MODEL_DIR, "mask_rcnn_grasping_points_0001.h5")
+# weights_path = os.path.join(MODEL_DIR, 'train_id#18',"mask_rcnn_grasping_points_0001.h5")
 # print("Loading weights ", weights_path)
 # model.load_weights(weights_path, by_name=True)
 # image_ids = random.choices(validating_dataset.image_ids, k=25)
