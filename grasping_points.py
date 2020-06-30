@@ -53,10 +53,10 @@ class GraspingPointsConfig(Config):
     # RPN_TRAIN_ANCHORS_PER_IMAGE = 5000
     RPN_TRAIN_ANCHORS_PER_IMAGE = 2000
     RPN_OHEM_NUM_SAMPLES = 320
-    LEARNING_RATE = 0.003
+    LEARNING_RATE = 0.005
     LEARNING_MOMENTUM = 0.9
-    # NUM_AUGMENTATIONS = 15
     NUM_AUGMENTATIONS = 5
+    # NUM_AUGMENTATIONS = 5
 
 class InferenceConfig(GraspingPointsConfig):
     GPU_COUNT = 1
@@ -554,7 +554,7 @@ class GraspingPointsDataset(Dataset):
         all_boxes = np.delete(all_boxes, invalid_y, axis=0)
         probabilities = np.delete(probabilities, invalid_y, axis=0)
 
-        sorting_ix = np.argsort(probabilities[:, 1])[::-1][:20]
+        sorting_ix = np.argsort(probabilities[:, 1])[::-1][:10]
         # top_boxes = all_boxes[probabilities[:,1] > 0.9]
         # top_box_probabilities = probabilities[probabilities[:,1] > 0.9]
         top_boxes = all_boxes[sorting_ix]
@@ -615,62 +615,62 @@ validating_dataset.load_dataset(dataset_dir='../../../Datasets/jacquard_dataset'
 validating_dataset.prepare()
 #
 # Create model in training mode
-with tf.device(DEVICE):
-    model = modellib.MaskRCNN(mode="training", model_dir=MODEL_DIR,
-                              config=config, task="grasping_points")
-tf.keras.utils.plot_model(
-        model.keras_model, to_file='model.png', show_shapes=True, show_layer_names=True
-    )
-
-# Load weights
-weights_path = MASKRCNN_MODEL_PATH
-# weights_path = os.path.join(MODEL_DIR, "mask_rcnn_grasping_points_0004.h5")
-# weights_path = os.path.join(MODEL_DIR, 'train_id#17',"mask_rcnn_grasping_points_0004.h5")
-model.load_weights(weights_path, by_name=True)
-# print("Loading weights ", weights_path)
-model.load_weights(weights_path, by_name=True,
-                       exclude=["conv1", "rpn_model", "rpn_class_logits",
-                                "rpn_class ", "rpn_bbox "])
-
-
+# with tf.device(DEVICE):
+#     model = modellib.MaskRCNN(mode="training", model_dir=MODEL_DIR,
+#                               config=config, task="grasping_points")
+# tf.keras.utils.plot_model(
+#         model.keras_model, to_file='model.png', show_shapes=True, show_layer_names=True
+#     )
+#
+# # Load weights
+# weights_path = MASKRCNN_MODEL_PATH
+# # weights_path = os.path.join(MODEL_DIR, "mask_rcnn_grasping_points_0004.h5")
+# # weights_path = os.path.join(MODEL_DIR, 'train_id#19',"mask_rcnn_grasping_points_0020.h5")
+# # model.load_weights(weights_path, by_name=True)
+# # print("Loading weights ", weights_path)
+# model.load_weights(weights_path, by_name=True,
+#                        exclude=["conv1", "rpn_model", "rpn_class_logits",
+#                                 "rpn_class ", "rpn_bbox "])
+#
+#
+# # model.train(training_dataset, validating_dataset,
+# #                learning_rate=config.LEARNING_RATE,
+# #                epochs=150,
+# #                layers=r"(conv1)|(grasp_rpn\_.*)|(fpn\_.*)",
+# #                task=mode)
+#
 # model.train(training_dataset, validating_dataset,
 #                learning_rate=config.LEARNING_RATE,
-#                epochs=150,
-#                layers=r"(conv1)|(grasp_rpn\_.*)|(fpn\_.*)",
-#                task=mode)
-
-model.train(training_dataset, validating_dataset,
-               learning_rate=config.LEARNING_RATE,
-               epochs=20,
-               layers="all",
-               task=mode)
-
-model.train(training_dataset, validating_dataset,
-               learning_rate=config.LEARNING_RATE/10,
-               epochs=5,
-               layers="all",
-               task=mode)
-
-model.train(training_dataset, validating_dataset,
-               learning_rate=config.LEARNING_RATE/100,
-               epochs=10,
-               layers="all",
-               task=mode)
-
-# model.train(training_dataset, validating_dataset,
-#                learning_rate=config.LEARNING_RATE/5,
-#                epochs=200,
+#                epochs=20,
 #                layers="all",
 #                task=mode)
-
+#
 # model.train(training_dataset, validating_dataset,
-#                learning_rate=config.LEARNING_RATE/50,
-#                epochs=300,
+#                learning_rate=config.LEARNING_RATE/10,
+#                epochs=30,
 #                layers="all",
 #                task=mode)
-
-model_path = os.path.join(MODEL_DIR, "train_id#18.h5")
-model.keras_model.save_weights(model_path)
+#
+# model.train(training_dataset, validating_dataset,
+#                learning_rate=config.LEARNING_RATE,
+#                epochs=40,
+#                layers="all",
+#                task=mode)
+#
+# # model.train(training_dataset, validating_dataset,
+# #                learning_rate=config.LEARNING_RATE/5,
+# #                epochs=200,
+# #                layers="all",
+# #                task=mode)
+#
+# # model.train(training_dataset, validating_dataset,
+# #                learning_rate=config.LEARNING_RATE/50,
+# #                epochs=300,
+# #                layers="all",
+# #                task=mode)
+#
+# model_path = os.path.join(MODEL_DIR, "train_id#22.h5")
+# model.keras_model.save_weights(model_path)
 
 # ######################################################################################################
 # Create model in inference mode
@@ -679,7 +679,7 @@ model.keras_model.save_weights(model_path)
 #                               config=inference_config, task="grasping_points")
 #
 # # Load weights
-# weights_path = os.path.join(MODEL_DIR, 'train_id#18',"mask_rcnn_grasping_points_0001.h5")
+# weights_path = os.path.join(MODEL_DIR, 'train_id#22',"mask_rcnn_grasping_points_0010.h5")
 # print("Loading weights ", weights_path)
 # model.load_weights(weights_path, by_name=True)
 # image_ids = random.choices(validating_dataset.image_ids, k=25)
@@ -711,6 +711,9 @@ model.keras_model.save_weights(model_path)
     # training_dataset.visualize_bbox(image_id, bounding_box[0], gt_class_id[i], gt_bbox[i], rgbd_image=image)
 
 # ######################################################################################################
+# with tf.device(DEVICE):
+#     model = modellib.MaskRCNN(mode="inference", model_dir=MODEL_DIR,
+#                               config=inference_config, task="grasping_points")
 # normalized_anchors = model.get_anchors(config.IMAGE_SHAPE, mode='grasping_points', angles=config.RPN_GRASP_ANGLES)
 #
 # # Generate Anchors
@@ -755,7 +758,7 @@ model.keras_model.save_weights(model_path)
 #         ax1.add_patch(p)
 #     ax1.set_title(validating_dataset.image_info[image_id]['path'])
 #
-#     print (len(positive_anchor_ix), len(negative_anchor_ix))
+#     print (len(positive_anchor_ix), len(negative_anchor_ix), len(neutral_anchor_ix))
 #
 #
 #     for i, rect2 in enumerate(negative_anchors):

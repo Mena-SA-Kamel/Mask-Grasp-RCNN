@@ -1092,12 +1092,12 @@ def grasping_rpn_graph(feature_map, anchors_per_location, anchor_stride):
                        strides=anchor_stride,
                        name='grasp_rpn_conv_shared')(feature_map)
 
-    # classification_1 = KL.Conv2D(512, (3, 3), padding='same', activation='relu',
-    #               strides=anchor_stride,
-    #               name='grasp_rpn_class_raw_1')(shared)
+    classification_1 = KL.Conv2D(512, (3, 3), padding='same', activation='relu',
+                  strides=anchor_stride,
+                  name='grasp_rpn_class_raw_1')(shared)
     # Anchor Score. [batch, height, width, anchors per location * 2].
     classification_2 = KL.Conv2D(2 * anchors_per_location, (1, 1), padding='valid',
-                  activation='linear', name='grasp_rpn_class_raw_2')(shared)
+                  activation='linear', name='grasp_rpn_class_raw_2')(classification_1)
 
     # Reshape to [batch, anchors, 2]
     rpn_class_logits = KL.Lambda(
@@ -1109,11 +1109,11 @@ def grasping_rpn_graph(feature_map, anchors_per_location, anchor_stride):
 
     # Bounding box refinement. [batch, H, W, anchors per location * depth]
     # where depth is [dx, dy, log(dw), log(dh), dtheta]
-    # regression_1 = KL.Conv2D(512, (3, 3), padding='same', activation='relu',
-    #                    strides=anchor_stride,
-    #                    name='grasp_rpn_bbox_pred_1')(shared)
+    regression_1 = KL.Conv2D(512, (3, 3), padding='same', activation='relu',
+                       strides=anchor_stride,
+                       name='grasp_rpn_bbox_pred_1')(shared)
     regression_2 = KL.Conv2D(anchors_per_location * 5, (1, 1), padding="valid",
-                  activation='linear', name='grasp_rpn_bbox_pred_2')(shared)
+                  activation='linear', name='grasp_rpn_bbox_pred_2')(regression_1)
 
     # Reshape to [batch, anchors, 5]
     rpn_bbox = KL.Lambda(lambda t: tf.reshape(t, [tf.shape(t)[0], -1, 5]))(regression_2)
@@ -1381,6 +1381,54 @@ def smooth_l1_loss(y_true, y_pred):
     less_than_one = K.cast(K.less(diff, 1.0), "float32")
     loss = (less_than_one * 0.5 * diff**2) + (1 - less_than_one) * (diff - 0.5)
     return loss
+
+def rpn_combined_loss_graph_new(config, target_bbox, target_class, rpn_bbox, rpn_class_logits, anchors):
+    # CLASSIFICATION LOSS
+
+    # Squeeze last dim to simplify
+    target_class = tf.squeeze(target_class, -1)
+
+    # Get anchor classes. Convert the -1/+1 match to 0/1 values. Positive anchors are 1, negative and
+    # neutral are zero
+    # SHAPE = [batch size, number of anchors]
+    positive_class_mask = K.cast(K.equal(target_class, 1), tf.int32)
+
+    # Classification Loss
+    classification_loss = K.sparse_categorical_crossentropy(target=positive_class_mask,
+                                                            output=rpn_class_logits,
+                                                            from_logits=True)
+
+    # Regression Loss
+    regression_loss = smooth_l1_loss(target_bbox, rpn_bbox)
+    mean_regression_loss = K.mean(regression_loss, axis=2, keepdims=True)
+    mean_regression_loss = tf.squeeze(mean_regression_loss, -1)
+
+    # Set regression losses of negative anchors to zero
+    positive_indices = tf.where(K.equal(positive_class_mask, 1))
+    negative_indices = tf.where(K.equal(positive_class_mask, 0))
+
+    # creating a tensor of zeros of shape [num negative samples, ]. This will replace the regression
+    # losses of negative anchors
+    inplace_array = tf.gather_nd(mean_regression_loss, negative_indices)
+    inplace_array = KL.Lambda(lambda x: x * 0.0)(inplace_array)
+    negative_indices = tf.cast(negative_indices, tf.int32)
+
+    # replacing elements at indices specified with negative_indices with inplace_array
+    regression_loss_filtered = tf.tensor_scatter_nd_update(mean_regression_loss, negative_indices, inplace_array)
+
+    # Sum the classification and regresion losses
+    # Consider adding a balancing term, alpha here
+    total_loss = KL.Add()([regression_loss_filtered, classification_loss])
+
+    # Select top_k proposal losses per image
+
+    # top_loss_ix shape is [batch_size, config.RPN_OHEM_NUM_SAMPLES]
+    top_loss_values = tf.nn.top_k(total_loss, config.RPN_OHEM_NUM_SAMPLES, sorted=True, name="rpn_top_losses").values
+
+    combined_loss_mean = K.sum(top_loss_values) / float(config.RPN_OHEM_NUM_SAMPLES * config.BATCH_SIZE)
+
+    return combined_loss_mean
+
 
 def rpn_combined_loss_graph(config, target_bbox, target_class, rpn_bbox, rpn_class_logits, anchors):
     # CLASSIFICATION LOSS
@@ -2957,7 +3005,7 @@ class MaskRCNN():
             #     [rpn_bbox, top_losses_ix])
             # Losses
             # Classification loss
-            combined_loss = KL.Lambda(lambda x: rpn_combined_loss_graph(config, *x), name="rpn_loss")(
+            combined_loss = KL.Lambda(lambda x: rpn_combined_loss_graph_new(config, *x), name="rpn_loss")(
                 [input_rpn_bbox, input_rpn_match, rpn_bbox, rpn_class_logits, anchors])
 
             # rpn_class_loss = KL.Lambda(lambda x: rpn_class_loss_graph(*x), name="rpn_class_loss")(
