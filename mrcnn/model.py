@@ -1382,8 +1382,21 @@ def smooth_l1_loss(y_true, y_pred):
     loss = (less_than_one * 0.5 * diff**2) + (1 - less_than_one) * (diff - 0.5)
     return loss
 
-def rpn_combined_loss_graph_new(config, target_bbox, target_class, rpn_bbox, rpn_class_logits, anchors):
-    # CLASSIFICATION LOSS
+def rpn_combined_loss_graph_new(config, target_bbox, target_class, rpn_bbox, rpn_class_logits, valid_anchor_mask):
+    # Filtering anchors that cross the image boundary
+    valid_anchor_indices = tf.where(valid_anchor_mask)
+
+    target_bbox = tf.gather(target_bbox, valid_anchor_indices, axis=1)
+    target_bbox = tf.squeeze(target_bbox, axis=2)
+
+    target_class = tf.gather(target_class, valid_anchor_indices, axis=1)
+    target_class = tf.squeeze(target_class, axis=2)
+
+    rpn_bbox = tf.gather(rpn_bbox, valid_anchor_indices, axis=1)
+    rpn_bbox = tf.squeeze(rpn_bbox, axis=2)
+
+    rpn_class_logits = tf.gather(rpn_class_logits, valid_anchor_indices, axis=1)
+    rpn_class_logits = tf.squeeze(rpn_class_logits, axis=2)
 
     # Squeeze last dim to simplify
     target_class = tf.squeeze(target_class, -1)
@@ -2944,11 +2957,12 @@ class MaskRCNN():
 
         # Anchors
         if mode == "training":
-            anchors = self.get_anchors(config.IMAGE_SHAPE, mode='grasping_points', angles=config.RPN_GRASP_ANGLES)
+            anchors, valid_anchor_mask = self.get_anchors(config.IMAGE_SHAPE, mode='grasping_points', angles=config.RPN_GRASP_ANGLES)
             # Duplicate across the batch dimension because Keras requires it
             anchors = np.broadcast_to(anchors, (config.BATCH_SIZE,) + anchors.shape)
             # A hack to get around Keras's bad support for constants
-            anchors = KL.Lambda(lambda x: tf.Variable(anchors), name="anchors")(input_image) ### ???
+            anchors = KL.Lambda(lambda x: tf.Variable(anchors), name="anchors")(input_image)
+            valid_anchor_mask = KL.Lambda(lambda x: tf.Variable(valid_anchor_mask), name="anchors")(input_image)
         else:
             anchors = input_anchors
 
@@ -3006,7 +3020,7 @@ class MaskRCNN():
             # Losses
             # Classification loss
             combined_loss = KL.Lambda(lambda x: rpn_combined_loss_graph_new(config, *x), name="rpn_loss")(
-                [input_rpn_bbox, input_rpn_match, rpn_bbox, rpn_class_logits, anchors])
+                [input_rpn_bbox, input_rpn_match, rpn_bbox, rpn_class_logits, valid_anchor_mask])
 
             # rpn_class_loss = KL.Lambda(lambda x: rpn_class_loss_graph(*x), name="rpn_class_loss")(
             #     [input_rpn_match, rpn_class_logits])
@@ -3660,7 +3674,20 @@ class MaskRCNN():
             self.anchors = a
             # Normalize coordinates
             self._anchor_cache[tuple(image_shape)] = utils.norm_boxes(a, image_shape[:2], mode)
-        return self._anchor_cache[tuple(image_shape)]
+
+            if mode == 'grasping_points':
+                # Filter out anchors that have boundaries that are crossing the image boundary. Those anchors prevents convergence
+                # when training based on Faster RCNN's paper. This can be simplified by checking if an anchor rotated at 90 degrees
+                # cross the boundary of the image
+
+                radius = ((0.5 * a[:, 2]) ** 2 + (0.5 * a[:, 3]) ** 2) ** 0.5
+                valid_anchors_mask = a[:, 0] + radius <= image_shape[1]
+                valid_anchors_mask = np.logical_and(valid_anchors_mask, (a[:, 0] - radius >= 0))
+                valid_anchors_mask = np.logical_and(valid_anchors_mask, (a[:, 1] + radius <= image_shape[0]))
+                valid_anchors_mask = np.logical_and(valid_anchors_mask, (a[:, 1] - radius >= 0))
+                return self._anchor_cache[tuple(image_shape)], valid_anchors_mask
+            else:
+                return self._anchor_cache[tuple(image_shape)]
 
     def ancestor(self, tensor, name, checked=None):
         """Finds the ancestor of a TF tensor in the computation graph.

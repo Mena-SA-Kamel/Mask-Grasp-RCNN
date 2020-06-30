@@ -962,40 +962,25 @@ def generate_pyramid_anchors(scales, ratios, feature_shapes, feature_strides,
             continue
     anchors = np.concatenate(anchors, axis=0)
 
-
-    # Filter out anchors that have boundaries that are crossing the image boundary. Those anchors prevents convergence
-    # when training based on Faster RCNN's paper. This can be simplified by checking if an anchor rotated at 90 degrees
-    # cross the boundary of the image
-
-    # radius = ((0.5 * anchors[:, 2]) ** 2 + (0.5 * anchors[:, 3]) ** 2) ** 0.5
+    # anchors_filtered = anchors[valid_anchors_mask]
+    # fig, ax = plt.subplots(1, figsize=(10, 10))
+    # ax.imshow(np.zeros((500, 500)))
+    # for i, rect2 in enumerate(anchors_filtered):
+    #     rect2 = bbox_convert_to_four_vertices([rect2])
+    #     p = patches.Polygon(rect2[0], linewidth=1,edgecolor='r',facecolor='none')
+    #     ax.add_patch(p)
+    # plt.show(block = False)
     #
-    # invalid_x = np.where(anchors[:, 0] + radius > image_shape[1])[0]
-    # anchors = np.delete(anchors, invalid_x, axis = 0)
-    # radius = np.delete(radius, invalid_x)
-    #
-    # invalid_x = np.where(anchors[:, 0] - radius < 0)[0]
-    # anchors = np.delete(anchors, invalid_x, axis=0)
-    # radius = np.delete(radius, invalid_x)
-    #
-    # invalid_y = np.where(anchors[:, 1] + radius > image_shape[0])[0]
-    # anchors = np.delete(anchors, invalid_y, axis = 0)
-    # radius = np.delete(radius, invalid_y)
-    #
-    # invalid_y = np.where(anchors[:, 1] - radius < 0)[0]
-    # anchors = np.delete(anchors, invalid_y, axis=0)
-    # # radius = np.delete(radius, invalid_y)
     # fig, ax = plt.subplots(1, figsize=(10, 10))
     # ax.imshow(np.zeros((500, 500)))
     #
     # for i, rect2 in enumerate(anchors):
     #     rect2 = bbox_convert_to_four_vertices([rect2])
-    #     p = patches.Polygon(rect2[0], linewidth=1,edgecolor='r',facecolor='none')
+    #     p = patches.Polygon(rect2[0], linewidth=1, edgecolor='r', facecolor='none')
     #     ax.add_patch(p)
-    # plt.show(block = False)
+    # plt.show(block=False)
     # import code;
     # code.interact(local=dict(globals(), **locals()))
-
-
     return anchors
 
 ############################################################
