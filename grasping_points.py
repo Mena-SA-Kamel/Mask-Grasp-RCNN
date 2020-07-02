@@ -53,9 +53,10 @@ class GraspingPointsConfig(Config):
     # RPN_TRAIN_ANCHORS_PER_IMAGE = 5000
     RPN_TRAIN_ANCHORS_PER_IMAGE = 2000
     RPN_OHEM_NUM_SAMPLES = 320
-    LEARNING_RATE = 0.003
+    LEARNING_RATE = 0.02
     LEARNING_MOMENTUM = 0.9
     NUM_AUGMENTATIONS = 5
+    WEIGHT_DECAY = 0.0001
     # NUM_AUGMENTATIONS = 5
 
 class InferenceConfig(GraspingPointsConfig):
@@ -625,7 +626,7 @@ tf.keras.utils.plot_model(
 # Load weights
 weights_path = MASKRCNN_MODEL_PATH
 # weights_path = os.path.join(MODEL_DIR, "mask_rcnn_grasping_points_0004.h5")
-# weights_path = os.path.join(MODEL_DIR, 'train_id#19',"mask_rcnn_grasping_points_0020.h5")
+# weights_path = os.path.join(MODEL_DIR, 'train_id#23',"mask_rcnn_grasping_points_0003.h5")
 # model.load_weights(weights_path, by_name=True)
 # print("Loading weights ", weights_path)
 model.load_weights(weights_path, by_name=True,
@@ -641,19 +642,13 @@ model.load_weights(weights_path, by_name=True,
 
 model.train(training_dataset, validating_dataset,
                learning_rate=config.LEARNING_RATE,
-               epochs=20,
+               epochs=10,
                layers="all",
                task=mode)
 
 model.train(training_dataset, validating_dataset,
                learning_rate=config.LEARNING_RATE/10,
-               epochs=30,
-               layers="all",
-               task=mode)
-
-model.train(training_dataset, validating_dataset,
-               learning_rate=config.LEARNING_RATE,
-               epochs=40,
+               epochs=15,
                layers="all",
                task=mode)
 

@@ -1088,16 +1088,16 @@ def grasping_rpn_graph(feature_map, anchors_per_location, anchor_stride):
     # Shared convolutional base of the RPN
 
     # 512 nodes -> 1024 nodes
-    shared = KL.Conv2D(512, (3, 3), padding='same', activation='relu',
+    shared = KL.Conv2D(2048, (3, 3), padding='same', activation='relu',
                        strides=anchor_stride,
                        name='grasp_rpn_conv_shared')(feature_map)
 
-    classification_1 = KL.Conv2D(512, (3, 3), padding='same', activation='relu',
-                  strides=anchor_stride,
-                  name='grasp_rpn_class_raw_1')(shared)
+    # classification_1 = KL.Conv2D(512, (3, 3), padding='same', activation='relu',
+    #               strides=anchor_stride,
+    #               name='grasp_rpn_class_raw_1')(shared)
     # Anchor Score. [batch, height, width, anchors per location * 2].
     classification_2 = KL.Conv2D(2 * anchors_per_location, (1, 1), padding='valid',
-                  activation='linear', name='grasp_rpn_class_raw_2')(classification_1)
+                  activation='linear', name='grasp_rpn_class_raw_2')(shared)
 
     # Reshape to [batch, anchors, 2]
     rpn_class_logits = KL.Lambda(
@@ -1109,11 +1109,11 @@ def grasping_rpn_graph(feature_map, anchors_per_location, anchor_stride):
 
     # Bounding box refinement. [batch, H, W, anchors per location * depth]
     # where depth is [dx, dy, log(dw), log(dh), dtheta]
-    regression_1 = KL.Conv2D(512, (3, 3), padding='same', activation='relu',
-                       strides=anchor_stride,
-                       name='grasp_rpn_bbox_pred_1')(shared)
+    # regression_1 = KL.Conv2D(512, (3, 3), padding='same', activation='relu',
+    #                    strides=anchor_stride,
+    #                    name='grasp_rpn_bbox_pred_1')(shared)
     regression_2 = KL.Conv2D(anchors_per_location * 5, (1, 1), padding="valid",
-                  activation='linear', name='grasp_rpn_bbox_pred_2')(regression_1)
+                  activation='linear', name='grasp_rpn_bbox_pred_2')(shared)
 
     # Reshape to [batch, anchors, 5]
     rpn_bbox = KL.Lambda(lambda t: tf.reshape(t, [tf.shape(t)[0], -1, 5]))(regression_2)
@@ -3184,7 +3184,6 @@ class MaskRCNN():
             if name in self.keras_model.metrics_names:
                 continue
             layer = self.keras_model.get_layer(name)
-            self.keras_model.metrics_names.append(name)
             loss = (
                 tf.reduce_mean(layer.output, keepdims=True)
                 * self.config.LOSS_WEIGHTS.get(name, 1.))
@@ -3344,10 +3343,6 @@ class MaskRCNN():
                                         histogram_freq=0, write_graph=True, write_images=False),
             keras.callbacks.ModelCheckpoint(self.checkpoint_path,
                                             verbose=0, save_weights_only=True),
-            # tf.keras.callbacks.ReduceLROnPlateau(
-            #     monitor='val_rpn_loss', factor=0.1, patience=15, verbose=0, mode='auto',
-            #     min_delta=0.0001, cooldown=0, min_lr=0
-            # )
         ]
 
         # Add custom callbacks to the list
