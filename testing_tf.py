@@ -47,15 +47,40 @@ negative_indices = K.cast(negative_indices, tf.int32)
 # inplace_array = KL.Lambda(lambda x: x * 0.0)(inplace_array)
 #
 # bbox_loss = tf.tensor_scatter_nd_update(mean_regression_loss, negative_indices, inplace_array)
-valid_anchor_mask = np.array([True, False, True, True])
 
-valid_anchor_mask_tensor = K.variable(value=valid_anchor_mask)
+classification_loss = np.random.rand(3, 5)
+classification_loss = K.variable(value=classification_loss)
 
-valid_anchor_indices = tf.where(valid_anchor_mask)
-target_bbox = np.random.rand(3, 4, 5)
-target_bbox = K.variable(value=target_bbox)
+
+target_class = np.array([[1,-1,-1,-1, 1],
+                         [-1,1,-1,-1, 1],
+                         [1,-1,-1,-1, -1]])
+
+negative_class_mask = K.cast(K.equal(target_class, -1), tf.int32)
+positive_class_mask = K.cast(K.equal(target_class, 1), tf.int32)
+
+negative_indices = tf.where(K.equal(negative_class_mask, 1))
+positive_indices = tf.where(K.equal(positive_class_mask, 1))
+
+N = tf.count_nonzero(positive_class_mask, axis = 1)
+N = K.cast(N, tf.int32)
+
+values = tf.gather_nd(classification_loss, negative_indices)
+
+negative_class_losses = tf.sparse.SparseTensor(negative_indices, values, classification_loss.shape)
+negative_class_losses = tf.sparse.to_dense(negative_class_losses)
+
+top_losses_sum = K.variable(value=0)
+for i in range(3):# batch size
+    top_loss_values = tf.nn.top_k(negative_class_losses[i], N[i]*2, sorted=True, name="rpn_top_negative_losses").values
+    top_losses_sum = tf.add(top_losses_sum, K.sum(top_loss_values))
+    print(top_loss_values)
+print(top_losses_sum)
 import code; code.interact(local=dict(globals(), **locals()))
-target_bbox = tf.gather(target_bbox, valid_anchor_indices, axis = 1)
+
+total_positive_loss = K.sum(tf.gather_nd(classification_loss, positive_indices))
+
+
 #
 # top_loss_ix = tf.nn.top_k(total_loss, 2, sorted=True, name="rpn_top_losses").values
 #

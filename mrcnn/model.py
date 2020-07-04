@@ -1382,6 +1382,76 @@ def smooth_l1_loss(y_true, y_pred):
     loss = (less_than_one * 0.5 * diff**2) + (1 - less_than_one) * (diff - 0.5)
     return loss
 
+def rpn_combined_loss_graph_zhang_paper(config, target_bbox, target_class, rpn_bbox, rpn_class_logits, valid_anchor_mask):
+    # Filtering anchors that cross the image boundary
+    valid_anchor_indices = tf.where(valid_anchor_mask)
+
+    target_bbox = tf.gather(target_bbox, valid_anchor_indices, axis=1)
+    target_bbox = tf.squeeze(target_bbox, axis=2)
+
+    target_class = tf.gather(target_class, valid_anchor_indices, axis=1)
+    target_class = tf.squeeze(target_class, axis=2)
+
+    rpn_bbox = tf.gather(rpn_bbox, valid_anchor_indices, axis=1)
+    rpn_bbox = tf.squeeze(rpn_bbox, axis=2)
+
+    rpn_class_logits = tf.gather(rpn_class_logits, valid_anchor_indices, axis=1)
+    rpn_class_logits = tf.squeeze(rpn_class_logits, axis=2)
+
+    # Squeeze last dim to simplify
+    target_class = tf.squeeze(target_class, -1)
+
+    # Get anchor classes. Convert the -1/+1 match to 0/1 values. Positive anchors are 1, negative and
+    # neutral are zero
+    # SHAPE = [batch size, number of anchors]
+    positive_class_mask = K.cast(K.equal(target_class, 1), tf.int32)
+    negative_class_mask = K.cast(K.equal(target_class, -1), tf.int32)
+
+    # Classification Loss
+    # Class imbalance require hard example mining
+    classification_loss = K.sparse_categorical_crossentropy(target=positive_class_mask,
+                                                            output=rpn_class_logits,
+                                                            from_logits=True)
+
+    # Need to find the number of positive samples (N) and select the top 3N negative samples with the highest loss
+    N = tf.count_nonzero(positive_class_mask, axis = 1)
+    N = K.cast(N, tf.int32)
+
+    # Gather the negative anchors
+    negative_indices = tf.where(K.equal(negative_class_mask, 1))
+    positive_indices = tf.where(K.equal(positive_class_mask, 1))
+
+    values = tf.gather_nd(classification_loss, negative_indices)
+    negative_class_losses = tf.sparse.SparseTensor(negative_indices, values, [config.BATCH_SIZE, valid_anchor_mask.shape[0]])
+    negative_class_losses = tf.sparse.to_dense(negative_class_losses)
+
+    # Summing the top 3N negative elements in each row
+    top_negative_losses_sum = K.variable(value=0)
+    for i in range(config.BATCH_SIZE):  # batch size
+        top_loss_per_row = tf.nn.top_k(negative_class_losses[i], N[i]*3, sorted=True).values
+        top_negative_losses_sum = tf.add(top_negative_losses_sum, K.sum(top_loss_per_row))
+
+    # Summing the positive elements
+    total_positive_loss = K.sum(tf.gather_nd(classification_loss, positive_indices))
+
+
+    # Classification Loss
+    classification_loss = top_negative_losses_sum + total_positive_loss
+
+    # Regression Loss
+    regression_loss = smooth_l1_loss(target_bbox, rpn_bbox)
+    mean_regression_loss = K.mean(regression_loss, axis=2, keepdims=True)
+    mean_regression_loss = tf.squeeze(mean_regression_loss, -1)
+    # Only positive anchors count towards the loss
+    total_regression_loss = K.sum(tf.gather_nd(mean_regression_loss, positive_indices))
+
+    alpha = K.variable(value = 2, dtype= tf.float32)
+    num_positive_samples = tf.cast(K.sum(N), tf.float32)
+    combined_loss = (classification_loss + (alpha * total_regression_loss)) / (4 * num_positive_samples * config.BATCH_SIZE)
+
+    return combined_loss
+
+
 def rpn_combined_loss_graph_new(config, target_bbox, target_class, rpn_bbox, rpn_class_logits, valid_anchor_mask):
     # Filtering anchors that cross the image boundary
     valid_anchor_indices = tf.where(valid_anchor_mask)
@@ -3019,7 +3089,7 @@ class MaskRCNN():
             #     [rpn_bbox, top_losses_ix])
             # Losses
             # Classification loss
-            combined_loss = KL.Lambda(lambda x: rpn_combined_loss_graph_new(config, *x), name="rpn_loss")(
+            combined_loss = KL.Lambda(lambda x: rpn_combined_loss_graph_zhang_paper(config, *x), name="rpn_loss")(
                 [input_rpn_bbox, input_rpn_match, rpn_bbox, rpn_class_logits, valid_anchor_mask])
 
             # rpn_class_loss = KL.Lambda(lambda x: rpn_class_loss_graph(*x), name="rpn_class_loss")(
@@ -3545,7 +3615,7 @@ class MaskRCNN():
 
         # Anchors
         if task == 'grasping_points':
-            anchors = self.get_anchors(image_shape, mode='grasping_points', angles=self.config.RPN_GRASP_ANGLES)
+            anchors, valid_anchors_mask = self.get_anchors(image_shape, mode='grasping_points', angles=self.config.RPN_GRASP_ANGLES)
         else:
             anchors = self.get_anchors(image_shape)
         # Duplicate across the batch dimension because Keras requires it
@@ -3652,7 +3722,8 @@ class MaskRCNN():
         # Cache anchors and reuse if image shape is the same
         if not hasattr(self, "_anchor_cache"):
             self._anchor_cache = {}
-        if not tuple(image_shape) in self._anchor_cache:
+        # if not tuple(image_shape) in self._anchor_cache:
+        if True:
             # Generate Anchors
             a = utils.generate_pyramid_anchors(
                 self.config.RPN_ANCHOR_SCALES,
@@ -3680,7 +3751,7 @@ class MaskRCNN():
                 valid_anchors_mask = np.logical_and(valid_anchors_mask, (a[:, 0] - radius >= 0))
                 valid_anchors_mask = np.logical_and(valid_anchors_mask, (a[:, 1] + radius <= image_shape[0]))
                 valid_anchors_mask = np.logical_and(valid_anchors_mask, (a[:, 1] - radius >= 0))
-                return self._anchor_cache[tuple(image_shape)], valid_anchors_mask
+                return [self._anchor_cache[tuple(image_shape)], valid_anchors_mask]
             else:
                 return self._anchor_cache[tuple(image_shape)]
 
