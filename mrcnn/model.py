@@ -1835,6 +1835,13 @@ def load_image_gt(dataset, config, image_id, augment=False, augmentation=None,
     else:
         mask = utils.resize_mask(mask, scale, padding, crop)
 
+    # import code;
+    # code.interact(local=dict(globals(), **locals()))
+    # Disabling resizing
+    # bbox_resize_5_dimensional = bbox_5_dimensional
+    # scale = 1
+    # window = (0, 0, original_shape[0], original_shape[1])
+
     # Random horizontal flips.
     # TODO: will be removed in a future update in favor of augmentation
     if augment:
@@ -2629,7 +2636,7 @@ def grasp_data_generator(dataset, config, shuffle=True, augment=False, augmentat
             if shuffle and image_index == 0:
                 np.random.shuffle(image_ids)
 
-
+            print(image_index)
             # Get GT bounding boxes and masks for image.
             image_id = image_ids[image_index]
 
@@ -2668,12 +2675,12 @@ def grasp_data_generator(dataset, config, shuffle=True, augment=False, augmentat
                 batch_images = np.zeros(
                     (batch_size,) + image.shape, dtype=np.float32)
 
-            # If more instances than fits in the array, sub-sample from them.
-            if gt_boxes.shape[0] > config.MAX_GT_INSTANCES:
-                ids = np.random.choice(
-                    np.arange(gt_boxes.shape[0]), config.MAX_GT_INSTANCES, replace=False)
-                gt_class_ids = gt_class_ids[ids]
-                gt_boxes = gt_boxes[ids]
+            # # If more instances than fits in the array, sub-sample from them.
+            # if gt_boxes.shape[0] > config.MAX_GT_INSTANCES:
+            #     ids = np.random.choice(
+            #         np.arange(gt_boxes.shape[0]), config.MAX_GT_INSTANCES, replace=False)
+            #     gt_class_ids = gt_class_ids[ids]
+            #     gt_boxes = gt_boxes[ids]
 
             # Add to batch
             batch_image_meta[b] = image_meta

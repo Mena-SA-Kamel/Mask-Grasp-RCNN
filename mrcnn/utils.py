@@ -106,6 +106,7 @@ def compute_overlaps(boxes1, boxes2, mode=''):
         anchor_vertices[:, 3] = xs + ws / 2
 
         overlaps = np.zeros((boxes1.shape[0], boxes2.shape[0]))
+        i = 1
         for i in range(overlaps.shape[1]):
             box2 = boxes2[i]
             # need gt vertices to be in the form y1, x1, y2, x2
@@ -124,6 +125,7 @@ def compute_overlaps(boxes1, boxes2, mode=''):
         #     image = np.zeros((384, 384))
         #     fig, ax = plt.subplots(1, figsize=(10, 10))
         #     ax.imshow(image)
+        #
         #     for rect in boxes1[np.where(arIoU>0.3)[0]]:
         #         rect = bbox_convert_to_four_vertices([rect])[0]
         #         p = patches.Polygon(rect, linewidth=1,edgecolor='c',facecolor='none')
@@ -134,6 +136,9 @@ def compute_overlaps(boxes1, boxes2, mode=''):
         #     p = patches.Polygon(gt_box, linewidth=1.5, edgecolor='b', facecolor='none')
         #     ax.add_patch(p)
         #     plt.show(block=False)
+        #     if i > 20:
+        #         break
+        #     i = i + 1
         # import code;
         # code.interact(local=dict(globals(), **locals()))
 
