@@ -2636,7 +2636,6 @@ def grasp_data_generator(dataset, config, shuffle=True, augment=False, augmentat
             if shuffle and image_index == 0:
                 np.random.shuffle(image_ids)
 
-            print(image_index)
             # Get GT bounding boxes and masks for image.
             image_id = image_ids[image_index]
 
