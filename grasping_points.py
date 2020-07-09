@@ -38,7 +38,8 @@ class GraspingPointsConfig(Config):
     IMAGE_MIN_DIM = 320
     IMAGE_MAX_DIM = 320
 
-    RPN_ANCHOR_SCALES = (8, 16, 32, 64, 128) # To modify based on image size
+    # RPN_ANCHOR_SCALES = (8, 16, 32, 64, 128) # To modify based on image size
+    RPN_ANCHOR_SCALES = (6, 12, 24, 48, 96) # To modify based on image size
     RPN_ANCHOR_RATIOS = [1] # To modify based on image size
     TRAIN_ROIS_PER_IMAGE = 200 # Default (Paper uses 512)
     RPN_NMS_THRESHOLD = 0.7 # Default Value. Update to increase the number of proposals out of the RPN
@@ -49,15 +50,17 @@ class GraspingPointsConfig(Config):
     # MEAN_PIXEL = np.array([181.6, 180.0, 224.3]) # Jacquard Dataset image mean, based on 1000 random images
     MEAN_PIXEL = np.array([180.7, 218.6, 180.2]) # Jacquard Dataset image mean, based on 1000 random images
     MAX_GT_INSTANCES = 2000
-    RPN_GRASP_ANGLES = [-60, -30, 0, 30, 60]
+    # RPN_GRASP_ANGLES = [-60, -30, 0, 30, 60]
+    RPN_GRASP_ANGLES = [-67.5, -22.5, 22.5, 67.5]
     RPN_BBOX_STD_DEV = np.array([0.1, 0.1, 0.2, 0.2, 1])
     # RPN_TRAIN_ANCHORS_PER_IMAGE = 5000
-    RPN_TRAIN_ANCHORS_PER_IMAGE = 2000
+    # RPN_TRAIN_ANCHORS_PER_IMAGE = 2000
+    RPN_TRAIN_ANCHORS_PER_IMAGE = 1600
     RPN_OHEM_NUM_SAMPLES = 320
-    LEARNING_RATE = 0.004
+    LEARNING_RATE = 0.001
     LEARNING_MOMENTUM = 0.9
     NUM_AUGMENTATIONS = 5
-    WEIGHT_DECAY = 0.0002
+    WEIGHT_DECAY = 0.0001
     # NUM_AUGMENTATIONS = 5
 
 class InferenceConfig(GraspingPointsConfig):
@@ -556,7 +559,7 @@ class GraspingPointsDataset(Dataset):
         all_boxes = np.delete(all_boxes, invalid_y, axis=0)
         probabilities = np.delete(probabilities, invalid_y, axis=0)
 
-        sorting_ix = np.argsort(probabilities[:, 1])[::-1][:10]
+        sorting_ix = np.argsort(probabilities[:, 1])[::-1][:20]
         # top_boxes = all_boxes[probabilities[:,1] > 0.50]
         # top_box_probabilities = probabilities[probabilities[:,1] > 0.50]
         top_boxes = all_boxes[sorting_ix]
@@ -621,7 +624,7 @@ testing_dataset.load_dataset(dataset_dir='../../../Datasets/jacquard_dataset_res
 # validating_dataset.load_dataset(type='val_set')
 testing_dataset.prepare()
 
-# # Create model in training mode
+# Create model in training mode
 # with tf.device(DEVICE):
 #     model = modellib.MaskRCNN(mode="training", model_dir=MODEL_DIR,
 #                               config=config, task="grasping_points")
@@ -648,13 +651,13 @@ testing_dataset.prepare()
 #
 # model.train(training_dataset, validating_dataset,
 #                learning_rate=config.LEARNING_RATE,
-#                epochs=30,
+#                epochs=40,
 #                layers="all",
 #                task=mode)
 #
 # model.train(training_dataset, validating_dataset,
 #                learning_rate=config.LEARNING_RATE/10,
-#                epochs=10,
+#                epochs=50,
 #                layers="all",
 #                task=mode)
 #
@@ -675,39 +678,39 @@ testing_dataset.prepare()
 
 # ######################################################################################################
 # Create model in inference mode
-with tf.device(DEVICE):
-    model = modellib.MaskRCNN(mode="inference", model_dir=MODEL_DIR,
-                              config=inference_config, task="grasping_points")
-
-# Load weights
-# weights_path = os.path.join(MODEL_DIR, 'colab_result_id#1',"mask_rcnn_grasping_points_0030.h5")
-weights_path = os.path.join(MODEL_DIR, 'train_id#29',"mask_rcnn_grasping_points_0011.h5")
-print("Loading weights ", weights_path)
-model.load_weights(weights_path, by_name=True)
-image_ids = random.choices(validating_dataset.image_ids, k=25)
-for image_id in image_ids:
-    # validating_dataset.load_image(image_id, validating_dataset.image_info[image_id]['augmentation'])
-    image, image_meta, gt_class_id, gt_bbox, gt_mask =\
-        modellib.load_image_gt(validating_dataset, inference_config, image_id, use_mini_mask=False, mode='grasping_points')
-    results = model.detect([image], verbose=1, task=mode)
-    r = results[0]
-    post_nms_predictions, pre_nms_predictions = validating_dataset.refine_results(r, model.anchors)
-    fig, (ax1, ax2) = plt.subplots(1, 2)
-    ax1.imshow(image)
-    ax2.imshow(image)
-    for i, rect in enumerate(pre_nms_predictions):
-        rect = validating_dataset.bbox_convert_to_four_vertices([rect])
-        p = patches.Polygon(rect[0], linewidth=1,edgecolor='r',facecolor='none')
-        ax1.add_patch(p)
-    for i, rect2 in enumerate(post_nms_predictions):
-        rect2 = validating_dataset.bbox_convert_to_four_vertices([rect2])
-        p2 = patches.Polygon(rect2[0], linewidth=1,edgecolor='g',facecolor='none')
-        ax2.add_patch(p2)
-    plt.title(validating_dataset.image_info[image_id]['path'])
-    plt.show(block=False)
-
-import code;
-code.interact(local=dict(globals(), **locals()))
+# with tf.device(DEVICE):
+#     model = modellib.MaskRCNN(mode="inference", model_dir=MODEL_DIR,
+#                               config=inference_config, task="grasping_points")
+#
+# # Load weights
+# weights_path = os.path.join(MODEL_DIR, 'colab_result_id#1',"mask_rcnn_grasping_points_0010.h5")
+# # weights_path = os.path.join(MODEL_DIR, 'train_id#29',"mask_rcnn_grasping_points_0011.h5")
+# print("Loading weights ", weights_path)
+# model.load_weights(weights_path, by_name=True)
+# image_ids = random.choices(validating_dataset.image_ids, k=25)
+# for image_id in image_ids:
+#     # validating_dataset.load_image(image_id, validating_dataset.image_info[image_id]['augmentation'])
+#     image, image_meta, gt_class_id, gt_bbox, gt_mask =\
+#         modellib.load_image_gt(validating_dataset, inference_config, image_id, use_mini_mask=False, mode='grasping_points')
+#     results = model.detect([image], verbose=1, task=mode)
+#     r = results[0]
+#     post_nms_predictions, pre_nms_predictions = validating_dataset.refine_results(r, model.anchors)
+#     fig, (ax1, ax2) = plt.subplots(1, 2)
+#     ax1.imshow(image)
+#     ax2.imshow(image)
+#     for i, rect in enumerate(pre_nms_predictions):
+#         rect = validating_dataset.bbox_convert_to_four_vertices([rect])
+#         p = patches.Polygon(rect[0], linewidth=1,edgecolor='r',facecolor='none')
+#         ax1.add_patch(p)
+#     for i, rect2 in enumerate(post_nms_predictions):
+#         rect2 = validating_dataset.bbox_convert_to_four_vertices([rect2])
+#         p2 = patches.Polygon(rect2[0], linewidth=1,edgecolor='g',facecolor='none')
+#         ax2.add_patch(p2)
+#     plt.title(validating_dataset.image_info[image_id]['path'])
+#     plt.show(block=False)
+#
+# import code;
+# code.interact(local=dict(globals(), **locals()))
     # plt.savefig(os.path.join('Grasping_anchors','P'+str(level+2)+ 'center_anchors.png'))
     #
     # training_dataset.visualize_bbox(image_id, bounding_box[0], gt_class_id[i], gt_bbox[i], rgbd_image=image)
@@ -737,7 +740,7 @@ for image_id in image_ids:
         modellib.load_image_gt(validating_dataset, config, image_id, use_mini_mask=False, mode='grasping_points')
 
     target_rpn_match, target_rpn_bbox = modellib.build_rpn_targets(
-        image.shape, model.anchors, gt_class_id, gt_bbox, model.config, mode='grasping_points')
+        image.shape, model.anchors, gt_class_id, gt_bbox, model.config, mode = 'grasping_points')
     positive_anchor_ix = np.where(target_rpn_match[:] == 1)[0]
     negative_anchor_ix = np.where(target_rpn_match[:] == -1)[0]
     neutral_anchor_ix = np.where(target_rpn_match[:] == 0)[0]
