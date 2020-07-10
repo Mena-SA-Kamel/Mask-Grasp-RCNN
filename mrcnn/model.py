@@ -1088,7 +1088,7 @@ def grasping_rpn_graph(feature_map, anchors_per_location, anchor_stride):
     # Shared convolutional base of the RPN
 
     # 512 nodes -> 1024 nodes
-    shared = KL.Conv2D(2048, (3, 3), padding='same', activation='relu',
+    shared = KL.Conv2D(512, (3, 3), padding='same', activation='relu',
                        strides=anchor_stride,
                        name='grasp_rpn_conv_shared')(feature_map)
 
@@ -1833,14 +1833,16 @@ def load_image_gt(dataset, config, image_id, augment=False, augmentation=None,
 
     else:
         mask, class_ids = dataset.load_mask(image_id)
-    image, window, scale, padding, crop = utils.resize_image(
-        image,
-        min_dim=config.IMAGE_MIN_DIM,
-        min_scale=config.IMAGE_MIN_SCALE,
-        max_dim=config.IMAGE_MAX_DIM,
-        mode=config.IMAGE_RESIZE_MODE)
+        image, window, scale, padding, crop = utils.resize_image(
+            image,
+            min_dim=config.IMAGE_MIN_DIM,
+            min_scale=config.IMAGE_MIN_SCALE,
+            max_dim=config.IMAGE_MAX_DIM,
+            mode=config.IMAGE_RESIZE_MODE)
 
     if mode == 'grasping_points':
+        window = [0, 0, image.shape[0], image.shape[1]]
+        scale = 1
         bbox_resized = utils.resize_bbox(window, bbox_cropped, image.shape)
         bbox_resize_5_dimensional = dataset.bbox_convert_to_five_dimension(bbox_resized, image_id)
     else:
@@ -2114,7 +2116,7 @@ def build_rpn_targets(image_shape, anchors, gt_class_ids, gt_boxes, config, mode
         overlaps = utils.compute_overlaps(anchors, gt_boxes, mode='grasping_points')
 
         fg_neg_thresh = 0.1
-        fg_pos_thresh = 0.3
+        fg_pos_thresh = 0.4
 
         # 1. Set negative anchors first. They get overwritten below if a GT box is
         # matched to them. Skip boxes in crowd areas.
@@ -2657,6 +2659,7 @@ def grasp_data_generator(dataset, config, shuffle=True, augment=False, augmentat
                                   augmentation=None,
                                   use_mini_mask=config.USE_MINI_MASK,
                                   mode=mode)
+
             else:
                 image, image_meta, gt_class_ids, gt_boxes, gt_masks = \
                     load_image_gt(dataset, config, image_id, augment=augment,
@@ -2667,7 +2670,7 @@ def grasp_data_generator(dataset, config, shuffle=True, augment=False, augmentat
             # Skip images that have no instances. This can happen in cases
             # where we train on a subset of classes and the image doesn't
             # have any of the classes we care about.
-            if not np.any(gt_class_ids > 0):
+            if not np.any(gt_class_ids > 0) or gt_boxes.size == 0:
                 continue
 
             # RPN Targets
@@ -3429,7 +3432,7 @@ class MaskRCNN():
             keras.callbacks.TensorBoard(log_dir=self.log_dir,
                                         histogram_freq=0, write_graph=True, write_images=False),
             keras.callbacks.ModelCheckpoint(self.checkpoint_path,
-                                            verbose=0, save_weights_only=True),
+                                            verbose=0, save_weights_only=True, period = 5),
         ]
 
         # Add custom callbacks to the list
