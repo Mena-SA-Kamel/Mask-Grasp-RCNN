@@ -756,6 +756,24 @@ def resize_image(image, min_dim=None, max_dim=None, min_scale=None, mode="square
         raise Exception("Mode {} not supported".format(mode))
     return image.astype(image_dtype), window, scale, padding, crop
 
+def crop_bbox(window, bbox_vertices, original_shape, target_shape):
+    """ Coorects the bounding boxes after center cropping the image.
+    """
+    # window
+    y1, x1, y2, x2 = window
+    cropped_bbox_vertices = []
+    for box in bbox_vertices:
+        adjusted_box = np.copy(box)
+        adjusted_box[:, 0] = box[:, 0] - x1 # width
+        adjusted_box[:, 1] = box[:, 1] - y1
+        if any(adjusted_box[:, 0] > target_shape[1]) or any(adjusted_box[:, 1] > target_shape[0]):
+            continue
+        if any(adjusted_box[:, 0] < 0) or any(adjusted_box[:, 1] < 0):
+            continue
+        cropped_bbox_vertices.append(adjusted_box)
+    cropped_bbox_vertices = np.array(cropped_bbox_vertices)
+    return cropped_bbox_vertices
+
 def resize_bbox(window, bbox_vertices, original_shape):
     """ Resizes the bounding_boxes specified by bbox_vertices using the affine transformation
     window: (y1, x1, y2, x2).

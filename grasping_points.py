@@ -39,7 +39,7 @@ class GraspingPointsConfig(Config):
     IMAGE_MAX_DIM = 320
 
     # RPN_ANCHOR_SCALES = (8, 16, 32, 64, 128) # To modify based on image size
-    RPN_ANCHOR_SCALES = (6, 12, 24, 48, 96) # To modify based on image size
+    RPN_ANCHOR_SCALES = (6, 12, 18, 48, 96) # To modify based on image size
     RPN_ANCHOR_RATIOS = [1] # To modify based on image size
     TRAIN_ROIS_PER_IMAGE = 200 # Default (Paper uses 512)
     RPN_NMS_THRESHOLD = 0.7 # Default Value. Update to increase the number of proposals out of the RPN
@@ -88,7 +88,7 @@ class GraspingPointsDataset(Dataset):
                 if augmentation:
                     # Augmentation will create hypothetical paths that load_image_gt() uses to construct the different
                     # image variants
-                    image_name = image.split('\\')[-1].strip('_RGB.png')
+                    # image_name = image.split('\\')[-1].strip('_RGB.png')
                     for i in range(config.NUM_AUGMENTATIONS):
                         self.add_image("grasping_points", image_id=id, path=rgb_path,
                                        depth_path=depth_path, positive_points=positive_grasp_points,
@@ -99,16 +99,25 @@ class GraspingPointsDataset(Dataset):
                 rgb_path = image
                 depth_path = image.replace('rgb', 'depth')
                 positive_grasp_points = image.replace('r.png', 'cpos.txt').replace('rgb', 'grasp_rectangles')
-                negative_grasp_points = image.replace('r.png', 'cneg.txt').replace('rgb', 'grasp_rectangles')
+                # negative_grasp_points = image.replace('r.png', 'cneg.txt').replace('rgb', 'grasp_rectangles')
                 self.add_image("grasping_points", image_id = id, path = rgb_path,
-                               depth_path = depth_path, positive_points = positive_grasp_points,
-                               negative_points = negative_grasp_points)
+                               depth_path = depth_path, positive_points = positive_grasp_points, augmentation = [])
+                if augmentation:
+                    # Augmentation will create hypothetical paths that load_image_gt() uses to construct the different
+                    # image variants
+                    # image_name = image.split('\\')[-1].strip('r.png')
+                    for i in range(config.NUM_AUGMENTATIONS):
+                        self.add_image("grasping_points", image_id=id, path=rgb_path,
+                                      depth_path=depth_path, positive_points=positive_grasp_points,
+                                       augmentation = self.generate_augmentations())
+                        id = id + 1
             id = id + 1
 
     def generate_augmentations(self):
         augmentation_types = ['angle', 'dx', 'dy', 'flip']
         augmentations = random.sample(list(augmentation_types), 2)
         augmentations_list = np.zeros(4)
+        augmentations_list[-1] = 2
 
         if 'angle' in augmentations:
             angle = randrange(-30, 30)
@@ -131,6 +140,14 @@ class GraspingPointsDataset(Dataset):
     def apply_augmentation_to_image(self, image, augmentation):
         # ['angle', 'dx', 'dy', 'flip']
         angle, dx, dy, flip_code = augmentation
+        #
+        #
+        # x_dim_crop = 320
+        # y_dim_crop = 320
+        # x_dim, y_dim = image.shape[:2]
+        # x_diff = x_dim - x_dim_crop
+        # y_diff = y_dim - y_dim_crop
+        # image_center_crop = image[int(x_diff/2): x_dim - int(x_diff/2), int(y_diff/2): y_dim - int(y_diff/2)]
 
         rgbd_image = image_augmentation.rotate_image(image, angle, scale=1)
         rgbd_image = image_augmentation.translate_image(rgbd_image, dx, dy)
@@ -324,22 +341,28 @@ class GraspingPointsDataset(Dataset):
         return np.array(bounding_boxes), np.array(class_ids)
 
 
-    def load_ground_truth_bbox_files(self, image_id):
+    def load_ground_truth_bbox_files(self, image_id, include_negatives=False):
         positive_rectangles_path = self.image_info[image_id]['positive_points']
-        negative_rectangles_path = self.image_info[image_id]['negative_points']
 
+        boxes = []
         with open(positive_rectangles_path) as f:
             positive_rectangles = f.readlines()
-        with open(negative_rectangles_path) as f:
-            negative_rectangles = f.readlines()
+            boxes.append(positive_rectangles)
+            class_id = 1
+
+        if include_negatives:
+            negative_rectangles_path = self.image_info[image_id]['negative_points']
+            with open(negative_rectangles_path) as f:
+                negative_rectangles = f.readlines()
+            boxes.append(negative_rectangles)
+            class_id = 0
 
         bounding_boxes_formatted = []
         vertices = []
         class_ids = []
         bad_rectangle = False
 
-        class_id = 0
-        for bounding_box_class in [negative_rectangles, positive_rectangles]:
+        for bounding_box_class in boxes:
             i = 0
             for bounding_box in bounding_box_class:
                 try:
@@ -347,9 +370,6 @@ class GraspingPointsDataset(Dataset):
                     y = int(float(bounding_box.split(' ')[1]))
                     vertices.append([x, y])
                 except:
-                    # print("ERROR : ValueError: cannot convert float NaN to integer")
-                    # import code;
-                    # code.interact(local=dict(globals(), **locals()))
                     bad_rectangle = True
                 i += 1
                 if i % 4 == 0:
@@ -451,6 +471,7 @@ class GraspingPointsDataset(Dataset):
     def load_bounding_boxes(self, image_id, augmentation=[]):
         # bounding boxes here have a shape of N x 4 x 2, consisting of four vertices per rectangle given N rectangles
         # loading jacquard style bboxes. NOTE: class_ids will all be 1 since jacquard only has positive boxes
+
         if 'jacquard' in self.image_info[image_id]['path']:
             bbox_5_dimensional, class_ids = self.load_jacquard_gt_boxes(image_id)
             if len(augmentation) != 0:
@@ -459,6 +480,9 @@ class GraspingPointsDataset(Dataset):
         else:
             bounding_box_vertices, class_ids = self.load_ground_truth_bbox_files(image_id)
             bbox_5_dimensional = self.bbox_convert_to_five_dimension(bounding_box_vertices)
+            if len(augmentation) != 0:
+                bbox_5_dimensional, class_ids = self.apply_augmentation_to_box(bbox_5_dimensional, class_ids, image_id, augmentation)
+            bounding_box_vertices = self.bbox_convert_to_four_vertices(bbox_5_dimensional)
 
         class_ids = np.array(class_ids)
         bounding_box_vertices = np.array(bounding_box_vertices)
@@ -608,20 +632,20 @@ mode = "grasping_points"
 
 training_dataset = GraspingPointsDataset()
 # training_dataset.construct_jacquard_dataset()
-# training_dataset.load_dataset()
-training_dataset.load_dataset(dataset_dir='../../../Datasets/jacquard_dataset_resized', augmentation=True)
+training_dataset.load_dataset(augmentation=True)
+# training_dataset.load_dataset(dataset_dir='../../../Datasets/jacquard_dataset_resized', augmentation=True)
 training_dataset.prepare()
 # channel_means = np.array(training_dataset.get_channel_means())
 # config.MEAN_PIXEL = np.around(channel_means, decimals = 1)
 
 validating_dataset = GraspingPointsDataset()
-validating_dataset.load_dataset(dataset_dir='../../../Datasets/jacquard_dataset_resized', type='val_set', augmentation=True)
-# validating_dataset.load_dataset(type='val_set')
+# validating_dataset.load_dataset(dataset_dir='../../../Datasets/jacquard_dataset_resized', type='val_set', augmentation=True)
+validating_dataset.load_dataset(type='val_set',augmentation=True)
 validating_dataset.prepare()
 
 testing_dataset = GraspingPointsDataset()
-testing_dataset.load_dataset(dataset_dir='../../../Datasets/jacquard_dataset_resized', type='test_set', augmentation=True)
-# validating_dataset.load_dataset(type='val_set')
+# testing_dataset.load_dataset(dataset_dir='../../../Datasets/jacquard_dataset_resized', type='test_set', augmentation=True)
+testing_dataset.load_dataset(type='test_set', augmentation=True)
 testing_dataset.prepare()
 
 # Create model in training mode

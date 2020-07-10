@@ -1817,20 +1817,31 @@ def load_image_gt(dataset, config, image_id, augment=False, augmentation=None,
     """
     # Load image and mask
     image = dataset.load_image(image_id, dataset.image_info[image_id]['augmentation'])
+    original_shape = image.shape
     if mode == 'grasping_points':
         bbox_vertices, bbox_5_dimensional, class_ids = dataset.load_bounding_boxes(image_id, dataset.image_info[image_id]['augmentation'])
         mask = []
+        x_dim_crop = 320
+        y_dim_crop = 320
+        y_dim, x_dim = image.shape[:2]
+        x_diff = x_dim - x_dim_crop
+        y_diff = y_dim - y_dim_crop
+        image = image[int(y_diff/2): y_dim - int(y_diff/2), int(x_diff/2): x_dim - int(x_diff/2)]
+        window = int(y_diff/2), int(x_diff/2), y_dim - int(y_diff/2), x_dim - int(x_diff/2)
+        target_shape = [y_dim_crop, x_dim_crop]
+        bbox_cropped = utils.crop_bbox(window, bbox_vertices, original_shape, target_shape)
+
     else:
         mask, class_ids = dataset.load_mask(image_id)
-    original_shape = image.shape
     image, window, scale, padding, crop = utils.resize_image(
         image,
         min_dim=config.IMAGE_MIN_DIM,
         min_scale=config.IMAGE_MIN_SCALE,
         max_dim=config.IMAGE_MAX_DIM,
         mode=config.IMAGE_RESIZE_MODE)
+
     if mode == 'grasping_points':
-        bbox_resized = utils.resize_bbox(window, bbox_vertices, original_shape)
+        bbox_resized = utils.resize_bbox(window, bbox_cropped, image.shape)
         bbox_resize_5_dimensional = dataset.bbox_convert_to_five_dimension(bbox_resized, image_id)
     else:
         mask = utils.resize_mask(mask, scale, padding, crop)
@@ -2103,7 +2114,7 @@ def build_rpn_targets(image_shape, anchors, gt_class_ids, gt_boxes, config, mode
         overlaps = utils.compute_overlaps(anchors, gt_boxes, mode='grasping_points')
 
         fg_neg_thresh = 0.1
-        fg_pos_thresh = 0.2
+        fg_pos_thresh = 0.3
 
         # 1. Set negative anchors first. They get overwritten below if a GT box is
         # matched to them. Skip boxes in crowd areas.
@@ -2117,8 +2128,6 @@ def build_rpn_targets(image_shape, anchors, gt_class_ids, gt_boxes, config, mode
         # gt_iou_argmax =  np.argmax(overlaps, axis=0)
         rpn_match[gt_iou_argmax] = 1
         # 3. Set anchors with high overlap as positive.
-        # import code;
-        # code.interact(local=dict(globals(), **locals()))
         rpn_match[anchor_iou_max >= fg_pos_thresh] = 1
     else:
         # Handle COCO crowds
