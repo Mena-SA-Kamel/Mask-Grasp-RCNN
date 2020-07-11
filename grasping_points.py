@@ -584,7 +584,7 @@ class GraspingPointsDataset(Dataset):
         all_boxes = np.delete(all_boxes, invalid_y, axis=0)
         probabilities = np.delete(probabilities, invalid_y, axis=0)
 
-        sorting_ix = np.argsort(probabilities[:, 1])[::-1][:20]
+        sorting_ix = np.argsort(probabilities[:, 1])[::-1][:10]
         # top_boxes = all_boxes[probabilities[:,1] > 0.50]
         # top_box_probabilities = probabilities[probabilities[:,1] > 0.50]
         top_boxes = all_boxes[sorting_ix]
@@ -637,7 +637,6 @@ training_dataset.load_dataset(augmentation=True)
 # training_dataset.load_dataset(dataset_dir='../../../Datasets/jacquard_dataset_resized', augmentation=True)
 training_dataset.prepare()
 # channel_means = np.array(training_dataset.get_channel_means())
-# import code; code.interact(local=dict(globals(), **locals()))
 # config.MEAN_PIXEL = np.around(channel_means, decimals = 1)
 
 validating_dataset = GraspingPointsDataset()
@@ -650,50 +649,50 @@ testing_dataset = GraspingPointsDataset()
 testing_dataset.load_dataset(type='test_set', augmentation=True)
 testing_dataset.prepare()
 
-# Create model in training mode
-with tf.device(DEVICE):
-    model = modellib.MaskRCNN(mode="training", model_dir=MODEL_DIR,
-                              config=config, task="grasping_points")
-tf.keras.utils.plot_model(
-        model.keras_model, to_file='model.png', show_shapes=True, show_layer_names=True
-    )
-
-# Load weights
-# weights_path = MASKRCNN_MODEL_PATH
-weights_path = os.path.join(MODEL_DIR, "mask_rcnn_coco.h5")
-# weights_path = os.path.join(MODEL_DIR, 'train_id#28',"mask_rcnn_grasping_points_0005.h5")
+# # Create model in training mode
+# with tf.device(DEVICE):
+#     model = modellib.MaskRCNN(mode="training", model_dir=MODEL_DIR,
+#                               config=config, task="grasping_points")
+# tf.keras.utils.plot_model(
+#         model.keras_model, to_file='model.png', show_shapes=True, show_layer_names=True
+#     )
+#
+# # Load weights
+# # weights_path = MASKRCNN_MODEL_PATH
+# # weights_path = os.path.join(MODEL_DIR, "mask_rcnn_coco.h5")
+# weights_path = os.path.join(MODEL_DIR, 'train_#1b',"mask_rcnn_grasping_points_0088.h5")
 # model.load_weights(weights_path, by_name=True)
-# print("Loading weights ", weights_path)
-model.load_weights(weights_path, by_name=True,
-                       exclude=["conv1", "rpn_model", "rpn_class_logits",
-                                "rpn_class ", "rpn_bbox "])
-
-model.train(training_dataset, validating_dataset,
-               learning_rate=config.LEARNING_RATE,
-               epochs=1000,
-               layers="all",
-               task=mode)
-
+# # print("Loading weights ", weights_path)
+# # model.load_weights(weights_path, by_name=True,
+# #                        exclude=["conv1", "rpn_model", "rpn_class_logits",
+# #                                 "rpn_class ", "rpn_bbox "])
+#
 # model.train(training_dataset, validating_dataset,
-#                learning_rate=config.LEARNING_RATE/10,
-#                epochs=50,
+#                learning_rate=config.LEARNING_RATE,
+#                epochs=400,
 #                layers="all",
 #                task=mode)
-
-# model.train(training_dataset, validating_dataset,
-#                learning_rate=config.LEARNING_RATE/5,
-#                epochs=200,
-#                layers="all",
-#                task=mode)
-
-# model.train(training_dataset, validating_dataset,
-#                learning_rate=config.LEARNING_RATE/50,
-#                epochs=300,
-#                layers="all",
-#                task=mode)
-
-model_path = os.path.join(MODEL_DIR, "train_id#32.h5")
-model.keras_model.save_weights(model_path)
+#
+# # model.train(training_dataset, validating_dataset,
+# #                learning_rate=config.LEARNING_RATE/10,
+# #                epochs=50,
+# #                layers="all",
+# #                task=mode)
+#
+# # model.train(training_dataset, validating_dataset,
+# #                learning_rate=config.LEARNING_RATE/5,
+# #                epochs=200,
+# #                layers="all",
+# #                task=mode)
+#
+# # model.train(training_dataset, validating_dataset,
+# #                learning_rate=config.LEARNING_RATE/50,
+# #                epochs=300,
+# #                layers="all",
+# #                task=mode)
+#
+# model_path = os.path.join(MODEL_DIR, "train_id#32.h5")
+# model.keras_model.save_weights(model_path)
 
 # ######################################################################################################
 # Create model in inference mode
@@ -702,7 +701,7 @@ model.keras_model.save_weights(model_path)
 #                               config=inference_config, task="grasping_points")
 #
 # # Load weights
-# weights_path = os.path.join(MODEL_DIR, 'colab_result_id#1',"mask_rcnn_grasping_points_0010.h5")
+# weights_path = os.path.join(MODEL_DIR, 'train_#1d',"mask_rcnn_grasping_points_0044.h5")
 # # weights_path = os.path.join(MODEL_DIR, 'train_id#29',"mask_rcnn_grasping_points_0011.h5")
 # print("Loading weights ", weights_path)
 # model.load_weights(weights_path, by_name=True)
@@ -730,9 +729,9 @@ model.keras_model.save_weights(model_path)
 #
 # import code;
 # code.interact(local=dict(globals(), **locals()))
-    # plt.savefig(os.path.join('Grasping_anchors','P'+str(level+2)+ 'center_anchors.png'))
-    #
-    # training_dataset.visualize_bbox(image_id, bounding_box[0], gt_class_id[i], gt_bbox[i], rgbd_image=image)
+#     # plt.savefig(os.path.join('Grasping_anchors','P'+str(level+2)+ 'center_anchors.png'))
+#     #
+#     # training_dataset.visualize_bbox(image_id, bounding_box[0], gt_class_id[i], gt_bbox[i], rgbd_image=image)
 
 # ######################################################################################################
 # with tf.device(DEVICE):
@@ -752,7 +751,7 @@ model.keras_model.save_weights(model_path)
 #                                           mode,
 #                                           config.RPN_GRASP_ANGLES)
 #
-#
+# #
 # image_ids = random.choices(validating_dataset.image_ids, k=10)
 # for image_id in image_ids:
 #     image, image_meta, gt_class_id, gt_bbox, gt_mask =\

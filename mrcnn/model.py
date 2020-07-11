@@ -9,6 +9,7 @@ Written by Waleed Abdulla
 
 import os
 import random
+from random import randrange
 import datetime
 import re
 import math
@@ -1788,6 +1789,29 @@ def mrcnn_mask_loss_graph(target_masks, target_class_ids, pred_masks):
 ############################################################
 #  Data Generator
 ############################################################
+def generate_augmentations():
+    augmentation_types = ['angle', 'dx', 'dy', 'flip']
+    augmentations = random.sample(list(augmentation_types), 2)
+    augmentations_list = np.zeros(4)
+    augmentations_list[-1] = 2
+
+    if 'angle' in augmentations:
+        angle = randrange(-30, 30)
+        augmentations_list[0] = angle
+
+    if 'dx' in augmentations:
+        dx = randrange(-50, 50)
+        augmentations_list[1] = dx
+
+    if 'dy' in augmentations:
+        dy = randrange(-50, 50)
+        augmentations_list[2] = dy
+
+    if 'flip' in augmentations:
+        flip = randrange(0, 3) # 0 -> vertical flip, 1 -> horizontal flip, 2 -> no flip
+        augmentations_list[3] = flip
+
+    return augmentations_list
 
 def load_image_gt(dataset, config, image_id, augment=False, augmentation=None,
                   use_mini_mask=False, mode=''):
@@ -1816,10 +1840,12 @@ def load_image_gt(dataset, config, image_id, augment=False, augmentation=None,
         defined in MINI_MASK_SHAPE.
     """
     # Load image and mask
-    image = dataset.load_image(image_id, dataset.image_info[image_id]['augmentation'])
+    augmentations = generate_augmentations()
+    image = dataset.load_image(image_id, augmentations)
     original_shape = image.shape
     if mode == 'grasping_points':
-        bbox_vertices, bbox_5_dimensional, class_ids = dataset.load_bounding_boxes(image_id, dataset.image_info[image_id]['augmentation'])
+        # bbox_vertices, bbox_5_dimensional, class_ids = dataset.load_bounding_boxes(image_id, dataset.image_info[image_id]['augmentation'])
+        bbox_vertices, bbox_5_dimensional, class_ids = dataset.load_bounding_boxes(image_id, augmentations)
         mask = []
         x_dim_crop = 320
         y_dim_crop = 320
@@ -2644,8 +2670,8 @@ def grasp_data_generator(dataset, config, shuffle=True, augment=False, augmentat
         try:
             # Increment index to pick next image. Shuffle if at the start of an epoch.
             image_index = (image_index + 1) % len(image_ids)
-            if image_index == 0:
-                print('dataset covered')
+            # if image_index == 0:
+            #     print('dataset covered')
             if shuffle and image_index == 0:
                 np.random.shuffle(image_ids)
 
@@ -3432,7 +3458,7 @@ class MaskRCNN():
             keras.callbacks.TensorBoard(log_dir=self.log_dir,
                                         histogram_freq=0, write_graph=True, write_images=False),
             keras.callbacks.ModelCheckpoint(self.checkpoint_path,
-                                            verbose=0, save_weights_only=True, period = 5),
+                                            verbose=0, save_weights_only=True, period = 4),
         ]
 
         # Add custom callbacks to the list
@@ -3639,6 +3665,7 @@ class MaskRCNN():
         else:
             anchors = self.get_anchors(image_shape)
         # Duplicate across the batch dimension because Keras requires it
+        # Duplicate across the batch dimension because Keras requires it
         # TODO: can this be optimized to avoid duplicating the anchors?
         anchors = np.broadcast_to(anchors, (self.config.BATCH_SIZE,) + anchors.shape)
 
@@ -3766,11 +3793,26 @@ class MaskRCNN():
                 # when training based on Faster RCNN's paper. This can be simplified by checking if an anchor rotated at 90 degrees
                 # cross the boundary of the image
 
-                radius = ((0.5 * a[:, 2]) ** 2 + (0.5 * a[:, 3]) ** 2) ** 0.5
+                radius = (((0.5 * a[:, 2]) ** 2 + (0.5 * a[:, 3]) ** 2) ** 0.5)*1
                 valid_anchors_mask = a[:, 0] + radius <= image_shape[1]
                 valid_anchors_mask = np.logical_and(valid_anchors_mask, (a[:, 0] - radius >= 0))
                 valid_anchors_mask = np.logical_and(valid_anchors_mask, (a[:, 1] + radius <= image_shape[0]))
                 valid_anchors_mask = np.logical_and(valid_anchors_mask, (a[:, 1] - radius >= 0))
+                # import matplotlib.pyplot as plt
+                # import matplotlib.patches as patches
+                # anchors_filtered = a[np.where((a[:, 0] == 80) & (a[:, 1] == 80))[0]]
+                # fig, ax = plt.subplots(1, figsize=(10, 10))
+                # ax.imshow(np.zeros((500, 500)))
+                # cols = ['r', 'b', 'g', 'k']
+                # for i, rect2 in enumerate(anchors_filtered):
+                #     rect2 = utils.bbox_convert_to_four_vertices([rect2])
+                #     print (rect2)
+                #     p = patches.Polygon(rect2[0], linewidth=1,edgecolor=cols[i],facecolor='none')
+                #     ax.add_patch(p)
+                # plt.show(block = False)
+                # import code;
+                # code.interact(local=dict(globals(), **locals()))
+
                 return [self._anchor_cache[tuple(image_shape)], valid_anchors_mask]
             else:
                 return self._anchor_cache[tuple(image_shape)]
