@@ -1813,7 +1813,7 @@ def generate_augmentations():
 
     return augmentations_list
 
-def load_image_gt(dataset, config, image_id, augment=False, augmentation=None,
+def load_image_gt(dataset, config, image_id, augment=False, augmentation=None, online_augment = False,
                   use_mini_mask=False, mode=''):
     """Load and return ground truth data for an image (image, mask, bounding boxes).
 
@@ -1840,7 +1840,10 @@ def load_image_gt(dataset, config, image_id, augment=False, augmentation=None,
         defined in MINI_MASK_SHAPE.
     """
     # Load image and mask
-    augmentations = generate_augmentations()
+    if online_augment:
+        augmentations = generate_augmentations()
+    else:
+        augmentations = []
     image = dataset.load_image(image_id, augmentations)
     original_shape = image.shape
     if mode == 'grasping_points':
@@ -2599,7 +2602,7 @@ def data_generator(dataset, config, shuffle=True, augment=False, augmentation=No
             if error_count > 5:
                 raise
 
-def grasp_data_generator(dataset, config, shuffle=True, augment=False, augmentation=None,
+def grasp_data_generator(dataset, config, shuffle=True, augment=False, augmentation=None, online_augment = False,
                          random_rois=0, batch_size=1, detection_targets=False,
                          no_augmentation_sources=None):
     """A generator that returns images and corresponding target class ids,
@@ -2683,6 +2686,7 @@ def grasp_data_generator(dataset, config, shuffle=True, augment=False, augmentat
                 image, image_meta, gt_class_ids, gt_boxes, gt_masks = \
                     load_image_gt(dataset, config, image_id, augment=augment,
                                   augmentation=None,
+                                  online_augment = online_augment,
                                   use_mini_mask=config.USE_MINI_MASK,
                                   mode=mode)
 
@@ -3436,6 +3440,7 @@ class MaskRCNN():
         if task == 'grasping_points':
             train_generator = grasp_data_generator(train_dataset, self.config, shuffle=True,
                                              augmentation=augmentation,
+                                             online_augment = True,
                                              batch_size=self.config.BATCH_SIZE,
                                              no_augmentation_sources=no_augmentation_sources)
             val_generator = grasp_data_generator(val_dataset, self.config, shuffle=True,
