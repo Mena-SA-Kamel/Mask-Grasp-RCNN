@@ -27,8 +27,8 @@ class GraspingPointsConfig(Config):
     BACKBONE = "resnet50"
     GPU_COUNT = 1
     IMAGES_PER_GPU = 12
-    STEPS_PER_EPOCH = 258 # STEPS_PER_EPOCH * batch_size = data size
-    VALIDATION_STEPS = 55
+    STEPS_PER_EPOCH = 51 # STEPS_PER_EPOCH * batch_size = data size
+    VALIDATION_STEPS = 11
     NUM_CLASSES = 1 + 1 # Object and background classes
     # IMAGE_MIN_DIM = 288
     # IMAGE_MAX_DIM = 384
@@ -633,7 +633,7 @@ mode = "grasping_points"
 
 training_dataset = GraspingPointsDataset()
 # training_dataset.construct_jacquard_dataset()
-training_dataset.load_dataset(augmentation=True)
+training_dataset.load_dataset()
 # training_dataset.load_dataset(dataset_dir='../../../Datasets/jacquard_dataset_resized', augmentation=True)
 training_dataset.prepare()
 # channel_means = np.array(training_dataset.get_channel_means())
@@ -641,58 +641,58 @@ training_dataset.prepare()
 
 validating_dataset = GraspingPointsDataset()
 # validating_dataset.load_dataset(dataset_dir='../../../Datasets/jacquard_dataset_resized', type='val_set', augmentation=True)
-validating_dataset.load_dataset(type='val_set',augmentation=True)
+validating_dataset.load_dataset(type='val_set')
 validating_dataset.prepare()
 
 testing_dataset = GraspingPointsDataset()
 # testing_dataset.load_dataset(dataset_dir='../../../Datasets/jacquard_dataset_resized', type='test_set', augmentation=True)
-testing_dataset.load_dataset(type='test_set', augmentation=True)
+testing_dataset.load_dataset(type='test_set')
 testing_dataset.prepare()
 
-# # Create model in training mode
-# with tf.device(DEVICE):
-#     model = modellib.MaskRCNN(mode="training", model_dir=MODEL_DIR,
-#                               config=config, task="grasping_points")
-# tf.keras.utils.plot_model(
-#         model.keras_model, to_file='model.png', show_shapes=True, show_layer_names=True
-#     )
-#
-# # Load weights
-# # weights_path = MASKRCNN_MODEL_PATH
-# # weights_path = os.path.join(MODEL_DIR, "mask_rcnn_coco.h5")
+# Create model in training mode
+with tf.device(DEVICE):
+    model = modellib.MaskRCNN(mode="training", model_dir=MODEL_DIR,
+                              config=config, task="grasping_points")
+tf.keras.utils.plot_model(
+        model.keras_model, to_file='model.png', show_shapes=True, show_layer_names=True
+    )
+
+# Load weights
+# weights_path = MASKRCNN_MODEL_PATH
+weights_path = os.path.join(MODEL_DIR, "mask_rcnn_coco.h5")
 # weights_path = os.path.join(MODEL_DIR, 'train_#1b',"mask_rcnn_grasping_points_0088.h5")
 # model.load_weights(weights_path, by_name=True)
-# # print("Loading weights ", weights_path)
-# # model.load_weights(weights_path, by_name=True,
-# #                        exclude=["conv1", "rpn_model", "rpn_class_logits",
-# #                                 "rpn_class ", "rpn_bbox "])
-#
+# print("Loading weights ", weights_path)
+model.load_weights(weights_path, by_name=True,
+                       exclude=["conv1", "rpn_model", "rpn_class_logits",
+                                "rpn_class ", "rpn_bbox "])
+
+model.train(training_dataset, validating_dataset,
+               learning_rate=config.LEARNING_RATE,
+               epochs=500,
+               layers="all",
+               task=mode)
+
 # model.train(training_dataset, validating_dataset,
-#                learning_rate=config.LEARNING_RATE,
-#                epochs=400,
+#                learning_rate=config.LEARNING_RATE/10,
+#                epochs=50,
 #                layers="all",
 #                task=mode)
-#
-# # model.train(training_dataset, validating_dataset,
-# #                learning_rate=config.LEARNING_RATE/10,
-# #                epochs=50,
-# #                layers="all",
-# #                task=mode)
-#
-# # model.train(training_dataset, validating_dataset,
-# #                learning_rate=config.LEARNING_RATE/5,
-# #                epochs=200,
-# #                layers="all",
-# #                task=mode)
-#
-# # model.train(training_dataset, validating_dataset,
-# #                learning_rate=config.LEARNING_RATE/50,
-# #                epochs=300,
-# #                layers="all",
-# #                task=mode)
-#
-# model_path = os.path.join(MODEL_DIR, "train_id#32.h5")
-# model.keras_model.save_weights(model_path)
+
+# model.train(training_dataset, validating_dataset,
+#                learning_rate=config.LEARNING_RATE/5,
+#                epochs=200,
+#                layers="all",
+#                task=mode)
+
+# model.train(training_dataset, validating_dataset,
+#                learning_rate=config.LEARNING_RATE/50,
+#                epochs=300,
+#                layers="all",
+#                task=mode)
+
+model_path = os.path.join(MODEL_DIR, "train_id#32.h5")
+model.keras_model.save_weights(model_path)
 
 # ######################################################################################################
 # Create model in inference mode
