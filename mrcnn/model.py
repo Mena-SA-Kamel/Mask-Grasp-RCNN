@@ -1813,7 +1813,7 @@ def generate_augmentations():
 
     return augmentations_list
 
-def load_image_gt(dataset, config, image_id, augment=False, augmentation=None, online_augment = False,
+def load_image_gt(dataset, config, image_id, augment=False, augmentation=None, online_augment = False, pre_augment = False,
                   use_mini_mask=False, mode=''):
     """Load and return ground truth data for an image (image, mask, bounding boxes).
 
@@ -1842,6 +1842,8 @@ def load_image_gt(dataset, config, image_id, augment=False, augmentation=None, o
     # Load image and mask
     if online_augment:
         augmentations = generate_augmentations()
+    elif pre_augment:
+        augmentations = dataset.image_info[image_id]['augmentation']
     else:
         augmentations = []
     image = dataset.load_image(image_id, augmentations)
@@ -2602,7 +2604,7 @@ def data_generator(dataset, config, shuffle=True, augment=False, augmentation=No
             if error_count > 5:
                 raise
 
-def grasp_data_generator(dataset, config, shuffle=True, augment=False, augmentation=None, online_augment = False,
+def grasp_data_generator(dataset, config, shuffle=True, augment=False, augmentation=None, online_augment = False, pre_augment = False,
                          random_rois=0, batch_size=1, detection_targets=False,
                          no_augmentation_sources=None):
     """A generator that returns images and corresponding target class ids,
@@ -2686,14 +2688,17 @@ def grasp_data_generator(dataset, config, shuffle=True, augment=False, augmentat
                 image, image_meta, gt_class_ids, gt_boxes, gt_masks = \
                     load_image_gt(dataset, config, image_id, augment=augment,
                                   augmentation=None,
-                                  online_augment = online_augment,
+                                  online_augment=online_augment,
+                                  pre_augment=pre_augment,
                                   use_mini_mask=config.USE_MINI_MASK,
                                   mode=mode)
 
             else:
                 image, image_meta, gt_class_ids, gt_boxes, gt_masks = \
                     load_image_gt(dataset, config, image_id, augment=augment,
+                                  online_augment=online_augment,
                                   augmentation=augmentation,
+                                  pre_augment=pre_augment,
                                   use_mini_mask=config.USE_MINI_MASK,
                                   mode=mode)
 
@@ -3444,7 +3449,8 @@ class MaskRCNN():
                                              batch_size=self.config.BATCH_SIZE,
                                              no_augmentation_sources=no_augmentation_sources)
             val_generator = grasp_data_generator(val_dataset, self.config, shuffle=True,
-                                           batch_size=self.config.BATCH_SIZE)
+                                           batch_size=self.config.BATCH_SIZE,
+                                           pre_augment= True)
         else:
             train_generator = data_generator(train_dataset, self.config, shuffle=True,
                                              augmentation=augmentation,
