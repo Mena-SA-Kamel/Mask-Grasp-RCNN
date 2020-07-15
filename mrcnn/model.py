@@ -1093,12 +1093,12 @@ def grasping_rpn_graph(feature_map, anchors_per_location, anchor_stride):
                        strides=anchor_stride,
                        name='grasp_rpn_conv_shared')(feature_map)
 
-    # classification_1 = KL.Conv2D(512, (3, 3), padding='same', activation='relu',
-    #               strides=anchor_stride,
-    #               name='grasp_rpn_class_raw_1')(shared)
+    classification_1 = KL.Conv2D(512, (3, 3), padding='same', activation='relu',
+                  strides=anchor_stride,
+                  name='grasp_rpn_class_raw_1')(shared)
     # Anchor Score. [batch, height, width, anchors per location * 2].
     classification_2 = KL.Conv2D(2 * anchors_per_location, (1, 1), padding='valid',
-                  activation='linear', name='grasp_rpn_class_raw_2')(shared)
+                  activation='linear', name='grasp_rpn_class_raw_2')(classification_1)
 
     # Reshape to [batch, anchors, 2]
     rpn_class_logits = KL.Lambda(
@@ -1110,11 +1110,11 @@ def grasping_rpn_graph(feature_map, anchors_per_location, anchor_stride):
 
     # Bounding box refinement. [batch, H, W, anchors per location * depth]
     # where depth is [dx, dy, log(dw), log(dh), dtheta]
-    # regression_1 = KL.Conv2D(512, (3, 3), padding='same', activation='relu',
-    #                    strides=anchor_stride,
-    #                    name='grasp_rpn_bbox_pred_1')(shared)
+    regression_1 = KL.Conv2D(512, (3, 3), padding='same', activation='relu',
+                       strides=anchor_stride,
+                       name='grasp_rpn_bbox_pred_1')(shared)
     regression_2 = KL.Conv2D(anchors_per_location * 5, (1, 1), padding="valid",
-                  activation='linear', name='grasp_rpn_bbox_pred_2')(shared)
+                  activation='linear', name='grasp_rpn_bbox_pred_2')(regression_1)
 
     # Reshape to [batch, anchors, 5]
     rpn_bbox = KL.Lambda(lambda t: tf.reshape(t, [tf.shape(t)[0], -1, 5]))(regression_2)
@@ -1385,19 +1385,19 @@ def smooth_l1_loss(y_true, y_pred):
 
 def rpn_combined_loss_graph_zhang_paper(config, target_bbox, target_class, rpn_bbox, rpn_class_logits, valid_anchor_mask):
     # Filtering anchors that cross the image boundary
-    valid_anchor_indices = tf.where(valid_anchor_mask)
-
-    target_bbox = tf.gather(target_bbox, valid_anchor_indices, axis=1)
-    target_bbox = tf.squeeze(target_bbox, axis=2)
-
-    target_class = tf.gather(target_class, valid_anchor_indices, axis=1)
-    target_class = tf.squeeze(target_class, axis=2)
-
-    rpn_bbox = tf.gather(rpn_bbox, valid_anchor_indices, axis=1)
-    rpn_bbox = tf.squeeze(rpn_bbox, axis=2)
-
-    rpn_class_logits = tf.gather(rpn_class_logits, valid_anchor_indices, axis=1)
-    rpn_class_logits = tf.squeeze(rpn_class_logits, axis=2)
+    # valid_anchor_indices = tf.where(valid_anchor_mask)
+    #
+    # target_bbox = tf.gather(target_bbox, valid_anchor_indices, axis=1)
+    # target_bbox = tf.squeeze(target_bbox, axis=2)
+    #
+    # target_class = tf.gather(target_class, valid_anchor_indices, axis=1)
+    # target_class = tf.squeeze(target_class, axis=2)
+    #
+    # rpn_bbox = tf.gather(rpn_bbox, valid_anchor_indices, axis=1)
+    # rpn_bbox = tf.squeeze(rpn_bbox, axis=2)
+    #
+    # rpn_class_logits = tf.gather(rpn_class_logits, valid_anchor_indices, axis=1)
+    # rpn_class_logits = tf.squeeze(rpn_class_logits, axis=2)
 
     # Squeeze last dim to simplify
     target_class = tf.squeeze(target_class, -1)
@@ -1423,7 +1423,7 @@ def rpn_combined_loss_graph_zhang_paper(config, target_bbox, target_class, rpn_b
     positive_indices = tf.where(K.equal(positive_class_mask, 1))
 
     values = tf.gather_nd(classification_loss, negative_indices)
-    negative_class_losses = tf.sparse.SparseTensor(negative_indices, values, [config.BATCH_SIZE, valid_anchor_mask.shape[0]])
+    negative_class_losses = tf.sparse.SparseTensor(negative_indices, values, [config.BATCH_SIZE, config.RPN_TRAIN_ANCHORS_PER_IMAGE])
     negative_class_losses = tf.sparse.to_dense(negative_class_losses)
 
     # Summing the top 3N negative elements in each row
@@ -3445,12 +3445,13 @@ class MaskRCNN():
         if task == 'grasping_points':
             train_generator = grasp_data_generator(train_dataset, self.config, shuffle=True,
                                              augmentation=augmentation,
-                                             online_augment = True,
+                                             pre_augment = True,
+                                             # online_augment= True,
                                              batch_size=self.config.BATCH_SIZE,
                                              no_augmentation_sources=no_augmentation_sources)
             val_generator = grasp_data_generator(val_dataset, self.config, shuffle=True,
                                            batch_size=self.config.BATCH_SIZE,
-                                           pre_augment= True)
+                                           pre_augment = True)
         else:
             train_generator = data_generator(train_dataset, self.config, shuffle=True,
                                              augmentation=augmentation,
