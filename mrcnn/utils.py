@@ -416,12 +416,12 @@ def apply_box_deltas(boxes, deltas, mode='', num_angles=0):
         height = boxes[:, 3]
         theta = boxes[:, 4]
 
-        center_x += deltas[:, 0] * width
-        center_y += deltas[:, 1] * height
-        width *= np.exp(deltas[:, 2])
-        height *= np.exp(deltas[:, 3])
-        theta += (deltas[:, 4] * (180/num_angles))
-        return np.stack([center_x, center_y, width, height, theta], axis=1)
+        x = center_x + (deltas[:, 0] * width)
+        y = center_y + (deltas[:, 1] * height)
+        w = width * np.exp(deltas[:, 2])
+        h = height * np.exp(deltas[:, 3])
+        angle = theta + (deltas[:, 4] * (180/num_angles))
+        return np.stack([x, y, w, h, angle], axis=1)
 
     else:
         boxes = boxes.astype(np.float32)

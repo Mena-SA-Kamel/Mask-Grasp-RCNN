@@ -1879,8 +1879,6 @@ def load_image_gt(dataset, config, image_id, augment=False, augmentation=None, o
     else:
         mask = utils.resize_mask(mask, scale, padding, crop)
 
-    # import code;
-    # code.interact(local=dict(globals(), **locals()))
     # Disabling resizing
     # bbox_resize_5_dimensional = bbox_5_dimensional
     # scale = 1
@@ -1951,7 +1949,6 @@ def load_image_gt(dataset, config, image_id, augment=False, augmentation=None, o
             mask = utils.minimize_mask(bbox, mask, config.MINI_MASK_SHAPE)
 
     # Image meta data
-
     image_meta = compose_image_meta(image_id, original_shape, image.shape,
                                     window, scale, active_class_ids)
 
@@ -2147,7 +2144,7 @@ def build_rpn_targets(image_shape, anchors, gt_class_ids, gt_boxes, config, mode
         overlaps = utils.compute_overlaps(anchors, gt_boxes, mode='grasping_points')
 
         fg_neg_thresh = 0.1
-        fg_pos_thresh = 0.4
+        fg_pos_thresh = 0.1
 
         # 1. Set negative anchors first. They get overwritten below if a GT box is
         # matched to them. Skip boxes in crowd areas.
@@ -2161,7 +2158,10 @@ def build_rpn_targets(image_shape, anchors, gt_class_ids, gt_boxes, config, mode
         # gt_iou_argmax =  np.argmax(overlaps, axis=0)
         rpn_match[gt_iou_argmax] = 1
         # 3. Set anchors with high overlap as positive.
+        # import code;
+        # code.interact(local=dict(globals(), **locals()))
         rpn_match[anchor_iou_max >= fg_pos_thresh] = 1
+
     else:
         # Handle COCO crowds
         # A crowd box in COCO is a bounding box around several instances. Exclude
@@ -3129,30 +3129,9 @@ class MaskRCNN():
         #     config=config)([rpn_class, rpn_bbox, anchors])
 
         if mode == 'training':
-
-            # input_rpn_match_filtered = KL.Lambda(lambda x: tf.gather_nd(*x), name="input_rpn_match_filtered")(
-            #     [input_rpn_match,top_losses_ix])
-            #
-            # input_rpn_bbox_filtered = KL.Lambda(lambda x: tf.gather_nd(*x), name="input_rpn_bbox_filtered")(
-            #     [input_rpn_bbox, top_losses_ix])
-            #
-            # rpn_class = KL.Lambda(lambda x: tf.gather_nd(*x), name="rpn_class_filtered")(
-            #     [rpn_class, top_losses_ix])
-            # rpn_class_logits = KL.Lambda(lambda x: tf.gather_nd(*x), name="rpn_class_logits_filtered")(
-            #     [rpn_class_logits, top_losses_ix])
-            # rpn_bbox = KL.Lambda(lambda x: tf.gather_nd(*x), name="rpn_bbox_filtered")(
-            #     [rpn_bbox, top_losses_ix])
             # Losses
-            # Classification loss
             combined_loss = KL.Lambda(lambda x: rpn_combined_loss_graph_zhang_paper(config, *x), name="rpn_loss")(
                 [input_rpn_bbox, input_rpn_match, rpn_bbox, rpn_class_logits, valid_anchor_mask])
-
-            # rpn_class_loss = KL.Lambda(lambda x: rpn_class_loss_graph(*x), name="rpn_class_loss")(
-            #     [input_rpn_match, rpn_class_logits])
-            #
-            # # Regression Loss
-            # rpn_bbox_loss = KL.Lambda(lambda x: rpn_bbox_loss_graph(config, *x), name="rpn_bbox_loss")(
-            #     [input_rpn_bbox, input_rpn_match, rpn_bbox])
 
             # Model
             inputs = [input_image, input_image_meta, input_rpn_match, input_rpn_bbox]
@@ -3164,7 +3143,6 @@ class MaskRCNN():
         else:
             # Model
             inputs = [input_image, input_image_meta, input_anchors]
-            # outputs = [rpn_rois, rpn_class, rpn_bbox]
             outputs = [rpn_class, rpn_bbox]
             model = KM.Model(inputs, outputs, name='grasp_rcnn')
 
@@ -3805,22 +3783,35 @@ class MaskRCNN():
                 # when training based on Faster RCNN's paper. This can be simplified by checking if an anchor rotated at 90 degrees
                 # cross the boundary of the image
 
-                radius = (((0.5 * a[:, 2]) ** 2 + (0.5 * a[:, 3]) ** 2) ** 0.5)*1
-                valid_anchors_mask = a[:, 0] + radius <= image_shape[1]
-                valid_anchors_mask = np.logical_and(valid_anchors_mask, (a[:, 0] - radius >= 0))
-                valid_anchors_mask = np.logical_and(valid_anchors_mask, (a[:, 1] + radius <= image_shape[0]))
-                valid_anchors_mask = np.logical_and(valid_anchors_mask, (a[:, 1] - radius >= 0))
-                # import matplotlib.pyplot as plt
-                # import matplotlib.patches as patches
+                radius = (((0.5 * a[:, 2]) ** 2 + (0.5 * a[:, 3]) ** 2) ** 0.5)*0.5
+                valid_anchors_mask = (a[:, 0] + radius) <= image_shape[1]
+                valid_anchors_mask = np.logical_and(valid_anchors_mask, ((a[:, 0] - radius) >= 0))
+                valid_anchors_mask = np.logical_and(valid_anchors_mask, ((a[:, 1] + radius) <= image_shape[0]))
+                valid_anchors_mask = np.logical_and(valid_anchors_mask, ((a[:, 1] - radius) >= 0))
+                import matplotlib.pyplot as plt
+                import matplotlib.patches as patches
                 # anchors_filtered = a[np.where((a[:, 0] == 80) & (a[:, 1] == 80))[0]]
-                # fig, ax = plt.subplots(1, figsize=(10, 10))
+                # anchors_filtered = a#[valid_anchors_mask]
+                # fig, ax = plt.subplots(1)
                 # ax.imshow(np.zeros((500, 500)))
                 # cols = ['r', 'b', 'g', 'k']
                 # for i, rect2 in enumerate(anchors_filtered):
-                #     rect2 = utils.bbox_convert_to_four_vertices([rect2])
-                #     print (rect2)
-                #     p = patches.Polygon(rect2[0], linewidth=1,edgecolor=cols[i],facecolor='none')
+                #
+                #     box = rect2
+                #     box[0] += 50
+                #     box[1] += 50
+                #     # import code;
+                #     # code.interact(local=dict(globals(), **locals()))
+                #     rect2 = utils.bbox_convert_to_four_vertices([box])
+                #     p = patches.Polygon(rect2[0], linewidth=1,edgecolor='r',facecolor='none')
                 #     ax.add_patch(p)
+                # image_boundary = np.array([[0,0],
+                #                            [320,0],
+                #                            [320,320],
+                #                            [0,320]])
+                # image_boundary += 50
+                # p = patches.Polygon(image_boundary, linewidth=1, edgecolor='g', facecolor='none')
+                # ax.add_patch(p)
                 # plt.show(block = False)
                 # import code;
                 # code.interact(local=dict(globals(), **locals()))

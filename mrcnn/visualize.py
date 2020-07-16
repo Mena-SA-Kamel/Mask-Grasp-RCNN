@@ -450,8 +450,8 @@ def draw_boxes(image, boxes=None, refined_boxes=None,
                                    edgecolor=color, facecolor='none')
             ax.add_patch(p)
             # Connect the top-left corners of the anchor and proposal
-            # if boxes is not None:
-            #     ax.add_line(lines.Line2D([x1, rx1], [y1, ry1], color=color))
+            if boxes is not None:
+                ax.add_line(lines.Line2D([x1, rx1], [y1, ry1], color=color))
 
         # Captions
         if captions is not None:
