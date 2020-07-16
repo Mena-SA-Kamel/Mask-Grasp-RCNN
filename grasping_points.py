@@ -27,13 +27,8 @@ class GraspingPointsConfig(Config):
     BACKBONE = "resnet50"
     GPU_COUNT = 1
     IMAGES_PER_GPU = 12
-<<<<<<< HEAD
     STEPS_PER_EPOCH = 257 # STEPS_PER_EPOCH * batch_size = data size
     VALIDATION_STEPS = 55
-=======
-    STEPS_PER_EPOCH = 154 # STEPS_PER_EPOCH * batch_size = data size
-    VALIDATION_STEPS = 33
->>>>>>> 2fec8abc6847d18fae1f4023c4a3bf675e29b19d
     NUM_CLASSES = 1 + 1 # Object and background classes
     # IMAGE_MIN_DIM = 288
     # IMAGE_MAX_DIM = 384
@@ -65,11 +60,7 @@ class GraspingPointsConfig(Config):
     RPN_OHEM_NUM_SAMPLES = 320
     LEARNING_RATE = 0.002
     LEARNING_MOMENTUM = 0.9
-<<<<<<< HEAD
     NUM_AUGMENTATIONS = 5
-=======
-    NUM_AUGMENTATIONS = 3
->>>>>>> 2fec8abc6847d18fae1f4023c4a3bf675e29b19d
     WEIGHT_DECAY = 0.0002
     # NUM_AUGMENTATIONS = 5
 
@@ -567,11 +558,7 @@ class GraspingPointsDataset(Dataset):
         Applies a NMS refinement algorithm on the proposals output by the RPN
         '''
         probabilities = results['scores'][0] # bg prob, fg prob
-<<<<<<< HEAD
         deltas = results['refinements'][0] * config.RPN_BBOX_STD_DEV
-=======
-        deltas = results['refinements'][0] * model.config.RPN_BBOX_STD_DEV
->>>>>>> 2fec8abc6847d18fae1f4023c4a3bf675e29b19d
         mode = 'grasping_points'
         all_boxes = utils.apply_box_deltas(anchors, deltas, mode,
                                            len(config.RPN_GRASP_ANGLES))
@@ -665,7 +652,6 @@ testing_dataset = GraspingPointsDataset()
 testing_dataset.load_dataset(type='test_set', augmentation=True)
 testing_dataset.prepare()
 
-<<<<<<< HEAD
 # Create model in training mode
 with tf.device(DEVICE):
     model = modellib.MaskRCNN(mode="training", model_dir=MODEL_DIR,
@@ -690,44 +676,6 @@ model.train(training_dataset, validating_dataset,
                layers="all",
                task=mode)
 
-# model.train(training_dataset, validating_dataset,
-#                learning_rate=config.LEARNING_RATE/10,
-#                epochs=50,
-#                layers="all",
-#                task=mode)
-
-# model.train(training_dataset, validating_dataset,
-#                learning_rate=config.LEARNING_RATE/5,
-#                epochs=200,
-#                layers="all",
-#                task=mode)
-
-=======
-# # Create model in training mode
-# with tf.device(DEVICE):
-#     model = modellib.MaskRCNN(mode="training", model_dir=MODEL_DIR,
-#                               config=config, task="grasping_points")
-# tf.keras.utils.plot_model(
-#         model.keras_model, to_file='model.png', show_shapes=True, show_layer_names=True
-#     )
-#
-# # Load weights
-# # weights_path = MASKRCNN_MODEL_PATH
-# # weights_path = os.path.join(MODEL_DIR, "mask_rcnn_coco.h5")
-# weights_path = os.path.join(MODEL_DIR, 'train_#5',"mask_rcnn_grasping_points_0300.h5")
-# model.load_weights(weights_path, by_name=True)
-# # print("Loading weights ", weights_path)
-# # model.load_weights(weights_path, by_name=True,
-# #                        exclude=["conv1", "rpn_model", "rpn_class_logits",
-# #                                 "rpn_class ", "rpn_bbox "])
-#
->>>>>>> 2fec8abc6847d18fae1f4023c4a3bf675e29b19d
-# model.train(training_dataset, validating_dataset,
-#                learning_rate=config.LEARNING_RATE/2,
-#                epochs=500,
-#                layers="all",
-#                task=mode)
-#
 # # model.train(training_dataset, validating_dataset,
 # #                learning_rate=config.LEARNING_RATE/10,
 # #                epochs=50,
@@ -756,11 +704,6 @@ model.train(training_dataset, validating_dataset,
 #                               config=inference_config, task="grasping_points")
 #
 # # Load weights
-<<<<<<< HEAD
-# weights_path = os.path.join(MODEL_DIR, 'train_#5b',"mask_rcnn_grasping_points_0088.h5")
-=======
-# weights_path = os.path.join(MODEL_DIR, 'train_#5',"mask_rcnn_grasping_points_0444.h5")
->>>>>>> 2fec8abc6847d18fae1f4023c4a3bf675e29b19d
 # # weights_path = os.path.join(MODEL_DIR, 'colab_result_id#1',"mask_rcnn_grasping_points_0144.h5")
 # # weights_path = os.path.join(MODEL_DIR, 'train_#2',"mask_rcnn_grasping_points_0160.h5")
 # print("Loading weights ", weights_path)
@@ -795,7 +738,7 @@ model.train(training_dataset, validating_dataset,
 # training_dataset.visualize_bbox(image_id, bounding_box[0], gt_class_id[i], gt_bbox[i], rgbd_image=image)
 
 # ######################################################################################################
-<<<<<<< HEAD
+
 # with tf.device(DEVICE):
 #     model = modellib.MaskRCNN(mode="inference", model_dir=MODEL_DIR,
 #                               config=inference_config, task="grasping_points")
@@ -865,77 +808,6 @@ model.train(training_dataset, validating_dataset,
 #     # visualize.draw_boxes(image, boxes=positive_anchors, refined_boxes=refined_anchors, mode=mode)
 # import code;
 # code.interact(local=dict(globals(), **locals()))
-=======
-with tf.device(DEVICE):
-    model = modellib.MaskRCNN(mode="inference", model_dir=MODEL_DIR,
-                              config=inference_config, task="grasping_points")
-normalized_anchors = model.get_anchors(config.IMAGE_SHAPE, mode='grasping_points', angles=config.RPN_GRASP_ANGLES)
-
-# Generate Anchors
-mode= 'grasping_points'
-backbone_shapes = modellib.compute_backbone_shapes(config, config.IMAGE_SHAPE)
-anchors = utils.generate_pyramid_anchors(config.RPN_ANCHOR_SCALES,
-                                          config.RPN_ANCHOR_RATIOS,
-                                          backbone_shapes,
-                                          config.BACKBONE_STRIDES,
-                                          config.RPN_ANCHOR_STRIDE,
-                                          config.IMAGE_SHAPE,
-                                          mode,
-                                          config.RPN_GRASP_ANGLES)
-
-image_ids = random.choices(validating_dataset.image_ids, k=10)
-for image_id in image_ids:
-    image, image_meta, gt_class_id, gt_bbox, gt_mask =\
-        modellib.load_image_gt(validating_dataset, config, image_id, pre_augment=True, use_mini_mask=False, mode='grasping_points')
-
-    target_rpn_match, target_rpn_bbox = modellib.build_rpn_targets(
-        image.shape, model.anchors, gt_class_id, gt_bbox, model.config, mode = 'grasping_points')
-    positive_anchor_ix = np.where(target_rpn_match[:] == 1)[0]
-    negative_anchor_ix = np.where(target_rpn_match[:] == -1)[0]
-    neutral_anchor_ix = np.where(target_rpn_match[:] == 0)[0]
-    positive_anchors = model.anchors[positive_anchor_ix]
-    negative_anchors = model.anchors[negative_anchor_ix]
-    neutral_anchors = model.anchors[neutral_anchor_ix]
-    image_final_anchors = np.where(np.logical_not(target_rpn_match[:] == 0))[0]
-    positive_anchors_mask = np.in1d(image_final_anchors, positive_anchor_ix)
-    deltas = target_rpn_bbox[positive_anchors_mask] * model.config.RPN_BBOX_STD_DEV
-    refined_anchors = utils.apply_box_deltas(positive_anchors, deltas, mode, len(config.RPN_GRASP_ANGLES))
-
-    fig, (ax1, ax2, ax3, ax4) = plt.subplots(1, 4)
-    ax1.imshow(image)
-    ax2.imshow(image)
-    ax3.imshow(image)
-    ax4.imshow(image)
-
-    for i, rect in enumerate(gt_bbox):
-        rect = validating_dataset.bbox_convert_to_four_vertices([rect])
-        p = patches.Polygon(rect[0], linewidth=1,edgecolor='g',facecolor='none')
-        ax1.add_patch(p)
-    ax1.set_title(validating_dataset.image_info[image_id]['path'])
-
-    print (len(positive_anchor_ix), len(negative_anchor_ix), len(neutral_anchor_ix))
-
-
-    for i, rect2 in enumerate(negative_anchors):
-        rect2 = validating_dataset.bbox_convert_to_four_vertices([rect2])
-        p = patches.Polygon(rect2[0], linewidth=1,edgecolor='r',facecolor='none')
-        ax2.add_patch(p)
-
-    for i, rect3 in enumerate(model.anchors[positive_anchor_ix]):
-        rect3= validating_dataset.bbox_convert_to_four_vertices([rect3])
-        q = patches.Polygon(rect3[0], linewidth=1, edgecolor='b', facecolor='none')
-        ax3.add_patch(q)
-
-    for i, rect4 in enumerate(refined_anchors):
-        rect4 = validating_dataset.bbox_convert_to_four_vertices([rect4])
-        r = patches.Polygon(rect4[0], linewidth=1, edgecolor='b', facecolor='none')
-        ax4.add_patch(r)
-    ax1.set_title(validating_dataset.image_info[image_id]['path'])
-    plt.show(block=False)
-    # visualize.draw_boxes(image, boxes=positive_anchors, refined_boxes=refined_anchors, mode=mode)
-import code;
-code.interact(local=dict(globals(), **locals()))
->>>>>>> 2fec8abc6847d18fae1f4023c4a3bf675e29b19d
 
 # log("target_rpn_match", target_rpn_match)
 # log("target_rpn_bbox", target_rpn_bbox)
