@@ -27,8 +27,8 @@ class GraspingPointsConfig(Config):
     BACKBONE = "resnet50"
     GPU_COUNT = 1
     IMAGES_PER_GPU = 12
-    STEPS_PER_EPOCH = 412 # STEPS_PER_EPOCH * batch_size = data size
-    VALIDATION_STEPS = 88
+    STEPS_PER_EPOCH = 257 # STEPS_PER_EPOCH * batch_size = data size
+    VALIDATION_STEPS = 55
     NUM_CLASSES = 1 + 1 # Object and background classes
     # IMAGE_MIN_DIM = 288
     # IMAGE_MAX_DIM = 384
@@ -60,7 +60,7 @@ class GraspingPointsConfig(Config):
     RPN_OHEM_NUM_SAMPLES = 320
     LEARNING_RATE = 0.002
     LEARNING_MOMENTUM = 0.9
-    NUM_AUGMENTATIONS = 8
+    NUM_AUGMENTATIONS = 5
     WEIGHT_DECAY = 0.0002
     # NUM_AUGMENTATIONS = 5
 
@@ -553,43 +553,43 @@ class GraspingPointsDataset(Dataset):
         return [filtered_boxes, filtered_scores, boxes, scores]
 
 
-    def refine_results(self, results, anchors):
+    def refine_results(self, results, anchors, config):
         '''
         Applies a NMS refinement algorithm on the proposals output by the RPN
         '''
         probabilities = results['scores'][0] # bg prob, fg prob
-        deltas = results['refinements'][0]
+        deltas = results['refinements'][0] * config.RPN_BBOX_STD_DEV
         mode = 'grasping_points'
         all_boxes = utils.apply_box_deltas(anchors, deltas, mode,
                                            len(config.RPN_GRASP_ANGLES))
         # Filter out boxes with center coordinates out of the image
-        radius = ((0.5 * all_boxes[:, 2]) ** 2 + (0.5 * all_boxes[:, 3]) ** 2) ** 0.5
-
-        invalid_x = np.where(all_boxes[:, 0] + radius > config.IMAGE_SHAPE[1])[0]
-        all_boxes = np.delete(all_boxes, invalid_x, axis = 0)
-        probabilities = np.delete(probabilities, invalid_x, axis = 0)
-        radius = np.delete(radius, invalid_x)
-
-        invalid_x = np.where(all_boxes[:, 0] - radius < 0)[0]
-        all_boxes = np.delete(all_boxes, invalid_x, axis=0)
-        probabilities = np.delete(probabilities, invalid_x, axis=0)
-        radius = np.delete(radius, invalid_x)
-
-        invalid_y = np.where(all_boxes[:, 1] + radius > config.IMAGE_SHAPE[0])[0]
-        all_boxes = np.delete(all_boxes, invalid_y, axis = 0)
-        probabilities = np.delete(probabilities, invalid_y, axis = 0)
-        radius = np.delete(radius, invalid_y)
-
-        invalid_y = np.where(all_boxes[:, 1] - radius < 0)[0]
-        all_boxes = np.delete(all_boxes, invalid_y, axis=0)
-        probabilities = np.delete(probabilities, invalid_y, axis=0)
+        # radius = ((0.5 * all_boxes[:, 2]) ** 2 + (0.5 * all_boxes[:, 3]) ** 2) ** 0.5
+        #
+        # invalid_x = np.where(all_boxes[:, 0] + radius > config.IMAGE_SHAPE[1])[0]
+        # all_boxes = np.delete(all_boxes, invalid_x, axis = 0)
+        # probabilities = np.delete(probabilities, invalid_x, axis = 0)
+        # radius = np.delete(radius, invalid_x)
+        #
+        # invalid_x = np.where(all_boxes[:, 0] - radius < 0)[0]
+        # all_boxes = np.delete(all_boxes, invalid_x, axis=0)
+        # probabilities = np.delete(probabilities, invalid_x, axis=0)
+        # radius = np.delete(radius, invalid_x)
+        #
+        # invalid_y = np.where(all_boxes[:, 1] + radius > config.IMAGE_SHAPE[0])[0]
+        # all_boxes = np.delete(all_boxes, invalid_y, axis = 0)
+        # probabilities = np.delete(probabilities, invalid_y, axis = 0)
+        # radius = np.delete(radius, invalid_y)
+        #
+        # invalid_y = np.where(all_boxes[:, 1] - radius < 0)[0]
+        # all_boxes = np.delete(all_boxes, invalid_y, axis=0)
+        # probabilities = np.delete(probabilities, invalid_y, axis=0)
 
         sorting_ix = np.argsort(probabilities[:, 1])[::-1][:10]
         #
         # top_boxes = all_boxes[probabilities[:,1] > 0.10]
         # top_box_probabilities = probabilities[probabilities[:,1] > 0.10]
-        # top_boxes = all_boxes[probabilities[:,1] > 0.30]
-        # top_box_probabilities = probabilities[probabilities[:,1] > 0.30]
+        # top_boxes = all_boxes[probabilities[:,1] > 0.10]
+        # top_box_probabilities = probabilities[probabilities[:,1] > 0.10]
         top_boxes = all_boxes[sorting_ix]
         top_box_probabilities = probabilities[sorting_ix]
         top_boxes, top_box_probabilities, pre_nms_boxes, pre_nms_scores = self.orient_box_nms(top_boxes, top_box_probabilities)
@@ -662,13 +662,13 @@ tf.keras.utils.plot_model(
 
 # Load weights
 # weights_path = MASKRCNN_MODEL_PATH
-# weights_path = os.path.join(MODEL_DIR, "mask_rcnn_coco.h5")
-weights_path = os.path.join(MODEL_DIR, 'train_#4',"mask_rcnn_grasping_points_0300.h5")
-model.load_weights(weights_path, by_name=True)
+weights_path = os.path.join(MODEL_DIR, "mask_rcnn_coco.h5")
+# weights_path = os.path.join(MODEL_DIR, 'train_#5',"mask_rcnn_grasping_points_0188.h5")
+# model.load_weights(weights_path, by_name=True)
 # print("Loading weights ", weights_path)
-# model.load_weights(weights_path, by_name=True,
-#                        exclude=["conv1", "rpn_model", "rpn_class_logits",
-#                                 "rpn_class ", "rpn_bbox "])
+model.load_weights(weights_path, by_name=True,
+                       exclude=["conv1", "rpn_model", "rpn_class_logits",
+                                "rpn_class ", "rpn_bbox "])
 
 model.train(training_dataset, validating_dataset,
                learning_rate=config.LEARNING_RATE,
@@ -704,11 +704,12 @@ model.keras_model.save_weights(model_path)
 #                               config=inference_config, task="grasping_points")
 #
 # # Load weights
-# # weights_path = os.path.join(MODEL_DIR, 'train_#5',"mask_rcnn_grasping_points_0444.h5")
-# weights_path = os.path.join(MODEL_DIR, 'train_#5',"mask_rcnn_grasping_points_0300.h5")
+# weights_path = os.path.join(MODEL_DIR, 'train_#5b',"mask_rcnn_grasping_points_0088.h5")
+# # weights_path = os.path.join(MODEL_DIR, 'colab_result_id#1',"mask_rcnn_grasping_points_0144.h5")
+# # weights_path = os.path.join(MODEL_DIR, 'train_#2',"mask_rcnn_grasping_points_0160.h5")
 # print("Loading weights ", weights_path)
 # model.load_weights(weights_path, by_name=True)
-# dataset = validating_dataset
+# dataset = testing_dataset
 # image_ids = random.choices(dataset.image_ids, k=25)
 # for image_id in image_ids:
 #     # validating_dataset.load_image(image_id, validating_dataset.image_info[image_id]['augmentation'])
@@ -716,7 +717,7 @@ model.keras_model.save_weights(model_path)
 #         modellib.load_image_gt(dataset, inference_config, image_id, use_mini_mask=False, mode='grasping_points')
 #     results = model.detect([image], verbose=1, task=mode)
 #     r = results[0]
-#     post_nms_predictions, pre_nms_predictions = dataset.refine_results(r, model.anchors)
+#     post_nms_predictions, pre_nms_predictions = dataset.refine_results(r, model.anchors, model.config)
 #     fig, (ax1, ax2) = plt.subplots(1, 2)
 #     ax1.imshow(image)
 #     ax2.imshow(image)
@@ -733,9 +734,9 @@ model.keras_model.save_weights(model_path)
 #
 # import code;
 # code.interact(local=dict(globals(), **locals()))
-#     # plt.savefig(os.path.join('Grasping_anchors','P'+str(level+2)+ 'center_anchors.png'))
-#     #
-#     # training_dataset.visualize_bbox(image_id, bounding_box[0], gt_class_id[i], gt_bbox[i], rgbd_image=image)
+# plt.savefig(os.path.join('Grasping_anchors','P'+str(level+2)+ 'center_anchors.png'))
+#
+# training_dataset.visualize_bbox(image_id, bounding_box[0], gt_class_id[i], gt_bbox[i], rgbd_image=image)
 
 # ######################################################################################################
 # with tf.device(DEVICE):
@@ -755,11 +756,10 @@ model.keras_model.save_weights(model_path)
 #                                           mode,
 #                                           config.RPN_GRASP_ANGLES)
 #
-# #
 # image_ids = random.choices(validating_dataset.image_ids, k=10)
 # for image_id in image_ids:
 #     image, image_meta, gt_class_id, gt_bbox, gt_mask =\
-#         modellib.load_image_gt(validating_dataset, config, image_id, use_mini_mask=False, mode='grasping_points')
+#         modellib.load_image_gt(validating_dataset, config, image_id, pre_augment=True, use_mini_mask=False, mode='grasping_points')
 #
 #     target_rpn_match, target_rpn_bbox = modellib.build_rpn_targets(
 #         image.shape, model.anchors, gt_class_id, gt_bbox, model.config, mode = 'grasping_points')
@@ -774,10 +774,11 @@ model.keras_model.save_weights(model_path)
 #     deltas = target_rpn_bbox[positive_anchors_mask] * model.config.RPN_BBOX_STD_DEV
 #     refined_anchors = utils.apply_box_deltas(positive_anchors, deltas, mode, len(config.RPN_GRASP_ANGLES))
 #
-#     fig, (ax1, ax2, ax3) = plt.subplots(1, 3)
+#     fig, (ax1, ax2, ax3, ax4) = plt.subplots(1, 4)
 #     ax1.imshow(image)
 #     ax2.imshow(image)
 #     ax3.imshow(image)
+#     ax4.imshow(image)
 #
 #     for i, rect in enumerate(gt_bbox):
 #         rect = validating_dataset.bbox_convert_to_four_vertices([rect])
@@ -798,13 +799,13 @@ model.keras_model.save_weights(model_path)
 #         q = patches.Polygon(rect3[0], linewidth=1, edgecolor='b', facecolor='none')
 #         ax3.add_patch(q)
 #
-#     # for i, rect4 in enumerate(refined_anchors):
-#     #     rect4 = validating_dataset.bbox_convert_to_four_vertices([rect4])
-#     #     r = patches.Polygon(rect4[0], linewidth=1, edgecolor='b', facecolor='none')
-#     #     ax.add_patch(r)
+#     for i, rect4 in enumerate(refined_anchors):
+#         rect4 = validating_dataset.bbox_convert_to_four_vertices([rect4])
+#         r = patches.Polygon(rect4[0], linewidth=1, edgecolor='b', facecolor='none')
+#         ax4.add_patch(r)
 #     ax1.set_title(validating_dataset.image_info[image_id]['path'])
 #     plt.show(block=False)
-#     visualize.draw_boxes(image, boxes=positive_anchors, refined_boxes=refined_anchors, mode=mode)
+#     # visualize.draw_boxes(image, boxes=positive_anchors, refined_boxes=refined_anchors, mode=mode)
 # import code;
 # code.interact(local=dict(globals(), **locals()))
 
