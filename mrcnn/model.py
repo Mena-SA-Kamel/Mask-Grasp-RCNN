@@ -21,6 +21,7 @@ import bisect
 import tensorflow as tf
 import keras
 from math import pi
+from .clr_callback import CyclicLR
 
 import keras.backend as K
 import keras.layers as KL
@@ -2675,8 +2676,6 @@ def grasp_data_generator(dataset, config, shuffle=True, augment=False, augmentat
         try:
             # Increment index to pick next image. Shuffle if at the start of an epoch.
             image_index = (image_index + 1) % len(image_ids)
-            # if image_index == 0:
-            #     print('dataset covered')
             if shuffle and image_index == 0:
                 np.random.shuffle(image_ids)
 
@@ -3424,7 +3423,6 @@ class MaskRCNN():
             train_generator = grasp_data_generator(train_dataset, self.config, shuffle=True,
                                              augmentation=augmentation,
                                              pre_augment = True,
-                                             # online_augment= True,
                                              batch_size=self.config.BATCH_SIZE,
                                              no_augmentation_sources=no_augmentation_sources)
             val_generator = grasp_data_generator(val_dataset, self.config, shuffle=True,
@@ -3438,13 +3436,15 @@ class MaskRCNN():
             val_generator = data_generator(val_dataset, self.config, shuffle=True,
                                            batch_size=self.config.BATCH_SIZE)
 
-        ###### WORKS UNTIL HERE ###########
         # Create log_dir if it does not exist
         if not os.path.exists(self.log_dir):
             os.makedirs(self.log_dir)
 
         # Callbacks
+        clr_triangular = CyclicLR(base_lr=0.0002, max_lr=0.02, step_size=2000., mode='triangular',
+                 gamma=1., scale_fn=None, scale_mode='cycle')
         callbacks = [
+            clr_triangular,
             keras.callbacks.TensorBoard(log_dir=self.log_dir,
                                         histogram_freq=0, write_graph=True, write_images=False),
             keras.callbacks.ModelCheckpoint(self.checkpoint_path,
@@ -3482,6 +3482,7 @@ class MaskRCNN():
             use_multiprocessing=True,
         )
         self.epoch = max(self.epoch, epochs)
+        return clr_triangular
 
     def mold_inputs(self, images):
         """Takes a list of images and modifies them to the format expected
