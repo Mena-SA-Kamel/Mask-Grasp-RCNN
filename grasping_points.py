@@ -60,7 +60,7 @@ class GraspingPointsConfig(Config):
     RPN_OHEM_NUM_SAMPLES = 320
     LEARNING_RATE = 0.002
     LEARNING_MOMENTUM = 0.9
-    NUM_AUGMENTATIONS = 5
+    NUM_AUGMENTATIONS = 100
     WEIGHT_DECAY = 0.0002
     # NUM_AUGMENTATIONS = 5
 
@@ -585,9 +585,9 @@ class GraspingPointsDataset(Dataset):
         # probabilities = np.delete(probabilities, invalid_y, axis=0)
 
         sorting_ix = np.argsort(probabilities[:, 1])[::-1][:10]
-        #
-        # top_boxes = all_boxes[probabilities[:,1] > 0.10]
-        # top_box_probabilities = probabilities[probabilities[:,1] > 0.10]
+
+        # top_boxes = all_boxes[probabilities[:,1] > 0.75]
+        # top_box_probabilities = probabilities[probabilities[:,1] > 0.75]
         # top_boxes = all_boxes[probabilities[:,1] > 0.10]
         # top_box_probabilities = probabilities[probabilities[:,1] > 0.10]
         top_boxes = all_boxes[sorting_ix]
@@ -708,7 +708,7 @@ weights_path = os.path.join(MODEL_DIR, 'colab_result_id#1',"mask_rcnn_grasping_p
 # weights_path = os.path.join(MODEL_DIR, 'train_#7',"mask_rcnn_grasping_points_0200.h5")
 print("Loading weights ", weights_path)
 model.load_weights(weights_path, by_name=True)
-dataset = validating_dataset
+dataset = testing_dataset
 image_ids = random.choices(dataset.image_ids, k=25)
 for image_id in image_ids:
     # validating_dataset.load_image(image_id, validating_dataset.image_info[image_id]['augmentation'])
