@@ -3441,7 +3441,8 @@ class MaskRCNN():
             os.makedirs(self.log_dir)
 
         # Callbacks
-        clr_triangular = CyclicLR(base_lr=0.0002, max_lr=0.02, step_size=2000., mode='triangular',
+        clr_triangular = CyclicLR(base_lr=self.config.LEARNING_RATE/15, max_lr=self.config.LEARNING_RATE*15,
+                                  step_size=self.config.STEPS_PER_EPOCH*2, mode='triangular2',
                  gamma=1., scale_fn=None, scale_mode='cycle')
         callbacks = [
             clr_triangular,
