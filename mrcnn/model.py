@@ -1815,7 +1815,7 @@ def generate_augmentations():
     return augmentations_list
 
 def load_image_gt(dataset, config, image_id, augment=False, augmentation=None, online_augment = False, pre_augment = False,
-                  use_mini_mask=False, mode=''):
+                  use_mini_mask=False, mode='', image_type='rgd'):
     """Load and return ground truth data for an image (image, mask, bounding boxes).
 
     augment: (deprecated. Use augmentation instead). If true, apply random
@@ -1847,7 +1847,7 @@ def load_image_gt(dataset, config, image_id, augment=False, augmentation=None, o
         augmentations = dataset.image_info[image_id]['augmentation']
     else:
         augmentations = []
-    image = dataset.load_image(image_id, augmentations)
+    image = dataset.load_image(image_id, augmentation=augmentations, image_type=image_type)
     original_shape = image.shape
     if mode == 'grasping_points':
         # bbox_vertices, bbox_5_dimensional, class_ids = dataset.load_bounding_boxes(image_id, dataset.image_info[image_id]['augmentation'])
@@ -3442,7 +3442,7 @@ class MaskRCNN():
 
         # Callbacks
         clr_triangular = CyclicLR(base_lr=self.config.LEARNING_RATE/15, max_lr=self.config.LEARNING_RATE*15,
-                                  step_size=self.config.STEPS_PER_EPOCH*2, mode='triangular2',
+                                  step_size=self.config.STEPS_PER_EPOCH*4, mode='triangular',
                  gamma=1., scale_fn=None, scale_mode='cycle')
         callbacks = [
             clr_triangular,
