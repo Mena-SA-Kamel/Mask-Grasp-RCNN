@@ -1430,7 +1430,9 @@ def rpn_combined_loss_graph_zhang_paper(config, target_bbox, target_class, rpn_b
     # Summing the top 3N negative elements in each row
     top_negative_losses_sum = K.variable(value=0)
     for i in range(config.BATCH_SIZE):  # batch size
-        top_loss_per_row = tf.nn.top_k(negative_class_losses[i], N[i]*3, sorted=True).values
+        num_negatives = K.minimum(N[i]*3, config.RPN_TRAIN_ANCHORS_PER_IMAGE - N[i])
+        num_negatives = tf.dtypes.cast(num_negatives, tf.int32)
+        top_loss_per_row = tf.nn.top_k(negative_class_losses[i], num_negatives, sorted=True).values
         top_negative_losses_sum = tf.add(top_negative_losses_sum, K.sum(top_loss_per_row))
 
     # Summing the positive elements
