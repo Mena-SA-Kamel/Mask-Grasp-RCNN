@@ -48,8 +48,8 @@ class GraspingPointsConfig(Config):
     # MEAN_PIXEL = np.array([112.7, 112.1, 113.5, 123.5]) # Added a 4th channel. Modify the mean of the pixel depth
     # MEAN_PIXEL = np.array([181.6, 180.0, 180.9, 224.3]) # Jacquard Dataset image mean, based on 1000 random images
     # MEAN_PIXEL = np.array([181.6, 180.0, 224.3]) # Jacquard Dataset image mean, based on 1000 random images
-    # MEAN_PIXEL = np.array([180.7, 218.6, 180.2]) # Jacquard Dataset image mean, based on 1000 random images
-    MEAN_PIXEL = np.array([198.4, 116.1, 185.0]) # Cornell, based on 1000 random images
+    MEAN_PIXEL = np.array([182.4, 234.1, 181.8]) # Jacquard Dataset image mean, based on 1000 random images
+    # MEAN_PIXEL = np.array([198.4, 116.1, 185.0]) # Cornell, based on 1000 random images
     MAX_GT_INSTANCES = 2000
     # RPN_GRASP_ANGLES = [-60, -30, 0, 30, 60]
     RPN_GRASP_ANGLES = [-67.5, -22.5, 22.5, 67.5]
@@ -595,12 +595,12 @@ class GraspingPointsDataset(Dataset):
 
         sorting_ix = np.argsort(probabilities[:, 1])[::-1][:10]
 
-        top_boxes = all_boxes[probabilities[:,1] > config.DETECTION_MIN_CONFIDENCE]
-        top_box_probabilities = probabilities[probabilities[:,1] > config.DETECTION_MIN_CONFIDENCE]
+        # top_boxes = all_boxes[probabilities[:,1] > config.DETECTION_MIN_CONFIDENCE]
+        # top_box_probabilities = probabilities[probabilities[:,1] > config.DETECTION_MIN_CONFIDENCE]
         # top_boxes = all_boxes[probabilities[:,1] > 0.10]
         # top_box_probabilities = probabilities[probabilities[:,1] > 0.10]
-        # top_boxes = all_boxes[sorting_ix]
-        # top_box_probabilities = probabilities[sorting_ix]
+        top_boxes = all_boxes[sorting_ix]
+        top_box_probabilities = probabilities[sorting_ix]
         top_boxes, top_box_probabilities, pre_nms_boxes, pre_nms_scores = self.orient_box_nms(top_boxes, top_box_probabilities)
 
         return top_boxes, pre_nms_boxes
@@ -651,20 +651,21 @@ mode = "grasping_points"
 
 training_dataset = GraspingPointsDataset()
 # training_dataset.construct_jacquard_dataset()
-training_dataset.load_dataset(augmentation=True)
-# training_dataset.load_dataset(dataset_dir='../../../Datasets/jacquard_dataset_resized', augmentation=True)
+# training_dataset.load_dataset(augmentation=True)
+training_dataset.load_dataset(dataset_dir='../../../Datasets/jacquard_dataset_resized_new', augmentation=True)
 training_dataset.prepare()
 # channel_means = np.array(training_dataset.get_channel_means())
+# import code; code.interact(local=dict(globals(), **locals()))
 # config.MEAN_PIXEL = np.around(channel_means, decimals = 1)
 
 validating_dataset = GraspingPointsDataset()
-# validating_dataset.load_dataset(dataset_dir='../../../Datasets/jacquard_dataset_resized', type='val_set', augmentation=True)
-validating_dataset.load_dataset(type='val_set', augmentation=True)
+validating_dataset.load_dataset(dataset_dir='../../../Datasets/jacquard_dataset_resized_new', type='val_set', augmentation=True)
+# validating_dataset.load_dataset(type='val_set', augmentation=True)
 validating_dataset.prepare()
 
 testing_dataset = GraspingPointsDataset()
-# testing_dataset.load_dataset(dataset_dir='../../../Datasets/jacquard_dataset_resized', type='test_set', augmentation=True)
-testing_dataset.load_dataset(type='test_set', augmentation=True)
+testing_dataset.load_dataset(dataset_dir='../../../Datasets/jacquard_dataset_resized_new', type='test_set', augmentation=True)
+# testing_dataset.load_dataset(type='test_set', augmentation=True)
 testing_dataset.prepare()
 
 # Create model in training mode
@@ -719,7 +720,7 @@ with tf.device(DEVICE):
                               config=inference_config, task="grasping_points")
 
 # Load weights
-weights_path = os.path.join(MODEL_DIR, 'colab_result_id#1',"mask_rcnn_grasping_points_0076.h5")
+weights_path = os.path.join(MODEL_DIR, 'colab_result_id#1',"train_#11c.h5")
 # weights_path = os.path.join(MODEL_DIR, 'train_#7',"mask_rcnn_grasping_points_0200.h5")
 print("Loading weights ", weights_path)
 model.load_weights(weights_path, by_name=True)
@@ -763,7 +764,6 @@ code.interact(local=dict(globals(), **locals()))
 # training_dataset.visualize_bbox(image_id, bounding_box[0], gt_class_id[i], gt_bbox[i], rgbd_image=image)
 
 # ######################################################################################################
-
 # with tf.device(DEVICE):
 #     model = modellib.MaskRCNN(mode="inference", model_dir=MODEL_DIR,
 #                               config=inference_config, task="grasping_points")
@@ -781,7 +781,7 @@ code.interact(local=dict(globals(), **locals()))
 #                                           mode,
 #                                           config.RPN_GRASP_ANGLES)
 #
-# image_ids = random.choices(validating_dataset.image_ids, k=10)
+# image_ids = random.choices(validating_dataset.image_ids, k=25)
 # for image_id in image_ids:
 #     image, image_meta, gt_class_id, gt_bbox, gt_mask =\
 #         modellib.load_image_gt(validating_dataset, config, image_id, pre_augment=True, use_mini_mask=False, mode='grasping_points')
@@ -799,17 +799,19 @@ code.interact(local=dict(globals(), **locals()))
 #     deltas = target_rpn_bbox[positive_anchors_mask] * model.config.RPN_BBOX_STD_DEV
 #     refined_anchors = utils.apply_box_deltas(positive_anchors, deltas, mode, len(config.RPN_GRASP_ANGLES))
 #
-#     fig, (ax1, ax2, ax3, ax4) = plt.subplots(1, 4)
+#     fig, (ax1, ax2, ax3, ax4, ax5) = plt.subplots(1, 5)
+#
 #     ax1.imshow(image)
 #     ax2.imshow(image)
 #     ax3.imshow(image)
 #     ax4.imshow(image)
+#     ax5.imshow(image)
 #
 #     for i, rect in enumerate(gt_bbox):
 #         rect = validating_dataset.bbox_convert_to_four_vertices([rect])
 #         p = patches.Polygon(rect[0], linewidth=1,edgecolor='g',facecolor='none')
-#         ax1.add_patch(p)
-#     ax1.set_title(validating_dataset.image_info[image_id]['path'])
+#         ax2.add_patch(p)
+#     ax2.set_title(validating_dataset.image_info[image_id]['path'])
 #
 #     print (len(positive_anchor_ix), len(negative_anchor_ix), len(neutral_anchor_ix))
 #
@@ -817,18 +819,17 @@ code.interact(local=dict(globals(), **locals()))
 #     for i, rect2 in enumerate(negative_anchors):
 #         rect2 = validating_dataset.bbox_convert_to_four_vertices([rect2])
 #         p = patches.Polygon(rect2[0], linewidth=1,edgecolor='r',facecolor='none')
-#         ax2.add_patch(p)
+#         ax3.add_patch(p)
 #
 #     for i, rect3 in enumerate(model.anchors[positive_anchor_ix]):
 #         rect3= validating_dataset.bbox_convert_to_four_vertices([rect3])
 #         q = patches.Polygon(rect3[0], linewidth=1, edgecolor='b', facecolor='none')
-#         ax3.add_patch(q)
+#         ax4.add_patch(q)
 #
 #     for i, rect4 in enumerate(refined_anchors):
 #         rect4 = validating_dataset.bbox_convert_to_four_vertices([rect4])
 #         r = patches.Polygon(rect4[0], linewidth=1, edgecolor='b', facecolor='none')
-#         ax4.add_patch(r)
-#     ax1.set_title(validating_dataset.image_info[image_id]['path'])
+#         ax5.add_patch(r)
 #     plt.show(block=False)
 #     # visualize.draw_boxes(image, boxes=positive_anchors, refined_boxes=refined_anchors, mode=mode)
 # import code;

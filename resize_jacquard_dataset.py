@@ -10,8 +10,8 @@ import matplotlib
 import imageio
 
 
-IMAGE_MIN_DIM = 320
-IMAGE_MAX_DIM = 320
+IMAGE_MIN_DIM = 640
+IMAGE_MAX_DIM = 640
 IMAGE_RESIZE_MODE = "square"
 IMAGE_MIN_SCALE = 0
 
@@ -118,7 +118,7 @@ def bbox_convert_to_five_dimension(bounding_box_vertices):
 
 
 dataset_path = 'D:/Datasets/jacquard_dataset'
-target_path = 'D:/Datasets/jacquard_dataset_resized'
+target_path = 'D:/Datasets/jacquard_dataset_resized_new'
 
 
 folder_names = ['train_set', 'val_set', 'test_set']
@@ -141,9 +141,9 @@ for dataset in os.listdir(dataset_path):
         depth_path = image.replace('rgb', 'depth')
         positive_grasp_points = image.replace('_RGB.png', '_grasps.txt').replace('rgb', 'grasp_rectangles')
 
-        target_rgb_path = rgb_path.replace('jacquard_dataset', 'jacquard_dataset_resized')
-        target_depth_path = depth_path.replace('jacquard_dataset', 'jacquard_dataset_resized')
-        target_positive_grasp_points = positive_grasp_points.replace('jacquard_dataset', 'jacquard_dataset_resized')
+        target_rgb_path = rgb_path.replace('jacquard_dataset', 'jacquard_dataset_resized_new')
+        target_depth_path = depth_path.replace('jacquard_dataset', 'jacquard_dataset_resized_new')
+        target_positive_grasp_points = positive_grasp_points.replace('jacquard_dataset', 'jacquard_dataset_resized_new')
 
         rgb_image = load_image(rgb_path)
         original_shape = rgb_image.shape
