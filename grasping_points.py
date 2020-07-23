@@ -519,7 +519,7 @@ class GraspingPointsDataset(Dataset):
         boxes[:, 1] = y
         return boxes
 
-    def orient_box_nms(self, boxes, scores):
+    def orient_box_nms(self, boxes, scores, config):
         scores = scores[:, 1]
         sorting_ix = np.argsort(scores)[::-1]
         filtered_boxes = boxes[sorting_ix]
@@ -601,7 +601,7 @@ class GraspingPointsDataset(Dataset):
         # top_box_probabilities = probabilities[probabilities[:,1] > 0.10]
         top_boxes = all_boxes[sorting_ix]
         top_box_probabilities = probabilities[sorting_ix]
-        top_boxes, top_box_probabilities, pre_nms_boxes, pre_nms_scores = self.orient_box_nms(top_boxes, top_box_probabilities)
+        top_boxes, top_box_probabilities, pre_nms_boxes, pre_nms_scores = self.orient_box_nms(top_boxes, top_box_probabilities, config)
 
         return top_boxes, pre_nms_boxes
 
@@ -634,84 +634,84 @@ class GraspingPointsDataset(Dataset):
         g = random.random()
         return (r, g, b)
 
-# SETUP ##
-import tensorflow as tf
-config = tf.ConfigProto()
-config.gpu_options.allow_growth = True
-sess = tf.Session(config=config)
-
-# Directory to save logs and trained model
-MODEL_DIR = "models"
-MASKRCNN_MODEL_PATH = os.path.join(MODEL_DIR, "mask_rcnn_coco.h5")
-config = GraspingPointsConfig()
-inference_config = InferenceConfig()
-DEVICE = "/gpu:0"
-TEST_MODE = "inference"
-mode = "grasping_points"
-
-training_dataset = GraspingPointsDataset()
-# training_dataset.construct_jacquard_dataset()
-# training_dataset.load_dataset(augmentation=True)
-training_dataset.load_dataset(dataset_dir='../../../Datasets/jacquard_dataset_resized_new', augmentation=True)
-training_dataset.prepare()
-# channel_means = np.array(training_dataset.get_channel_means())
-# import code; code.interact(local=dict(globals(), **locals()))
-# config.MEAN_PIXEL = np.around(channel_means, decimals = 1)
-
-validating_dataset = GraspingPointsDataset()
-validating_dataset.load_dataset(dataset_dir='../../../Datasets/jacquard_dataset_resized_new', type='val_set', augmentation=True)
-# validating_dataset.load_dataset(type='val_set', augmentation=True)
-validating_dataset.prepare()
-
-testing_dataset = GraspingPointsDataset()
-testing_dataset.load_dataset(dataset_dir='../../../Datasets/jacquard_dataset_resized_new', type='test_set', augmentation=True)
-# testing_dataset.load_dataset(type='test_set', augmentation=True)
-testing_dataset.prepare()
-
-# Create model in training mode
-with tf.device(DEVICE):
-    model = modellib.MaskRCNN(mode="training", model_dir=MODEL_DIR,
-                              config=config, task="grasping_points")
-tf.keras.utils.plot_model(
-        model.keras_model, to_file='model.png', show_shapes=True, show_layer_names=True
-    )
-
-# Load weights
-# weights_path = MASKRCNN_MODEL_PATH
-weights_path = os.path.join(MODEL_DIR, "mask_rcnn_coco.h5")
-# weights_path = os.path.join(MODEL_DIR, 'train_#5',"mask_rcnn_grasping_points_0188.h5")
-# model.load_weights(weights_path, by_name=True)
-# print("Loading weights ", weights_path)
-model.load_weights(weights_path, by_name=True,
-                       exclude=["conv1", "rpn_model", "rpn_class_logits",
-                                "rpn_class ", "rpn_bbox "])
-
-model.train(training_dataset, validating_dataset,
-               learning_rate=config.LEARNING_RATE,
-               epochs=500,
-               layers="all",
-               task=mode)
-
+# # SETUP ##
+# import tensorflow as tf
+# config = tf.ConfigProto()
+# config.gpu_options.allow_growth = True
+# sess = tf.Session(config=config)
+#
+# # Directory to save logs and trained model
+# MODEL_DIR = "models"
+# MASKRCNN_MODEL_PATH = os.path.join(MODEL_DIR, "mask_rcnn_coco.h5")
+# config = GraspingPointsConfig()
+# inference_config = InferenceConfig()
+# DEVICE = "/gpu:0"
+# TEST_MODE = "inference"
+# mode = "grasping_points"
+#
+# training_dataset = GraspingPointsDataset()
+# # training_dataset.construct_jacquard_dataset()
+# # training_dataset.load_dataset(augmentation=True)
+# training_dataset.load_dataset(dataset_dir='../../../Datasets/jacquard_dataset_resized_new', augmentation=True)
+# training_dataset.prepare()
+# # channel_means = np.array(training_dataset.get_channel_means())
+# # import code; code.interact(local=dict(globals(), **locals()))
+# # config.MEAN_PIXEL = np.around(channel_means, decimals = 1)
+#
+# validating_dataset = GraspingPointsDataset()
+# validating_dataset.load_dataset(dataset_dir='../../../Datasets/jacquard_dataset_resized_new', type='val_set', augmentation=True)
+# # validating_dataset.load_dataset(type='val_set', augmentation=True)
+# validating_dataset.prepare()
+#
+# testing_dataset = GraspingPointsDataset()
+# testing_dataset.load_dataset(dataset_dir='../../../Datasets/jacquard_dataset_resized_new', type='test_set', augmentation=True)
+# # testing_dataset.load_dataset(type='test_set', augmentation=True)
+# testing_dataset.prepare()
+#
+# # Create model in training mode
+# with tf.device(DEVICE):
+#     model = modellib.MaskRCNN(mode="training", model_dir=MODEL_DIR,
+#                               config=config, task="grasping_points")
+# tf.keras.utils.plot_model(
+#         model.keras_model, to_file='model.png', show_shapes=True, show_layer_names=True
+#     )
+#
+# # Load weights
+# # weights_path = MASKRCNN_MODEL_PATH
+# weights_path = os.path.join(MODEL_DIR, "mask_rcnn_coco.h5")
+# # weights_path = os.path.join(MODEL_DIR, 'train_#5',"mask_rcnn_grasping_points_0188.h5")
+# # model.load_weights(weights_path, by_name=True)
+# # print("Loading weights ", weights_path)
+# model.load_weights(weights_path, by_name=True,
+#                        exclude=["conv1", "rpn_model", "rpn_class_logits",
+#                                 "rpn_class ", "rpn_bbox "])
+#
 # model.train(training_dataset, validating_dataset,
-#                learning_rate=config.LEARNING_RATE/10,
-#                epochs=50,
+#                learning_rate=config.LEARNING_RATE,
+#                epochs=500,
 #                layers="all",
 #                task=mode)
-
-# model.train(training_dataset, validating_dataset,
-#                learning_rate=config.LEARNING_RATE/5,
-#                epochs=200,
-#                layers="all",
-#                task=mode)
-
-# model.train(training_dataset, validating_dataset,
-#                learning_rate=config.LEARNING_RATE/50,
-#                epochs=300,
-#                layers="all",
-#                task=mode)
-
-model_path = os.path.join(MODEL_DIR, "train_id#32.h5")
-model.keras_model.save_weights(model_path)
+#
+# # model.train(training_dataset, validating_dataset,
+# #                learning_rate=config.LEARNING_RATE/10,
+# #                epochs=50,
+# #                layers="all",
+# #                task=mode)
+#
+# # model.train(training_dataset, validating_dataset,
+# #                learning_rate=config.LEARNING_RATE/5,
+# #                epochs=200,
+# #                layers="all",
+# #                task=mode)
+#
+# # model.train(training_dataset, validating_dataset,
+# #                learning_rate=config.LEARNING_RATE/50,
+# #                epochs=300,
+# #                layers="all",
+# #                task=mode)
+#
+# model_path = os.path.join(MODEL_DIR, "train_id#32.h5")
+# model.keras_model.save_weights(model_path)
 
 # ######################################################################################################
 # # Create model in inference mode
