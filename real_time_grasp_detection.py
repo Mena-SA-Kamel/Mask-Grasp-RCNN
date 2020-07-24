@@ -8,7 +8,7 @@ from mrcnn import visualize
 import matplotlib.pyplot as plt
 import os
 import mrcnn.model as modellib
-from grasping_points import InferenceConfig, GraspingPointsDataset
+from grasping_points import GraspingInferenceConfig, GraspingPointsDataset
 import datetime
 import matplotlib.patches as patches
 
@@ -46,7 +46,7 @@ align = rs.align(align_to)
 colorizer = rs.colorizer()
 frame_count = 0
 
-inference_config = InferenceConfig()
+inference_config = GraspingInferenceConfig()
 MODEL_DIR = "models"
 model_path = os.path.join(MODEL_DIR, 'colab_result_id#1',"train_#11c.h5")
 model = modellib.MaskRCNN(mode="inference", model_dir=MODEL_DIR,

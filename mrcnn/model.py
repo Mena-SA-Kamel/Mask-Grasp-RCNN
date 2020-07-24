@@ -35,6 +35,7 @@ from distutils.version import LooseVersion
 assert LooseVersion(tf.__version__) >= LooseVersion("1.3")
 assert LooseVersion(keras.__version__) >= LooseVersion('2.0.8')
 
+import matplotlib.pyplot as plt
 
 ############################################################
 #  Utility Functions
@@ -1849,9 +1850,9 @@ def load_image_gt(dataset, config, image_id, augment=False, augmentation=None, o
         augmentations = dataset.image_info[image_id]['augmentation']
     else:
         augmentations = []
-    image = dataset.load_image(image_id, augmentation=augmentations, image_type=image_type)
-    original_shape = image.shape
     if mode == 'grasping_points':
+        image = dataset.load_image(image_id, augmentation=augmentations, image_type=image_type)
+        original_shape = image.shape
         # bbox_vertices, bbox_5_dimensional, class_ids = dataset.load_bounding_boxes(image_id, dataset.image_info[image_id]['augmentation'])
         bbox_vertices, bbox_5_dimensional, class_ids = dataset.load_bounding_boxes(image_id, augmentations)
         mask = []
@@ -1866,6 +1867,8 @@ def load_image_gt(dataset, config, image_id, augment=False, augmentation=None, o
         bbox_cropped = utils.crop_bbox(window, bbox_vertices, original_shape, target_shape)
 
     else:
+        image = dataset.load_image(image_id)
+        original_shape = image.shape
         mask, class_ids = dataset.load_mask(image_id)
         image, window, scale, padding, crop = utils.resize_image(
             image,
@@ -3502,6 +3505,7 @@ class MaskRCNN():
         molded_images = []
         image_metas = []
         windows = []
+
         for image in images:
             # Resize image
             # TODO: move resizing to mold_image()
@@ -3645,7 +3649,6 @@ class MaskRCNN():
 
         # Mold inputs to format expected by the neural network
         molded_images, image_metas, windows = self.mold_inputs(images)
-
         # Validate image sizes
         # All images in a batch MUST be of the same size
         image_shape = molded_images[0].shape

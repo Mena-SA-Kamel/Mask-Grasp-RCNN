@@ -977,12 +977,17 @@ def generate_pyramid_anchors(scales, ratios, feature_shapes, feature_strides,
     # [anchor_count, (y1, x1, y2, x2)]
     anchors = []
     for i in range(len(scales)):
-        # Using only anchors for feature level #4
-        if i == 2:
+        if mode == 'grasping_points':
+            # Using only anchors for feature level #4
+            if i == 2:
+                anchors.append(generate_anchors(scales[i], ratios, feature_shapes[i],
+                                                feature_strides[i], anchor_stride, mode, angles))
+            else:
+                continue
+        else:
             anchors.append(generate_anchors(scales[i], ratios, feature_shapes[i],
                                             feature_strides[i], anchor_stride, mode, angles))
-        else:
-            continue
+
     anchors = np.concatenate(anchors, axis=0)
 
     # anchors_filtered = anchors[valid_anchors_mask]

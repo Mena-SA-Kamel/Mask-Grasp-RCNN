@@ -66,7 +66,7 @@ class GraspingPointsConfig(Config):
     DETECTION_MIN_CONFIDENCE = 0.75
     # NUM_AUGMENTATIONS = 5
 
-class InferenceConfig(GraspingPointsConfig):
+class GraspingInferenceConfig(GraspingPointsConfig):
     GPU_COUNT = 1
     IMAGES_PER_GPU = 1
 
@@ -644,7 +644,7 @@ class GraspingPointsDataset(Dataset):
 # MODEL_DIR = "models"
 # MASKRCNN_MODEL_PATH = os.path.join(MODEL_DIR, "mask_rcnn_coco.h5")
 # config = GraspingPointsConfig()
-# inference_config = InferenceConfig()
+# inference_config = GraspingInferenceConfig()
 # DEVICE = "/gpu:0"
 # TEST_MODE = "inference"
 # mode = "grasping_points"
@@ -667,7 +667,7 @@ class GraspingPointsDataset(Dataset):
 # testing_dataset.load_dataset(dataset_dir='../../../Datasets/jacquard_dataset_resized_new', type='test_set', augmentation=True)
 # # testing_dataset.load_dataset(type='test_set', augmentation=True)
 # testing_dataset.prepare()
-#
+
 # # Create model in training mode
 # with tf.device(DEVICE):
 #     model = modellib.MaskRCNN(mode="training", model_dir=MODEL_DIR,

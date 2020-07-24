@@ -14,8 +14,11 @@ import glob
 from shutil import copyfile
 import matplotlib.image as mpimg
 import matplotlib.pyplot as plt
+import matplotlib.patches as patches
 import skimage.io
 from PIL import Image
+
+from grasping_points import GraspingInferenceConfig, GraspingPointsDataset
 
 # Extending the mrcnn.config class to update the default variables
 class ObjectVsBackgroundConfig(Config):
@@ -35,7 +38,8 @@ class ObjectVsBackgroundConfig(Config):
     VALIDATION_STEPS = 20
     IMAGE_CHANNEL_COUNT = 4 # For RGB-D images of 4 channels
     # MEAN_PIXEL = np.array([134.6, 125.7, 119.0, 147.6]) # Added a 4th channel. Modify the mean of the pixel depth
-    MEAN_PIXEL = np.array([112.7, 112.1, 113.5, 123.5]) # Added a 4th channel. Modify the mean of the pixel depth
+    # MEAN_PIXEL = np.array([112.7, 112.1, 113.5, 123.5]) # Added a 4th channel. Modify the mean of the pixel depth
+    MEAN_PIXEL = np.array([122.6, 113.4 , 118.2, 135.8]) # SAMS dataset
     MAX_GT_INSTANCES = 50
 
 class InferenceConfig(ObjectVsBackgroundConfig):
@@ -358,40 +362,42 @@ class ObjectVsBackgroundDataset(Dataset):
     def get_mask_overlay(self, image, masks, scores, threshold=0.90):
         num_masks = masks.shape[-1]
         colors = visualize.random_colors(num_masks)
+        masked_image = np.copy(image)
         for i in list(range(num_masks)):
             if (scores[i] < threshold):
                 continue
             mask = masks[:, :, i]
-            image = visualize.apply_mask(image, mask, colors[i])
-        image = np.array(image, dtype='uint8')
-        return image
+            masked_image = visualize.apply_mask(masked_image, mask, colors[i])
+        masked_image = np.array(image, dtype='uint8')
+        return masked_image
 
 # SETUP ##
 
-# import tensorflow as tf
-# config = tf.ConfigProto()
-# config.gpu_options.allow_growth = True
-# sess = tf.Session(config=config)
-#
-# training_dataset = ObjectVsBackgroundDataset()
-# # training_dataset.construct_dataset(dataset_dir = '../../../Datasets/SAMS-Dataset')
-# training_dataset.load_dataset('train_set', dataset_dir='ocid_dataset')
-# training_dataset.prepare()
-#
-# validating_dataset = ObjectVsBackgroundDataset()
-# validating_dataset.load_dataset('val_set', dataset_dir='ocid_dataset')
-# validating_dataset.prepare()
-#
-# testing_dataset = ObjectVsBackgroundDataset()
-# testing_dataset.load_dataset('test_set', dataset_dir='ocid_dataset')
-# testing_dataset.prepare()
-#
-# config = ObjectVsBackgroundConfig()
+import tensorflow as tf
+config = tf.ConfigProto()
+config.gpu_options.allow_growth = True
+sess = tf.Session(config=config)
+
+training_dataset = ObjectVsBackgroundDataset()
+# training_dataset.construct_dataset(dataset_dir = '../../../Datasets/SAMS-Dataset')
+training_dataset.load_dataset('train_set', dataset_dir='sams_dataset')
+training_dataset.prepare()
+
+validating_dataset = ObjectVsBackgroundDataset()
+validating_dataset.load_dataset('val_set', dataset_dir='sams_dataset')
+validating_dataset.prepare()
+
+testing_dataset = ObjectVsBackgroundDataset()
+testing_dataset.load_dataset('test_set', dataset_dir='sams_dataset')
+testing_dataset.prepare()
+
+config = ObjectVsBackgroundConfig()
 # channel_means = np.array(training_dataset.get_channel_means())
 # config.MEAN_PIXEL = np.around(channel_means, decimals = 1)
 # config.display()
-# inference_config = InferenceConfig()
-#
+inference_config = InferenceConfig()
+grasping_inference_config = GraspingInferenceConfig()
+
 #
 # # # ##### TRAINING #####
 # #
@@ -421,26 +427,79 @@ class ObjectVsBackgroundDataset(Dataset):
 # model.keras_model.save_weights(model_path)
 
 # # # # ##### TESTING #####
-#
-# MODEL_DIR = "models"
-# model_path = os.path.join(MODEL_DIR, "mask_rcnn_object_vs_background_0020.h5")
-# model = modellib.MaskRCNN(mode="inference",
-#                            config=inference_config,
-#                            model_dir=MODEL_DIR)
-# model.load_weights(model_path, by_name=True)
-# image_ids = random.choices(testing_dataset.image_ids, k=15)
-# for image_id in image_ids:
-#      original_image, image_meta, gt_class_id, gt_bbox, gt_mask =\
-#          modellib.load_image_gt(testing_dataset, inference_config,
-#                                 image_id, use_mini_mask=False)
-#       visualize.display_instances(original_image, gt_bbox, gt_mask, gt_class_id,
-#                             validating_dataset.class_names, figsize=(8, 8))
 
-     # print(testing_dataset.image_info[image_id]['label_path'])
-     # results = model.detect([original_image], verbose=1)
-     # r = results[0]
-     # # image = testing_dataset.get_mask_overlay(original_image[:,:,0:3], r['masks'], r['scores'], 0.96)
-     # # # plt.imshow(image)
-     # # # plt.show()
+MODEL_DIR = "models"
+model_path = 'models/Good_models/Training_SAMS_dataset_LR-div-5-div-10-HYBRID-weights/mask_rcnn_object_vs_background_0051.h5'
+model = modellib.MaskRCNN(mode="inference",
+                           config=inference_config,
+                           model_dir=MODEL_DIR)
+model.load_weights(model_path, by_name=True)
+
+grasping_model_path = os.path.join(MODEL_DIR, 'colab_result_id#1',"train_#11c.h5")
+grasping_model = modellib.MaskRCNN(mode="inference", model_dir=MODEL_DIR,
+                              config=grasping_inference_config, task="grasping_points")
+grasping_model.load_weights(grasping_model_path, by_name=True)
+grasping_dataset_object = GraspingPointsDataset()
+
+dataset = testing_dataset
+image_ids = random.choices(dataset.image_ids, k=15)
+for image_id in image_ids:
+     original_image, image_meta, gt_class_id, gt_bbox, gt_mask =\
+         modellib.load_image_gt(dataset, inference_config,
+                                image_id, use_mini_mask=False)
+     # visualize.display_instances(original_image, gt_bbox, gt_mask, gt_class_id,
+     #                        dataset.class_names, figsize=(8, 8))
+
+     print(dataset.image_info[image_id]['label_path'])
+     results = model.detect([original_image], verbose=1)
+     r = results[0]
+     image = testing_dataset.get_mask_overlay(original_image[:,:,0:3], r['masks'], r['scores'], 0.96)
+
+     bounding_boxes = r['rois']
+
+     regions_to_analyze = []
+     for box in bounding_boxes:
+         y1, x1, y2, x2 = box
+         center_x = (x1 + x2) // 2
+         center_y = (y1 + y2) // 2
+         width = abs(x2 - x1) * 1.3
+         height = abs(y2 - y1) * 1.3
+
+         x1 = int(center_x - (width//2))
+         y1 = int(center_y - (height//2))
+         x2 = int(center_x + (width//2))
+         y2 = int(center_y + (height//2))
+         # p = patches.Rectangle((x1, y1), width, height, linewidth=2,
+         #                       alpha=0.7, linestyle="dashed",
+         #                       edgecolor='b', facecolor='none')
+         # ax.add_patch(p)
+         # regions_to_analyze.append([y1, x1, y2, x2])
+         image_crop = original_image[y1:y2, x1:x2, :]
+
+         input_image = np.zeros([image_crop.shape[0], image_crop.shape[1], 3])
+         input_image[:, :, 0:2] = image_crop[:,:,0:2]
+         input_image[:, :, 2] = image_crop[:,:,3]
+         input_image = input_image.astype('uint8')
+         #
+         # ax.imshow(input_image)
+         # plt.show(block=False)
+         #
+
+         grasping_results = grasping_model.detect([input_image], verbose=1, task='grasping_points')
+         r = grasping_results[0]
+         post_nms_predictions, pre_nms_predictions = grasping_dataset_object.refine_results(r, grasping_model.anchors, grasping_model.config)
+
+         fig, ax = plt.subplots()
+         ax.imshow(input_image)
+         for i, rect2 in enumerate(pre_nms_predictions):
+             rect2 = grasping_dataset_object.bbox_convert_to_four_vertices([rect2])
+             p2 = patches.Polygon(rect2[0], linewidth=2, edgecolor=grasping_dataset_object.generate_random_color(),
+                                  facecolor='none')
+             ax.add_patch(p2)
+             ax.set_title('Boxes post non-maximum supression')
+         plt.show()
+
+
+     # plt.show()
      # visualize.display_instances(original_image, r['rois'], r['masks'], r['class_ids'],
-     #                            testing_dataset.class_names, r['scores'],show_bbox=True, thresh = 0.95)
+     #                            dataset.class_names, r['scores'],show_bbox=True, thresh = 0.95)
