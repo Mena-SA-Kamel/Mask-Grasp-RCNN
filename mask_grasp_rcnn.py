@@ -21,8 +21,8 @@ from PIL import Image
 from grasping_points import GraspingInferenceConfig, GraspingPointsDataset
 
 # Extending the mrcnn.config class to update the default variables
-class ObjectVsBackgroundConfig(Config):
-    NAME = 'object_vs_background'
+class GraspMaskRCNNConfig(Config):
+    NAME = 'grasp_and_mask'
     BACKBONE = "resnet50"
     GPU_COUNT = 1
     IMAGES_PER_GPU = 1
@@ -42,28 +42,33 @@ class ObjectVsBackgroundConfig(Config):
     MEAN_PIXEL = np.array([122.6, 113.4 , 118.2, 135.8]) # SAMS dataset
     MAX_GT_INSTANCES = 50
 
-class InferenceConfig(ObjectVsBackgroundConfig):
+class GraspMaskRCNNInferenceConfig(GraspMaskRCNNConfig):
     GPU_COUNT = 1
     IMAGES_PER_GPU = 1
 
-class ObjectVsBackgroundDataset(Dataset):
+class GraspMaskRCNNDataset(Dataset):
 
-    def load_dataset(self, type = 'train_set', dataset_dir = 'New Graspable Objects Dataset'):
-        self.add_class(ObjectVsBackgroundConfig().NAME, 1, "object")
+    def load_dataset(self, type = 'train_set', dataset_dir = 'New Graspable Objects Dataset', augmentation=False):
+        self.add_class(GraspMaskRCNNConfig().NAME, 1, "object")
         dataset_path = os.path.join(dataset_dir, type)
-        image_list = glob.glob(dataset_path + '/**/label/*.png', recursive=True)
+        image_list = glob.glob(dataset_path + '/**/rgb/*.png', recursive=True)
         random.shuffle(image_list)
         id = 0
         for image in image_list:
-            rgb_path = image.replace('label', 'rgb').replace('table_', '').replace('floor_', '')
-            depth_path = image.replace('label', 'depth').replace('table_', '').replace('floor_', '')
-            label_path = image
-
-            # if 'ocid_dataset' in dataset_dir:
-            #     rgb_path = rgb_path.replace('table_', '').replace('floor_', '')
-            #     depth_path = depth_path.replace('table_', '').replace('floor_', '')
-            self.add_image("object_vs_background", image_id = id, path = rgb_path,
-                           label_path = label_path, depth_path = depth_path)
+            if 'jacquard_dataset' in dataset_dir:
+                rgb_path = image
+                depth_path = image.replace('rgb', 'depth')
+                positive_grasp_points = image.replace('_RGB.png', '_grasps.txt').replace('rgb', 'grasp_rectangles')
+                label_path = image.replace('_RGB.png', '_mask.png').replace('rgb', 'mask')
+                self.add_image("grasp_and_mask", image_id=id, path=rgb_path,
+                                depth_path=depth_path, label_path=label_path, positive_points=positive_grasp_points, augmentation = [])
+                ## To do: Enable augmentation
+            else:
+                rgb_path = image
+                depth_path = image.replace('rgb', 'depth').replace('table_', '').replace('floor_', '')
+                label_path = image.replace('rgb', 'label').replace('table_', '').replace('floor_', '')
+                self.add_image("grasp_and_mask", image_id = id, path = rgb_path,
+                               label_path = label_path, depth_path = depth_path)
             id = id + 1
 
     def load_mask(self, image_id):
@@ -73,15 +78,35 @@ class ObjectVsBackgroundDataset(Dataset):
         mask, class_ids = self.reshape_label_image(mask_processed)
         return mask, np.array(class_ids)
 
-    def load_image(self, image_id):
-        image = skimage.io.imread(self.image_info[image_id]['path'])
-        depth = skimage.io.imread(self.image_info[image_id]['depth_path'])
-        if depth.dtype.type == np.uint16:
-            depth = self.rescale_depth_image(depth)
-        rgbd_image = np.zeros([image.shape[0], image.shape[1], 4])
-        rgbd_image[:, :, 0:3] = image
-        rgbd_image[:, :, 3] = depth
+    def load_image(self, image_id, augmentation=[], image_type='rgd'):
+        image_path = self.image_info[image_id]['path']
+        image = skimage.io.imread(image_path)
+        try:
+            depth = skimage.io.imread(self.image_info[image_id]['depth_path'])
+        except:
+            print("ERROR : SyntaxError: not an FLI/FLC file")
+            import code;
+            code.interact(local=dict(globals(), **locals()))
+
+        depth = np.interp(depth, (depth.min(), depth.max()), (0, 1)) * 255
+        # if depth.dtype.type == np.uint16:
+        #     depth = self.rescale_depth_image(depth)
+        # rgbd_image = np.zeros([image.shape[0], image.shape[1], 4])
+        # RG_D image based on literature
+        if image_type == 'rgd':
+            rgbd_image = np.zeros([image.shape[0], image.shape[1], 3])
+            rgbd_image[:, :, 0:2] = image[:, :, 0:2]
+            rgbd_image[:, :, 2] = depth
+        elif image_type == 'rgb':
+            rgbd_image = np.zeros([image.shape[0], image.shape[1], 3])
+            rgbd_image[:, :, 0:3] = image[:, :, 0:3]
+        elif image_type == 'rgbd':
+            rgbd_image = np.zeros([image.shape[0], image.shape[1], 4])
+            rgbd_image[:, :, 0:3] = image[:, :, 0:3]
+            rgbd_image[:, :, 3] = depth
         rgbd_image = np.array(rgbd_image).astype('uint8')
+        if len(augmentation) != 0:
+            rgbd_image = self.apply_augmentation_to_image(rgbd_image, augmentation)
         return rgbd_image
 
     def rescale_depth_image(self, depth_image):
@@ -350,15 +375,6 @@ class ObjectVsBackgroundDataset(Dataset):
         depth_channel_mean = depth_sum / len(self.image_ids)
         return red_channel_mean, green_channel_mean, blue_channel_mean, depth_channel_mean
 
-    # def get_mask_overlay(self, image, masks):
-    #     num_masks = masks.shape[-1]
-    #     colors = visualize.random_colors(num_masks)
-    #     for i in list(range(num_masks)):
-    #         mask = masks[:, :, i]
-    #         image = visualize.apply_mask(image, mask, colors[i])
-    #     image = image.astype('uint8')
-    #     return image
-
     def get_mask_overlay(self, image, masks, scores, threshold=0.90):
         num_masks = masks.shape[-1]
         colors = visualize.random_colors(num_masks)
@@ -368,39 +384,39 @@ class ObjectVsBackgroundDataset(Dataset):
                 continue
             mask = masks[:, :, i]
             masked_image = visualize.apply_mask(masked_image, mask, colors[i])
-        masked_image = np.array(image, dtype='uint8')
+        masked_image = np.array(masked_image, dtype='uint8')
         return masked_image
 
 # SETUP ##
-#
-# import tensorflow as tf
-# config = tf.ConfigProto()
-# config.gpu_options.allow_growth = True
-# sess = tf.Session(config=config)
-#
-# training_dataset = ObjectVsBackgroundDataset()
-# # training_dataset.construct_dataset(dataset_dir = '../../../Datasets/SAMS-Dataset')
-# training_dataset.load_dataset('train_set', dataset_dir='sams_dataset')
-# training_dataset.prepare()
-#
-# validating_dataset = ObjectVsBackgroundDataset()
-# validating_dataset.load_dataset('val_set', dataset_dir='sams_dataset')
-# validating_dataset.prepare()
-#
-# testing_dataset = ObjectVsBackgroundDataset()
-# testing_dataset.load_dataset('test_set', dataset_dir='sams_dataset')
-# testing_dataset.prepare()
-#
-# config = ObjectVsBackgroundConfig()
-# # channel_means = np.array(training_dataset.get_channel_means())
-# # config.MEAN_PIXEL = np.around(channel_means, decimals = 1)
-# # config.display()
-# inference_config = InferenceConfig()
-# grasping_inference_config = GraspingInferenceConfig()
 
-#
-# # # ##### TRAINING #####
-# #
+import tensorflow as tf
+config = tf.ConfigProto()
+config.gpu_options.allow_growth = True
+sess = tf.Session(config=config)
+
+training_dataset = GraspMaskRCNNDataset()
+# training_dataset.construct_dataset(dataset_dir = '../../../Datasets/SAMS-Dataset')
+training_dataset.load_dataset(dataset_dir='../../../Datasets/jacquard_dataset_resized_new')
+training_dataset.prepare()
+
+validating_dataset = GraspMaskRCNNDataset()
+validating_dataset.load_dataset(dataset_dir='../../../Datasets/jacquard_dataset_resized_new', type='val_set')
+validating_dataset.prepare()
+
+testing_dataset = GraspMaskRCNNDataset()
+testing_dataset.load_dataset(dataset_dir='../../../Datasets/jacquard_dataset_resized_new', type='test_set')
+testing_dataset.prepare()
+
+config = GraspMaskRCNNConfig()
+# channel_means = np.array(training_dataset.get_channel_means())
+# config.MEAN_PIXEL = np.around(channel_means, decimals = 1)
+# config.display()
+inference_config = GraspMaskRCNNInferenceConfig()
+grasping_inference_config = GraspingInferenceConfig()
+
+
+##### TRAINING #####
+
 # MODEL_DIR = "models"
 # # COCO_MODEL_PATH = os.path.join("models", "mask_rcnn_object_vs_background_100_heads_50_all.h5")
 # COCO_MODEL_PATH = os.path.join("models", "mask_rcnn_object_vs_background_HYBRID-50_head_50_all.h5")
@@ -426,80 +442,77 @@ class ObjectVsBackgroundDataset(Dataset):
 # model_path = os.path.join(MODEL_DIR, "mask_rcnn_object_vs_background_HYBRID-Weights_SAMS-50_head_50_all.h5")
 # model.keras_model.save_weights(model_path)
 
-# # # # ##### TESTING #####
-#
-# MODEL_DIR = "models"
-# model_path = 'models/Good_models/Training_SAMS_dataset_LR-div-5-div-10-HYBRID-weights/mask_rcnn_object_vs_background_0051.h5'
-# model = modellib.MaskRCNN(mode="inference",
-#                            config=inference_config,
-#                            model_dir=MODEL_DIR)
-# model.load_weights(model_path, by_name=True)
-#
-# grasping_model_path = os.path.join(MODEL_DIR, 'colab_result_id#1',"train_#12.h5")
-# grasping_model = modellib.MaskRCNN(mode="inference", model_dir=MODEL_DIR,
-#                               config=grasping_inference_config, task="grasping_points")
-# grasping_model.load_weights(grasping_model_path, by_name=True)
-# grasping_dataset_object = GraspingPointsDataset()
-#
-# dataset = testing_dataset
-# image_ids = random.choices(dataset.image_ids, k=15)
-# for image_id in image_ids:
-#      original_image, image_meta, gt_class_id, gt_bbox, gt_mask =\
-#          modellib.load_image_gt(dataset, inference_config,
-#                                 image_id, use_mini_mask=False)
-#      # visualize.display_instances(original_image, gt_bbox, gt_mask, gt_class_id,
-#      #                        dataset.class_names, figsize=(8, 8))
-#
-#      print(dataset.image_info[image_id]['label_path'])
-#      results = model.detect([original_image], verbose=1)
-#      r = results[0]
-#      image = testing_dataset.get_mask_overlay(original_image[:,:,0:3], r['masks'], r['scores'], 0.96)
-#
-#      bounding_boxes = r['rois']
-#
-#      regions_to_analyze = []
-#      for box in bounding_boxes:
-#          y1, x1, y2, x2 = box
-#          center_x = (x1 + x2) // 2
-#          center_y = (y1 + y2) // 2
-#          width = abs(x2 - x1) * 1.3
-#          height = abs(y2 - y1) * 1.3
-#
-#          x1 = int(center_x - (width//2))
-#          y1 = int(center_y - (height//2))
-#          x2 = int(center_x + (width//2))
-#          y2 = int(center_y + (height//2))
-#          # p = patches.Rectangle((x1, y1), width, height, linewidth=2,
-#          #                       alpha=0.7, linestyle="dashed",
-#          #                       edgecolor='b', facecolor='none')
-#          # ax.add_patch(p)
-#          # regions_to_analyze.append([y1, x1, y2, x2])
-#          image_crop = original_image[y1:y2, x1:x2, :]
-#
-#          input_image = np.zeros([image_crop.shape[0], image_crop.shape[1], 3])
-#          input_image[:, :, 0:2] = image_crop[:,:,0:2]
-#          input_image[:, :, 2] = image_crop[:,:,3]
-#          input_image = input_image.astype('uint8')
-#          #
-#          # ax.imshow(input_image)
-#          # plt.show(block=False)
-#          #
-#
-#          grasping_results = grasping_model.detect([input_image], verbose=1, task='grasping_points')
-#          r = grasping_results[0]
-#          post_nms_predictions, pre_nms_predictions = grasping_dataset_object.refine_results(r, grasping_model.anchors, grasping_model.config)
-#
-#          fig, ax = plt.subplots()
-#          ax.imshow(input_image)
-#          for i, rect2 in enumerate(pre_nms_predictions):
-#              rect2 = grasping_dataset_object.bbox_convert_to_four_vertices([rect2])
-#              p2 = patches.Polygon(rect2[0], linewidth=2, edgecolor=grasping_dataset_object.generate_random_color(),
-#                                   facecolor='none')
-#              ax.add_patch(p2)
-#              ax.set_title('Boxes post non-maximum supression')
-#          plt.show()
+##### TESTING #####
 
+MODEL_DIR = "models"
 
-     # plt.show()
-     # visualize.display_instances(original_image, r['rois'], r['masks'], r['class_ids'],
-     #                            dataset.class_names, r['scores'],show_bbox=True, thresh = 0.95)
+mrcnn_model_path = 'models/Good_models/Training_SAMS_dataset_LR-div-5-div-10-HYBRID-weights/mask_rcnn_object_vs_background_0051.h5'
+mrcnn_model = modellib.MaskRCNN(mode="inference",
+                           config=inference_config,
+                           model_dir=MODEL_DIR)
+mrcnn_model.load_weights(mrcnn_model_path, by_name=True)
+
+grasping_model_path = os.path.join(MODEL_DIR, 'colab_result_id#1',"train_#12.h5")
+grasping_model = modellib.MaskRCNN(mode="inference", model_dir=MODEL_DIR,
+                              config=grasping_inference_config, task="grasping_points")
+grasping_model.load_weights(grasping_model_path, by_name=True)
+grasping_dataset_object = GraspingPointsDataset()
+
+dataset = testing_dataset
+image_ids = random.choices(dataset.image_ids, k=15)
+
+for image_id in image_ids:
+     original_image, image_meta, gt_class_id, gt_bbox, gt_mask =\
+         modellib.load_image_gt(dataset, inference_config,
+                                image_id, use_mini_mask=False, image_type='rgbd')
+     print(dataset.image_info[image_id]['label_path'])
+     results = mrcnn_model.detect([original_image], verbose=1)
+     r = results[0]
+
+     image = testing_dataset.get_mask_overlay(original_image[:,:,0:3], r['masks'], r['scores'], 0.96)
+     plt.imshow(image)
+     plt.show()
+
+     # bounding_boxes = r['rois']
+     #
+     # regions_to_analyze = []
+     # for box in bounding_boxes:
+     #     y1, x1, y2, x2 = box
+     #     center_x = (x1 + x2) // 2
+     #     center_y = (y1 + y2) // 2
+     #     width = abs(x2 - x1) * 1.3
+     #     height = abs(y2 - y1) * 1.3
+     #
+     #     x1 = int(center_x - (width//2))
+     #     y1 = int(center_y - (height//2))
+     #     x2 = int(center_x + (width//2))
+     #     y2 = int(center_y + (height//2))
+     #     # p = patches.Rectangle((x1, y1), width, height, linewidth=2,
+     #     #                       alpha=0.7, linestyle="dashed",
+     #     #                       edgecolor='b', facecolor='none')
+     #     # ax.add_patch(p)
+     #     # regions_to_analyze.append([y1, x1, y2, x2])
+     #     image_crop = original_image[y1:y2, x1:x2, :]
+     #
+     #     input_image = np.zeros([image_crop.shape[0], image_crop.shape[1], 3])
+     #     input_image[:, :, 0:2] = image_crop[:,:,0:2]
+     #     input_image[:, :, 2] = image_crop[:,:,3]
+     #     input_image = input_image.astype('uint8')
+     #     #
+     #     # ax.imshow(input_image)
+     #     # plt.show(block=False)
+     #     #
+     #
+     #     grasping_results = grasping_model.detect([input_image], verbose=1, task='grasping_points')
+     #     r = grasping_results[0]
+     #     post_nms_predictions, pre_nms_predictions = grasping_dataset_object.refine_results(r, grasping_model.anchors, grasping_model.config)
+     #
+     #     fig, ax = plt.subplots()
+     #     ax.imshow(input_image)
+     #     for i, rect2 in enumerate(pre_nms_predictions):
+     #         rect2 = grasping_dataset_object.bbox_convert_to_four_vertices([rect2])
+     #         p2 = patches.Polygon(rect2[0], linewidth=2, edgecolor=grasping_dataset_object.generate_random_color(),
+     #                              facecolor='none')
+     #         ax.add_patch(p2)
+     #         ax.set_title('Boxes post non-maximum supression')
+     #     plt.show()

@@ -1867,7 +1867,7 @@ def load_image_gt(dataset, config, image_id, augment=False, augmentation=None, o
         bbox_cropped = utils.crop_bbox(window, bbox_vertices, original_shape, target_shape)
 
     else:
-        image = dataset.load_image(image_id)
+        image = dataset.load_image(image_id, image_type=image_type)
         original_shape = image.shape
         mask, class_ids = dataset.load_mask(image_id)
         image, window, scale, padding, crop = utils.resize_image(

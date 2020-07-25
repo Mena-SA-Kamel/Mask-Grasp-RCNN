@@ -63,7 +63,7 @@ class GraspingPointsConfig(Config):
     NUM_AUGMENTATIONS = 0
     WEIGHT_DECAY = 0.0002
     DETECTION_NMS_THRESHOLD = 0.7
-    DETECTION_MIN_CONFIDENCE = 0.75
+    DETECTION_MIN_CONFIDENCE = 0.8
     # NUM_AUGMENTATIONS = 5
 
 class GraspingInferenceConfig(GraspingPointsConfig):
@@ -593,7 +593,7 @@ class GraspingPointsDataset(Dataset):
         # all_boxes = np.delete(all_boxes, invalid_y, axis=0)
         # probabilities = np.delete(probabilities, invalid_y, axis=0)
 
-        sorting_ix = np.argsort(probabilities[:, 1])[::-1][:10]
+        sorting_ix = np.argsort(probabilities[:, 1])[::-1][:20]
 
         # top_boxes = all_boxes[probabilities[:,1] > config.DETECTION_MIN_CONFIDENCE]
         # top_box_probabilities = probabilities[probabilities[:,1] > config.DETECTION_MIN_CONFIDENCE]
@@ -634,7 +634,7 @@ class GraspingPointsDataset(Dataset):
         g = random.random()
         return (r, g, b)
 
-# # SETUP ##
+# SETUP ##
 # import tensorflow as tf
 # config = tf.ConfigProto()
 # config.gpu_options.allow_growth = True
@@ -714,17 +714,17 @@ class GraspingPointsDataset(Dataset):
 # model.keras_model.save_weights(model_path)
 
 # ######################################################################################################
-# # Create model in inference mode
+# Create model in inference mode
 # with tf.device(DEVICE):
 #     model = modellib.MaskRCNN(mode="inference", model_dir=MODEL_DIR,
 #                               config=inference_config, task="grasping_points")
 #
 # # Load weights
-# weights_path = os.path.join(MODEL_DIR, 'colab_result_id#1',"train_#11c.h5")
+# weights_path = os.path.join(MODEL_DIR, 'colab_result_id#1',"train_#12b.h5")
 # # weights_path = os.path.join(MODEL_DIR, 'train_#7',"mask_rcnn_grasping_points_0200.h5")
 # print("Loading weights ", weights_path)
 # model.load_weights(weights_path, by_name=True)
-# dataset = validating_dataset
+# dataset = training_dataset
 # image_ids = random.choices(dataset.image_ids, k=25)
 # for image_id in image_ids:
 #     # validating_dataset.load_image(image_id, validating_dataset.image_info[image_id]['augmentation'])
