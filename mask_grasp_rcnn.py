@@ -17,8 +17,11 @@ import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 import skimage.io
 from PIL import Image
+import image_augmentation
+import cv2
+import math
 
-from grasping_points import GraspingInferenceConfig, GraspingPointsDataset
+# from grasping_points import GraspingInferenceConfig, GraspingPointsDataset
 
 # Extending the mrcnn.config class to update the default variables
 class GraspMaskRCNNConfig(Config):
@@ -39,8 +42,18 @@ class GraspMaskRCNNConfig(Config):
     IMAGE_CHANNEL_COUNT = 4 # For RGB-D images of 4 channels
     # MEAN_PIXEL = np.array([134.6, 125.7, 119.0, 147.6]) # Added a 4th channel. Modify the mean of the pixel depth
     # MEAN_PIXEL = np.array([112.7, 112.1, 113.5, 123.5]) # Added a 4th channel. Modify the mean of the pixel depth
-    MEAN_PIXEL = np.array([122.6, 113.4 , 118.2, 135.8]) # SAMS dataset
+    # MEAN_PIXEL = np.array([122.6, 113.4 , 118.2, 135.8]) # SAMS dataset
+    MEAN_PIXEL = np.array([181.6, 180.0, 180.9, 224.3]) # Jacquard_dataset dataset
+    GRASP_MEAN_PIXEL = np.array([181.6, 180.0, 224.3]) # Jacquard_dataset dataset
     MAX_GT_INSTANCES = 50
+    GRASP_ANCHOR_RATIOS = [1]
+    GRASP_ANCHOR_ANGLES = [-67.5, -22.5, 22.5, 67.5]
+    GRASP_ANCHOR_RATIOS = [1]  # To modify based on image size
+    POOL_SIZE = 7
+    GRASP_ANCHORS_PER_ROI = POOL_SIZE * POOL_SIZE * len(GRASP_ANCHOR_RATIOS) * len(GRASP_ANCHOR_ANGLES)
+    GRASP_ANCHOR_SIZE = 12
+    TRAIN_ROIS_PER_IMAGE = 200
+
 
 class GraspMaskRCNNInferenceConfig(GraspMaskRCNNConfig):
     GPU_COUNT = 1
@@ -73,7 +86,6 @@ class GraspMaskRCNNDataset(Dataset):
 
     def load_mask(self, image_id):
         mask_path = self.image_info[image_id]['label_path']
-        mask_original = self.load_label_from_file(mask_path)
         mask_processed = self.process_label_image(mask_path)
         mask, class_ids = self.reshape_label_image(mask_processed)
         return mask, np.array(class_ids)
@@ -387,6 +399,232 @@ class GraspMaskRCNNDataset(Dataset):
         masked_image = np.array(masked_image, dtype='uint8')
         return masked_image
 
+    def load_jacquard_gt_boxes(self, image_id):
+        positive_rectangles_path = self.image_info[image_id]['positive_points']
+        class_ids = []
+        bounding_boxes = []
+        with open(positive_rectangles_path) as f:
+            positive_rectangles = f.readlines()
+
+        for line in positive_rectangles:
+
+            bbox_5_dim = line.strip('\n').split(';')
+            bbox_5_dim = np.array(bbox_5_dim).astype(np.float)
+            x, y, theta, w, h = bbox_5_dim
+            # Need to put a constraint on the aspect ratio and box sizes
+            # Setting max aspect ratio to 20 and minimum to be 1/20
+            aspect_ratio = w / h
+            if (aspect_ratio < 1/20.0 or aspect_ratio > 20.0):
+                continue
+            # Minimum dimension allowed is 5 pixels
+            if (h < 5 or w < 5):
+                continue
+
+            # Theta re-adjustments:
+            if theta > 90:
+                theta  = theta - 180
+            elif theta < -90:
+                theta = theta + 180
+            bounding_boxes.append([x, y, w, h, theta])
+            class_ids.append(1)
+        return np.array(bounding_boxes), np.array(class_ids)
+
+    def apply_augmentation_to_box(self, boxes, class_ids, image_id, augmentation):
+        # ['angle', 'dx', 'dy', 'flip']
+        angle, dx, dy, flip_code = augmentation
+        image_shape = plt.imread(self.image_info[image_id]['path']).shape[:2]
+        transformed_boxes, class_ids = image_augmentation.rotate_bboxes(boxes, angle, image_shape, class_ids)
+        transformed_boxes, class_ids = image_augmentation.translate_bbox(transformed_boxes, dx, dy, image_shape, class_ids)
+        if flip_code != 2:
+            transformed_boxes = image_augmentation.flip_bbox(transformed_boxes, int(flip_code), image_shape)
+
+        return transformed_boxes, class_ids
+
+    def load_ground_truth_bbox_files(self, image_id, include_negatives=False):
+        positive_rectangles_path = self.image_info[image_id]['positive_points']
+
+        boxes = []
+        with open(positive_rectangles_path) as f:
+            positive_rectangles = f.readlines()
+            boxes.append(positive_rectangles)
+            class_id = 1
+
+        if include_negatives:
+            negative_rectangles_path = self.image_info[image_id]['negative_points']
+            with open(negative_rectangles_path) as f:
+                negative_rectangles = f.readlines()
+            boxes.append(negative_rectangles)
+            class_id = 0
+
+        bounding_boxes_formatted = []
+        vertices = []
+        class_ids = []
+        bad_rectangle = False
+
+        for bounding_box_class in boxes:
+            i = 0
+            for bounding_box in bounding_box_class:
+                try:
+                    x = int(float(bounding_box.split(' ')[0]))
+                    y = int(float(bounding_box.split(' ')[1]))
+                    vertices.append([x, y])
+                except:
+                    bad_rectangle = True
+                i += 1
+                if i % 4 == 0:
+                    if not bad_rectangle:
+                        bounding_boxes_formatted.append(vertices)
+                        class_ids.append(class_id)
+                    vertices = []
+                    bad_rectangle = False
+            class_id += 1
+        return np.array(bounding_boxes_formatted), class_ids
+
+    def get_five_dimensional_box(self, coordinates):
+        x_coordinates = coordinates[:, 0]
+        y_coordinates = coordinates[:, 1]
+        gripper_orientation = coordinates[:2, :]
+
+        # x = int((np.max(x_coordinates) - np.min(x_coordinates)) / 2) + np.min(x_coordinates)
+        # y = int((np.max(y_coordinates) - np.min(y_coordinates)) / 2) + np.min(y_coordinates)
+        x = ((np.max(x_coordinates) - np.min(x_coordinates)) / 2) + np.min(x_coordinates)
+        y = ((np.max(y_coordinates) - np.min(y_coordinates)) / 2) + np.min(y_coordinates)
+
+        # Gripper opening distance
+        w = np.abs(np.linalg.norm(gripper_orientation[0] - gripper_orientation[1]))
+
+        # Gripper width - Cross product betwee
+        # h = np.cross(p2-p1, p1-p3)/norm(p2-p1)
+        p1 = gripper_orientation[0]
+        p2 = gripper_orientation[1]
+        p3 = coordinates[2, :]
+        #### ERROR HERE ####
+        if (np.linalg.norm(p2 - p1) == 0):
+            print("ZERO DIVISION")
+            import code;
+            code.interact(local=dict(globals(), **locals()))
+        h = np.abs(np.cross(p2 - p1, p3 - p1) / np.linalg.norm(p2 - p1))
+
+        deltaY = gripper_orientation[0][1] - gripper_orientation[1][1]
+        deltaX = gripper_orientation[0][0] - gripper_orientation[1][0]
+        theta = -1 * np.arctan2(deltaY, deltaX) * 180 / math.pi
+        if theta > 90:
+            theta = theta - 180
+        elif theta < -90:
+            theta = theta + 180
+        return [x, y, w, h, theta]
+
+    def bbox_convert_to_five_dimension(self, bounding_box_vertices, image_id=0):
+        bbox_5_dimensional = []
+        for object_instance in bounding_box_vertices:
+            instance_bboxes = []
+            for bounding_box in object_instance:
+                x, y, w, h, theta = self.get_five_dimensional_box(bounding_box)
+                instance_bboxes.append([x, y, w, h, theta])
+                # self.visualize_bbox(image_id, bounding_box, 1, [x, y, w, h, theta])
+            bbox_5_dimensional.append(instance_bboxes)
+        bbox_5_dimensional = np.array(bbox_5_dimensional)
+        return bbox_5_dimensional
+
+    def load_bounding_boxes(self, image_id, augmentation=[]):
+        # bounding boxes here have a shape of N x 4 x 2, consisting of four vertices per rectangle given N rectangles
+        # loading jacquard style bboxes. NOTE: class_ids will all be 1 since jacquard only has positive boxes
+
+        if 'jacquard' in self.image_info[image_id]['path']:
+            bbox_5_dimensional, class_ids = self.load_jacquard_gt_boxes(image_id)
+            if len(augmentation) != 0:
+                bbox_5_dimensional, class_ids = self.apply_augmentation_to_box(bbox_5_dimensional, class_ids, image_id, augmentation)
+            bounding_box_vertices = self.bbox_convert_to_four_vertices(bbox_5_dimensional)
+        else:
+            bounding_box_vertices, class_ids = self.load_ground_truth_bbox_files(image_id)
+            bbox_5_dimensional = self.bbox_convert_to_five_dimension(bounding_box_vertices)
+            if len(augmentation) != 0:
+                bbox_5_dimensional, class_ids = self.apply_augmentation_to_box(bbox_5_dimensional, class_ids, image_id, augmentation)
+            bounding_box_vertices = self.bbox_convert_to_four_vertices(bbox_5_dimensional)
+
+        class_ids = np.array(class_ids)
+        bounding_box_vertices = np.array(bounding_box_vertices)
+
+        # shuffling the rectangles
+        p = np.random.permutation(len(class_ids))
+
+        # Reshaping boxes to have a shape [num_instances, num_grasp_boxes, ..]
+        bounding_box_vertices = np.array([bounding_box_vertices[p]])
+        bbox_5_dimensional = np.array([bbox_5_dimensional[p]])
+        class_ids = np.array([class_ids[p].astype('uint8')])
+        return bounding_box_vertices, bbox_5_dimensional, class_ids
+
+    def bbox_convert_to_four_vertices(self, bbox_5_dimension):
+        rotated_points = []
+        for i in range(len(bbox_5_dimension)):
+            x, y, w, h, theta = bbox_5_dimension[i]
+            original_points = np.float32([[0, 0], [w - 1, 0], [w - 1, h - 1], [0, h - 1]])
+            original_points = np.array([np.float32(original_points)])
+
+            translational_matrix = np.array([[1, 0, x - (w / 2)],
+                                             [0, 1, y - (h / 2)]])
+
+            original_points_translated = cv2.transform(original_points, translational_matrix)
+            scale = 1
+            angle = theta
+            if np.sign(theta) == 1:
+                angle = angle + 90
+                if angle > 180:
+                    angle = angle - 360
+            else:
+                angle = angle + 90
+
+            # rotational_matrix = cv2.getRotationMatrix2D((x, y), (angle + 90), scale)
+            rotational_matrix = cv2.getRotationMatrix2D((x, y), (angle + 90), scale)
+            original_points_rotated = cv2.transform(original_points_translated, rotational_matrix)
+            rotated_points.append(original_points_rotated[0])
+
+        return np.array(rotated_points)
+
+    def refine_results(self, results, anchors, config):
+        '''
+        Applies a NMS refinement algorithm on the proposals output by the RPN
+        '''
+        probabilities = results['scores'][0] # bg prob, fg prob
+        # deltas = results['refinements'][0] * config.RPN_BBOX_STD_DEV
+        deltas = results['refinements'][0] * np.array([0.1, 0.1, 0.2, 0.2, 1])
+        mode = 'grasping_points'
+        all_boxes = utils.apply_box_deltas(anchors, deltas, mode,
+                                           len(config.GRASP_ANCHOR_ANGLES))
+        # Filter out boxes with center coordinates out of the image
+        # radius = ((0.5 * all_boxes[:, 2]) ** 2 + (0.5 * all_boxes[:, 3]) ** 2) ** 0.5
+        #
+        # invalid_x = np.where(all_boxes[:, 0] + radius > config.IMAGE_SHAPE[1])[0]
+        # all_boxes = np.delete(all_boxes, invalid_x, axis = 0)
+        # probabilities = np.delete(probabilities, invalid_x, axis = 0)
+        # radius = np.delete(radius, invalid_x)
+        #
+        # invalid_x = np.where(all_boxes[:, 0] - radius < 0)[0]
+        # all_boxes = np.delete(all_boxes, invalid_x, axis=0)
+        # probabilities = np.delete(probabilities, invalid_x, axis=0)
+        # radius = np.delete(radius, invalid_x)
+        #
+        # invalid_y = np.where(all_boxes[:, 1] + radius > config.IMAGE_SHAPE[0])[0]
+        # all_boxes = np.delete(all_boxes, invalid_y, axis = 0)
+        # probabilities = np.delete(probabilities, invalid_y, axis = 0)
+        # radius = np.delete(radius, invalid_y)
+        #
+        # invalid_y = np.where(all_boxes[:, 1] - radius < 0)[0]
+        # all_boxes = np.delete(all_boxes, invalid_y, axis=0)
+        # probabilities = np.delete(probabilities, invalid_y, axis=0)
+
+        sorting_ix = np.argsort(probabilities[:, 1])[::-1][:20]
+
+        # top_boxes = all_boxes[probabilities[:,1] > config.DETECTION_MIN_CONFIDENCE]
+        # top_box_probabilities = probabilities[probabilities[:,1] > config.DETECTION_MIN_CONFIDENCE]
+        # top_boxes = all_boxes[probabilities[:,1] > 0.10]
+        # top_box_probabilities = probabilities[probabilities[:,1] > 0.10]
+        top_boxes = all_boxes[sorting_ix]
+        top_box_probabilities = probabilities[sorting_ix]
+        top_boxes, top_box_probabilities, pre_nms_boxes, pre_nms_scores = self.orient_box_nms(top_boxes, top_box_probabilities, config)
+
+        return top_boxes, pre_nms_boxes
+
 # SETUP ##
 
 import tensorflow as tf
@@ -412,16 +650,16 @@ config = GraspMaskRCNNConfig()
 # config.MEAN_PIXEL = np.around(channel_means, decimals = 1)
 # config.display()
 inference_config = GraspMaskRCNNInferenceConfig()
-grasping_inference_config = GraspingInferenceConfig()
+# grasping_inference_config = GraspingInferenceConfig()
 
 
 ##### TRAINING #####
-
+#
 # MODEL_DIR = "models"
 # # COCO_MODEL_PATH = os.path.join("models", "mask_rcnn_object_vs_background_100_heads_50_all.h5")
 # COCO_MODEL_PATH = os.path.join("models", "mask_rcnn_object_vs_background_HYBRID-50_head_50_all.h5")
 # model = modellib.MaskRCNN(mode="training", config=config,
-#                              model_dir=MODEL_DIR)
+#                              model_dir=MODEL_DIR, task='mask_grasp_rcnn')
 #
 # # model.load_weights(COCO_MODEL_PATH, by_name=True,
 # #                       exclude=["conv1", "mrcnn_class_logits", "mrcnn_bbox_fc",
@@ -434,10 +672,10 @@ grasping_inference_config = GraspingInferenceConfig()
 #                layers=r"(conv1)|(mrcnn\_.*)|(rpn\_.*)|(fpn\_.*)")
 #
 #
-# # model.train(training_dataset, validating_dataset,
-# #                 learning_rate=config.LEARNING_RATE/10,
-# #                 epochs=250,
-# #                 layers="all")
+# model.train(training_dataset, validating_dataset,
+#                 learning_rate=config.LEARNING_RATE/10,
+#                 epochs=250,
+#                 layers="all")
 #
 # model_path = os.path.join(MODEL_DIR, "mask_rcnn_object_vs_background_HYBRID-Weights_SAMS-50_head_50_all.h5")
 # model.keras_model.save_weights(model_path)
@@ -449,31 +687,164 @@ MODEL_DIR = "models"
 mrcnn_model_path = 'models/Good_models/Training_SAMS_dataset_LR-div-5-div-10-HYBRID-weights/mask_rcnn_object_vs_background_0051.h5'
 mrcnn_model = modellib.MaskRCNN(mode="inference",
                            config=inference_config,
-                           model_dir=MODEL_DIR)
-mrcnn_model.load_weights(mrcnn_model_path, by_name=True)
-
-grasping_model_path = os.path.join(MODEL_DIR, 'colab_result_id#1',"train_#12.h5")
-grasping_model = modellib.MaskRCNN(mode="inference", model_dir=MODEL_DIR,
-                              config=grasping_inference_config, task="grasping_points")
-grasping_model.load_weights(grasping_model_path, by_name=True)
-grasping_dataset_object = GraspingPointsDataset()
+                           model_dir=MODEL_DIR, task='')
+# mrcnn_model.load_weights(mrcnn_model_path, by_name=True)
+#
+# grasping_model_path = os.path.join(MODEL_DIR, 'colab_result_id#1',"train_#12.h5")
+# grasping_model = modellib.MaskRCNN(mode="inference", model_dir=MODEL_DIR,
+#                               config=inference_config, task="grasping_points")
+# grasping_model.load_weights(grasping_model_path, by_name=True)
 
 dataset = testing_dataset
 image_ids = random.choices(dataset.image_ids, k=15)
 
 for image_id in image_ids:
-     original_image, image_meta, gt_class_id, gt_bbox, gt_mask =\
+     original_image, image_meta, gt_class_id, gt_bbox, gt_mask, gt_grasp_boxes, gt_grasp_id =\
          modellib.load_image_gt(dataset, inference_config,
-                                image_id, use_mini_mask=False, image_type='rgbd')
-     print(dataset.image_info[image_id]['label_path'])
-     results = mrcnn_model.detect([original_image], verbose=1)
-     r = results[0]
+                                image_id, use_mini_mask=True, image_type='rgbd', mode='mask_grasp_rcnn')
 
-     image = testing_dataset.get_mask_overlay(original_image[:,:,0:3], r['masks'], r['scores'], 0.96)
-     plt.imshow(image)
-     plt.show()
+     # Things to note:
+     # gt_bbox - array with the ROIs in the image
+     # gt_grasp_boxes - array with the grasps associated with the ROIs
 
+     # We want gt_bbox to have (y1, x1, y2, x2) values for the N boxes in the image: shape [N, 4]
+     # We also want gt_grasp_boex to specify the X number of boxes in the N ROIs in the image in the form
+     # (x,y,w,h,theta): shape [N, X, 4]
+     # gt_grasp_boxes are specified relative to the resized image size. We want the coordinates to be specified
+     # relative to the ROI's coordinates in order to represent them in terms of anchors over the ROI pooled feature space
+
+     fig, ax = plt.subplots()
+     ax.imshow(original_image)
+     for i, rect in enumerate(gt_bbox):
+         y1, x1, y2, x2 = rect
+         w = abs(x2 - x1)
+         h = abs(y2 - y1)
+         grasping_points = gt_grasp_boxes[i]
+         anchor_size = 12
+         ROI_shape = np.array([h, w])
+         pooled_feature_stride = np.array(ROI_shape/config.POOL_SIZE).astype('uint8')
+         anchors = utils.generate_grasping_anchors(config.GRASP_ANCHOR_SIZE,
+                                                   config.GRASP_ANCHOR_RATIOS,
+                                                   [config.POOL_SIZE, config.POOL_SIZE],
+                                                   pooled_feature_stride,
+                                                   1,
+                                                   config.GRASP_ANCHOR_ANGLES)
+
+         import code;
+         code.interact(local=dict(globals(), **locals()))
+         target_rpn_match, target_rpn_bbox = modellib.build_rpn_targets(
+            anchors, gt_grasp_id[i], gt_grasp_boxes[i], config, mode = 'mask_grasp_rcnn')
+
+
+         # shift anchors to be over the RoI
+         anchors[:,0] += x1
+         anchors[:,1] += y1
+
+         for i, anchor in enumerate(anchors):
+             anchor = utils.bbox_convert_to_four_vertices([anchor])
+             p = patches.Polygon(anchor[0], linewidth=1, edgecolor='r', facecolor='none')
+             ax.add_patch(p)
+
+         p = patches.Rectangle((x1, y1), w, h, facecolor=None, fill=False, color='b')
+         ax.add_patch(p)
+
+
+
+     plt.show(block=False)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+     # grasp_boxes_subset = random.choices(gt_grasp_boxes, k=5)
+     # for i, rect in enumerate(grasp_boxes_subset):
+     #     rect = validating_dataset.bbox_convert_to_four_vertices([rect])
+     #     p = patches.Polygon(rect[0], linewidth=1,edigecolor='g',facecolor='none')
+     #     ax1.add_patch(p)
+     # ax1.set_title(validating_dataset.image_info[image_id]['path'])
+     #
+     # mask_image = testing_dataset.get_mask_overlay(original_image[:,:,0:3], gt_mask, [1], 0.96)
+     # ax2.imshow(mask_image)
+     # plt.show()
+     #
+     # results = mrcnn_model.detect([original_image], verbose=1)
+     # r = results[0]
+     # mask_image = testing_dataset.get_mask_overlay(original_image[:, :, 0:3], r['masks'], r['scores'], 0.96)
      # bounding_boxes = r['rois']
+     #
+     # plt.imshow(mask_image);plt.show()
+     #
      #
      # regions_to_analyze = []
      # for box in bounding_boxes:
@@ -505,13 +876,13 @@ for image_id in image_ids:
      #
      #     grasping_results = grasping_model.detect([input_image], verbose=1, task='grasping_points')
      #     r = grasping_results[0]
-     #     post_nms_predictions, pre_nms_predictions = grasping_dataset_object.refine_results(r, grasping_model.anchors, grasping_model.config)
+     #     post_nms_predictions, pre_nms_predictions = testing_dataset.refine_results(r, grasping_model.anchors, config)
      #
      #     fig, ax = plt.subplots()
      #     ax.imshow(input_image)
      #     for i, rect2 in enumerate(pre_nms_predictions):
-     #         rect2 = grasping_dataset_object.bbox_convert_to_four_vertices([rect2])
-     #         p2 = patches.Polygon(rect2[0], linewidth=2, edgecolor=grasping_dataset_object.generate_random_color(),
+     #         rect2 = testing_dataset.bbox_convert_to_four_vertices([rect2])
+     #         p2 = patches.Polygon(rect2[0], linewidth=2, edgecolor=testing_dataset.generate_random_color(),
      #                              facecolor='none')
      #         ax.add_patch(p2)
      #         ax.set_title('Boxes post non-maximum supression')

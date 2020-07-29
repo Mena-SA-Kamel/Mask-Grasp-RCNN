@@ -763,6 +763,7 @@ def detection_targets_graph(proposals, gt_class_ids, gt_boxes, gt_masks, config)
     roi_gt_boxes = tf.gather(gt_boxes, roi_gt_box_assignment)
     roi_gt_class_ids = tf.gather(gt_class_ids, roi_gt_box_assignment)
 
+    #### HERE roi_gt_boxes NOW REFERS TO THE BOXES THAT THE PROPOSALS ARE REFERRING TO
     # Compute bbox refinement for positive ROIs
     deltas = utils.box_refinement_graph(positive_rois, roi_gt_boxes)
     deltas /= config.BBOX_STD_DEV
@@ -770,7 +771,7 @@ def detection_targets_graph(proposals, gt_class_ids, gt_boxes, gt_masks, config)
     # Assign positive ROIs to GT masks
     # Permute masks to [N, height, width, 1]
     transposed_masks = tf.expand_dims(tf.transpose(gt_masks, [2, 0, 1]), -1)
-    # Pick the right mask for each ROI
+    # Pick the right mask for each ROI (Can use this to pick right grasping points for ROI)
     roi_masks = tf.gather(transposed_masks, roi_gt_box_assignment)
 
     # Compute mask targets
@@ -797,6 +798,10 @@ def detection_targets_graph(proposals, gt_class_ids, gt_boxes, gt_masks, config)
     # Threshold mask pixels at 0.5 to have GT masks be 0 or 1 to use with
     # binary cross entropy loss.
     masks = tf.round(masks)
+
+    # Compute Grasping targets
+    # import code;
+    # code.interact(local=dict(globals(), **locals()))
 
     # Append negative ROIs and pad bbox deltas and masks that
     # are not used for negative ROIs with zeros.
@@ -1154,7 +1159,7 @@ def build_rpn_model(anchor_stride, anchors_per_location, depth, task='', name='i
 
 def fpn_classifier_graph(rois, feature_maps, image_meta,
                          pool_size, num_classes, train_bn=True,
-                         fc_layers_size=1024):
+                         fc_layers_size=1024, task='mask_rcnn', angles=[]):
     """Builds the computation graph of the feature pyramid network classifier
     and regressor heads.
 
@@ -1176,6 +1181,8 @@ def fpn_classifier_graph(rois, feature_maps, image_meta,
     """
     # ROI Pooling
     # Shape: [batch, num_rois, POOL_SIZE, POOL_SIZE, channels]
+    # import code;
+    # code.interact(local=dict(globals(), **locals()))
     x = PyramidROIAlign([pool_size, pool_size],
                         name="roi_align_classifier")([rois, image_meta] + feature_maps)
     # Two 1024 FC layers (implemented with Conv2D for consistency)
@@ -1205,7 +1212,26 @@ def fpn_classifier_graph(rois, feature_maps, image_meta,
     s = K.int_shape(x)
     mrcnn_bbox = KL.Reshape((s[1], num_classes, 4), name="mrcnn_bbox")(x)
 
-    return mrcnn_class_logits, mrcnn_probs, mrcnn_bbox
+    if task == 'mask_grasp_rcnn':
+        # Grasp Proposal heads
+        # Classification Head
+        k = len(angles)
+        grasp_class_logits = KL.TimeDistributed(KL.Dense(k*2),
+                                                name='grasp_class_logits')(shared)
+        grasp_probs = KL.TimeDistributed(KL.Activation("softmax"),
+                                         name="grasp_class")(grasp_class_logits)
+
+        # Regression Head (should we multiply by 2 for foreground and background classes?)
+        # [batch, num_rois, k * (dx, dy, log(dx), log(dh), dtheta)]
+
+        x = KL.TimeDistributed(KL.Dense(k*5, activation='linear'),
+                               name='grasp_bbox_fc')(shared)
+        # Reshape to [batch, num_rois, k, (dx, dy, log(dx), log(dh), dtheta)]
+        s = K.int_shape(x)
+        grasp_bbox = KL.Reshape((s[1], k, 5), name="grasp_bbox")(x)
+        return mrcnn_class_logits, mrcnn_probs, mrcnn_bbox, grasp_probs, grasp_bbox
+    else:
+        return mrcnn_class_logits, mrcnn_probs, mrcnn_bbox
 
 
 def build_fpn_mask_graph(rois, feature_maps, image_meta,
@@ -1865,7 +1891,25 @@ def load_image_gt(dataset, config, image_id, augment=False, augmentation=None, o
         window = int(y_diff/2), int(x_diff/2), y_dim - int(y_diff/2), x_dim - int(x_diff/2)
         target_shape = [y_dim_crop, x_dim_crop]
         bbox_cropped = utils.crop_bbox(window, bbox_vertices, original_shape, target_shape)
+        window = [0, 0, image.shape[0], image.shape[1]]
+        scale = 1
+        bbox_resized = utils.resize_bbox(window, bbox_cropped, image.shape)
+        bbox_resize_5_dimensional = dataset.bbox_convert_to_five_dimension(bbox_resized, image_id)
 
+    elif mode == 'mask_grasp_rcnn':
+        image = dataset.load_image(image_id, augmentation=augmentations, image_type=image_type)
+        original_shape = image.shape
+        grasp_bbox_vertices, grasp_bbox_5_dimensional, grasp_class_ids = dataset.load_bounding_boxes(image_id, augmentations)
+        mask, class_ids = dataset.load_mask(image_id)
+        image, window, scale, padding, crop = utils.resize_image(
+            image,
+            min_dim=config.IMAGE_MIN_DIM,
+            min_scale=config.IMAGE_MIN_SCALE,
+            max_dim=config.IMAGE_MAX_DIM,
+            mode=config.IMAGE_RESIZE_MODE)
+        mask = utils.resize_mask(mask, scale, padding, crop)
+        bbox_resized = utils.resize_bbox(window, grasp_bbox_vertices, original_shape)
+        bbox_resize_5_dimensional = dataset.bbox_convert_to_five_dimension(bbox_resized, image_id)
     else:
         image = dataset.load_image(image_id, image_type=image_type)
         original_shape = image.shape
@@ -1876,19 +1920,7 @@ def load_image_gt(dataset, config, image_id, augment=False, augmentation=None, o
             min_scale=config.IMAGE_MIN_SCALE,
             max_dim=config.IMAGE_MAX_DIM,
             mode=config.IMAGE_RESIZE_MODE)
-
-    if mode == 'grasping_points':
-        window = [0, 0, image.shape[0], image.shape[1]]
-        scale = 1
-        bbox_resized = utils.resize_bbox(window, bbox_cropped, image.shape)
-        bbox_resize_5_dimensional = dataset.bbox_convert_to_five_dimension(bbox_resized, image_id)
-    else:
         mask = utils.resize_mask(mask, scale, padding, crop)
-
-    # Disabling resizing
-    # bbox_resize_5_dimensional = bbox_5_dimensional
-    # scale = 1
-    # window = (0, 0, original_shape[0], original_shape[1])
 
     # Random horizontal flips.
     # TODO: will be removed in a future update in favor of augmentation
@@ -1958,6 +1990,9 @@ def load_image_gt(dataset, config, image_id, augment=False, augmentation=None, o
     image_meta = compose_image_meta(image_id, original_shape, image.shape,
                                     window, scale, active_class_ids)
 
+    if mode == 'mask_grasp_rcnn':
+        grasp_bbox = bbox_resize_5_dimensional
+        return image, image_meta, class_ids, bbox, mask, grasp_bbox, grasp_class_ids
     return image, image_meta, class_ids, bbox, mask
 
 
@@ -2116,16 +2151,7 @@ def build_detection_targets(rpn_rois, gt_class_ids, gt_boxes, gt_masks, config):
 
     return rois, roi_gt_class_ids, bboxes, masks
 
-# def build_grasp_rpn_targets(image_shape, anchors, gt_class_ids, gt_boxes, config):
-#     # RPN bounding boxes: [max anchors per image, (dx, dy, log(dw), log(dh), dtheta)]
-#     rpn_bbox = np.zeros((config.RPN_TRAIN_ANCHORS_PER_IMAGE, 5))
-#     overlaps = utils.compute_overlaps(anchors, gt_boxes, mode='grasping_points')
-#
-#     fg_neg_thresh = 0.3
-#     fg_pos_thresh = 0.7
-#     print (np.max(overlaps, axis=0))
-
-def build_rpn_targets(image_shape, anchors, gt_class_ids, gt_boxes, config, mode=''):
+def build_rpn_targets(anchors, gt_class_ids, gt_boxes, config, mode=''):
 
     """Given the anchors and GT boxes, compute overlaps and identify positive
     anchors and deltas to refine them to match their corresponding GT boxes.
@@ -2513,7 +2539,7 @@ def data_generator(dataset, config, shuffle=True, augment=False, augmentation=No
                 continue
 
             # RPN Targets
-            rpn_match, rpn_bbox = build_rpn_targets(image.shape, anchors,
+            rpn_match, rpn_bbox = build_rpn_targets(anchors,
                                                     gt_class_ids, gt_boxes, config)
 
             # Mask R-CNN Targets
@@ -2713,7 +2739,7 @@ def grasp_data_generator(dataset, config, shuffle=True, augment=False, augmentat
                 continue
 
             # RPN Targets
-            rpn_match, rpn_bbox = build_rpn_targets(image.shape, anchors,
+            rpn_match, rpn_bbox = build_rpn_targets(anchors,
                                                        gt_class_ids, gt_boxes, config, mode)
 
             # Init batch arrays
@@ -2784,6 +2810,8 @@ class MaskRCNN():
         self.set_log_dir()
         if task == 'grasping_points':
             self.keras_model = self.build_grasping_model(mode=mode, config=config)
+        elif task == 'mask_grasp_rcnn':
+            self.keras_model = self.build_mask_grasp_rcnn_model(mode=mode, config=config)
         else:
             self.keras_model = self.build(mode=mode, config=config)
 
@@ -3017,6 +3045,248 @@ class MaskRCNN():
             model = ParallelModel(model, config.GPU_COUNT)
         return model
 
+    def build_mask_grasp_rcnn_model(self, mode, config):
+        """Build a combined Mask R-CNN and Grasping RCNN architecture.
+            input_shape: The shape of the input image.
+            mode: Either "training" or "inference". The inputs and
+                outputs of the model differ accordingly.
+        """
+        assert mode in ['training', 'inference']
+
+        # Image size must be dividable by 2 multiple times
+        h, w = config.IMAGE_SHAPE[:2]
+        if h / 2**6 != int(h / 2**6) or w / 2**6 != int(w / 2**6):
+            raise Exception("Image size must be dividable by 2 at least 6 times "
+                            "to avoid fractions when downscaling and upscaling."
+                            "For example, use 256, 320, 384, 448, 512, ... etc. ")
+
+        # Inputs
+        input_image = KL.Input(
+            shape=[None, None, config.IMAGE_SHAPE[2]], name="input_image")
+        input_image_meta = KL.Input(shape=[config.IMAGE_META_SIZE],
+                                    name="input_image_meta")
+
+        if mode == "training":
+            # RPN GT
+            input_rpn_match = KL.Input(
+                shape=[None, 1], name="input_rpn_match", dtype=tf.int32)
+            input_rpn_bbox = KL.Input(
+                shape=[None, 4], name="input_rpn_bbox", dtype=tf.float32)
+
+            # Detection GT (class IDs, bounding boxes, and masks)
+            # 1. GT Class IDs (zero padded)
+            input_gt_class_ids = KL.Input(
+                shape=[None], name="input_gt_class_ids", dtype=tf.int32)
+            # 2. GT Boxes in pixels (zero padded)
+            # [batch, MAX_GT_INSTANCES, (y1, x1, y2, x2)] in image coordinates
+            input_gt_boxes = KL.Input(
+                shape=[None, 4], name="input_gt_boxes", dtype=tf.float32)
+            # Normalize coordinates
+            gt_boxes = KL.Lambda(lambda x: norm_boxes_graph(
+                x, K.shape(input_image)[1:3]))(input_gt_boxes)
+            # 3. GT Masks (zero padded)
+            # [batch, height, width, MAX_GT_INSTANCES]
+            if config.USE_MINI_MASK:
+                input_gt_masks = KL.Input(
+                    shape=[config.MINI_MASK_SHAPE[0],
+                           config.MINI_MASK_SHAPE[1], None],
+                    name="input_gt_masks", dtype=bool)
+            else:
+                input_gt_masks = KL.Input(
+                    shape=[config.IMAGE_SHAPE[0], config.IMAGE_SHAPE[1], None],
+                    name="input_gt_masks", dtype=bool)
+
+            # Grasping GT (class IDs, bounding boxes)
+            # RPN GT
+            input_grasp_rpn_match = KL.Input(
+                shape=[None, 1], name="input_grasp_rpn_match", dtype=tf.int32)
+            # Recall: rpn_bbox specifies the refinements required for each positive anchor to match the GT boxes. Shape
+            input_grasp_rpn_bbox = KL.Input(
+                shape=[None, 5], name="input_grasp_rpn_bbox", dtype=tf.float32)
+
+        elif mode == "inference":
+            # Anchors in normalized coordinates
+            input_anchors = KL.Input(shape=[None, 4], name="input_anchors")
+
+        # Build the shared convolutional layers.
+        # Bottom-up Layers
+        # Returns a list of the last layers of each stage, 5 in total.
+        # Don't create the thead (stage 5), so we pick the 4th item in the list.
+        if callable(config.BACKBONE):
+            _, C2, C3, C4, C5 = config.BACKBONE(input_image, stage5=True,
+                                                train_bn=config.TRAIN_BN)
+        else:
+            _, C2, C3, C4, C5 = resnet_graph(input_image, config.BACKBONE,
+                                             stage5=True, train_bn=config.TRAIN_BN)
+        # Top-down Layers
+        # TODO: add assert to varify feature map sizes match what's in config
+        P5 = KL.Conv2D(config.TOP_DOWN_PYRAMID_SIZE, (1, 1), name='fpn_c5p5')(C5)
+        P4 = KL.Add(name="fpn_p4add")([
+            KL.UpSampling2D(size=(2, 2), name="fpn_p5upsampled")(P5),
+            KL.Conv2D(config.TOP_DOWN_PYRAMID_SIZE, (1, 1), name='fpn_c4p4')(C4)])
+        P3 = KL.Add(name="fpn_p3add")([
+            KL.UpSampling2D(size=(2, 2), name="fpn_p4upsampled")(P4),
+            KL.Conv2D(config.TOP_DOWN_PYRAMID_SIZE, (1, 1), name='fpn_c3p3')(C3)])
+        P2 = KL.Add(name="fpn_p2add")([
+            KL.UpSampling2D(size=(2, 2), name="fpn_p3upsampled")(P3),
+            KL.Conv2D(config.TOP_DOWN_PYRAMID_SIZE, (1, 1), name='fpn_c2p2')(C2)])
+        # Attach 3x3 conv to all P layers to get the final feature maps.
+        P2 = KL.Conv2D(config.TOP_DOWN_PYRAMID_SIZE, (3, 3), padding="SAME", name="fpn_p2")(P2)
+        P3 = KL.Conv2D(config.TOP_DOWN_PYRAMID_SIZE, (3, 3), padding="SAME", name="fpn_p3")(P3)
+        P4 = KL.Conv2D(config.TOP_DOWN_PYRAMID_SIZE, (3, 3), padding="SAME", name="fpn_p4")(P4)
+        P5 = KL.Conv2D(config.TOP_DOWN_PYRAMID_SIZE, (3, 3), padding="SAME", name="fpn_p5")(P5)
+        # P6 is used for the 5th anchor scale in RPN. Generated by
+        # subsampling from P5 with stride of 2.
+        P6 = KL.MaxPooling2D(pool_size=(1, 1), strides=2, name="fpn_p6")(P5)
+
+        # Note that P6 is used in RPN, but not in the classifier heads.
+        rpn_feature_maps = [P2, P3, P4, P5, P6]
+        mrcnn_feature_maps = [P2, P3, P4, P5]
+
+
+        # Anchors
+        if mode == "training":
+            anchors = self.get_anchors(config.IMAGE_SHAPE)
+            # Duplicate across the batch dimension because Keras requires it
+            # TODO: can this be optimized to avoid duplicating the anchors?
+            anchors = np.broadcast_to(anchors, (config.BATCH_SIZE,) + anchors.shape)
+
+            # A hack to get around Keras's bad support for constants
+            anchors = KL.Lambda(lambda x: tf.Variable(anchors), name="anchors")(input_image)
+        else:
+            anchors = input_anchors
+
+        # RPN Model
+        rpn = build_rpn_model(config.RPN_ANCHOR_STRIDE,
+                              len(config.RPN_ANCHOR_RATIOS), config.TOP_DOWN_PYRAMID_SIZE)
+        # Loop through pyramid layers
+        layer_outputs = []  # list of lists
+        for p in rpn_feature_maps:
+            layer_outputs.append(rpn([p]))
+
+        # Concatenate layer outputs
+        # Convert from list of lists of level outputs to list of lists
+        # of outputs across levels.
+        # e.g. [[a1, b1, c1], [a2, b2, c2]] => [[a1, a2], [b1, b2], [c1, c2]]
+        output_names = ["rpn_class_logits", "rpn_class", "rpn_bbox"]
+        outputs = list(zip(*layer_outputs))
+        outputs = [KL.Concatenate(axis=1, name=n)(list(o))
+                   for o, n in zip(outputs, output_names)]
+
+        rpn_class_logits, rpn_class, rpn_bbox = outputs
+
+        # Generate proposals
+        # Proposals are [batch, N, (y1, x1, y2, x2)] in normalized coordinates
+        # and zero padded.
+        proposal_count = config.POST_NMS_ROIS_TRAINING if mode == "training"\
+            else config.POST_NMS_ROIS_INFERENCE
+        rpn_rois = ProposalLayer(
+            proposal_count=proposal_count,
+            nms_threshold=config.RPN_NMS_THRESHOLD,
+            name="ROI",
+            config=config)([rpn_class, rpn_bbox, anchors])
+
+        if mode == "training":
+            # Class ID mask to mark class IDs supported by the dataset the image
+            # came from.
+            active_class_ids = KL.Lambda(
+                lambda x: parse_image_meta_graph(x)["active_class_ids"]
+                )(input_image_meta)
+
+            if not config.USE_RPN_ROIS:
+                # Ignore predicted ROIs and use ROIs provided as an input.
+                input_rois = KL.Input(shape=[config.POST_NMS_ROIS_TRAINING, 4],
+                                      name="input_roi", dtype=np.int32)
+                # Normalize coordinates
+                target_rois = KL.Lambda(lambda x: norm_boxes_graph(
+                    x, K.shape(input_image)[1:3]))(input_rois)
+            else:
+                target_rois = rpn_rois
+
+            # Generate detection targets
+            # Subsamples proposals and generates target outputs for training
+            # Note that proposal class IDs, gt_boxes, and gt_masks are zero
+            # padded. Equally, returned rois and targets are zero padded.
+            rois, target_class_ids, target_bbox, target_mask =\
+                DetectionTargetLayer(config, name="proposal_targets")([
+                    target_rois, input_gt_class_ids, gt_boxes, input_gt_masks])
+
+            # Network Heads
+            # TODO: verify that this handles zero padded ROIs
+            mrcnn_class_logits, mrcnn_class, mrcnn_bbox, grasp_probs, grasp_bbox =\
+                fpn_classifier_graph(rois, mrcnn_feature_maps, input_image_meta,
+                                     config.POOL_SIZE, config.NUM_CLASSES,
+                                     train_bn=config.TRAIN_BN,
+                                     fc_layers_size=config.FPN_CLASSIF_FC_LAYERS_SIZE, task='mask_grasp_rcnn',
+                                     angles=config.GRASP_ANCHOR_ANGLES)
+
+            ######################### STOPPED HERE
+
+            mrcnn_mask = build_fpn_mask_graph(rois, mrcnn_feature_maps,
+                                              input_image_meta,
+                                              config.MASK_POOL_SIZE,
+                                              config.NUM_CLASSES,
+                                              train_bn=config.TRAIN_BN)
+
+            # TODO: clean up (use tf.identify if necessary)
+            output_rois = KL.Lambda(lambda x: x * 1, name="output_rois")(rois)
+
+            # Losses
+            rpn_class_loss = KL.Lambda(lambda x: rpn_class_loss_graph(*x), name="rpn_class_loss")(
+                [input_rpn_match, rpn_class_logits])
+            rpn_bbox_loss = KL.Lambda(lambda x: rpn_bbox_loss_graph(config, *x), name="rpn_bbox_loss")(
+                [input_rpn_bbox, input_rpn_match, rpn_bbox])
+            class_loss = KL.Lambda(lambda x: mrcnn_class_loss_graph(*x), name="mrcnn_class_loss")(
+                [target_class_ids, mrcnn_class_logits, active_class_ids])
+            bbox_loss = KL.Lambda(lambda x: mrcnn_bbox_loss_graph(*x), name="mrcnn_bbox_loss")(
+                [target_bbox, target_class_ids, mrcnn_bbox])
+            mask_loss = KL.Lambda(lambda x: mrcnn_mask_loss_graph(*x), name="mrcnn_mask_loss")(
+                [target_mask, target_class_ids, mrcnn_mask])
+
+            # Model
+            inputs = [input_image, input_image_meta,
+                      input_rpn_match, input_rpn_bbox, input_gt_class_ids, input_gt_boxes, input_gt_masks]
+            if not config.USE_RPN_ROIS:
+                inputs.append(input_rois)
+            outputs = [rpn_class_logits, rpn_class, rpn_bbox,
+                       mrcnn_class_logits, mrcnn_class, mrcnn_bbox, mrcnn_mask,
+                       rpn_rois, output_rois,
+                       rpn_class_loss, rpn_bbox_loss, class_loss, bbox_loss, mask_loss]
+            model = KM.Model(inputs, outputs, name='mask_rcnn')
+        else:
+            # Network Heads
+            # Proposal classifier and BBox regressor heads
+            mrcnn_class_logits, mrcnn_class, mrcnn_bbox =\
+                fpn_classifier_graph(rpn_rois, mrcnn_feature_maps, input_image_meta,
+                                     config.POOL_SIZE, config.NUM_CLASSES,
+                                     train_bn=config.TRAIN_BN,
+                                     fc_layers_size=config.FPN_CLASSIF_FC_LAYERS_SIZE)
+
+            # Detections
+            # output is [batch, num_detections, (y1, x1, y2, x2, class_id, score)] in
+            # normalized coordinates
+            detections = DetectionLayer(config, name="mrcnn_detection")(
+                [rpn_rois, mrcnn_class, mrcnn_bbox, input_image_meta])
+
+            # Create masks for detections
+            detection_boxes = KL.Lambda(lambda x: x[..., :4])(detections)
+            mrcnn_mask = build_fpn_mask_graph(detection_boxes, mrcnn_feature_maps,
+                                              input_image_meta,
+                                              config.MASK_POOL_SIZE,
+                                              config.NUM_CLASSES,
+                                              train_bn=config.TRAIN_BN)
+
+            model = KM.Model([input_image, input_image_meta, input_anchors],
+                             [detections, mrcnn_class, mrcnn_bbox,
+                                 mrcnn_mask, rpn_rois, rpn_class, rpn_bbox],
+                             name='mask_rcnn')
+
+        # Add multi-GPU support.
+        if config.GPU_COUNT > 1:
+            from mrcnn.parallel_model import ParallelModel
+            model = ParallelModel(model, config.GPU_COUNT)
+        return model
+
     def build_grasping_model(self, mode, config):
         """Builds the architecture for the Grasping Points RPN.
                 input_shape: The shape of the input image.
@@ -3096,7 +3366,7 @@ class MaskRCNN():
             anchors = input_anchors
 
         # RPN Model
-        anchors_per_location = len(config.RPN_ANCHOR_RATIOS) * len(config.RPN_GRASP_ANGLES)
+        anchors_per_location = len(config.GRASP_ANCHOR_RATIOS) * len(config.GRASP_ANCHOR_ANGLES)
 
         rpn = build_rpn_model(config.RPN_ANCHOR_STRIDE,
                               anchors_per_location, config.TOP_DOWN_PYRAMID_SIZE, task='grasping_points',
@@ -3759,6 +4029,8 @@ class MaskRCNN():
             })
         return results
 
+
+
     def get_anchors(self, image_shape, mode='', angles=[]):
         """Returns anchor pyramid for the given image size."""
         backbone_shapes = compute_backbone_shapes(self.config, image_shape)
@@ -3768,24 +4040,17 @@ class MaskRCNN():
             self._anchor_cache = {}
         # if not tuple(image_shape) in self._anchor_cache:
         if True:
-            # Generate Anchors
-            a = utils.generate_pyramid_anchors(
-                self.config.RPN_ANCHOR_SCALES,
-                self.config.RPN_ANCHOR_RATIOS,
-                backbone_shapes,
-                self.config.BACKBONE_STRIDES,
-                self.config.RPN_ANCHOR_STRIDE,
-                self.config.IMAGE_SHAPE,
-                mode,
-                angles)
-            # Keep a copy of the latest anchors in pixel coordinates because
-            # it's used in inspect_model notebooks.
-            # TODO: Remove this after the notebook are refactored to not use it
-            self.anchors = a
-            # Normalize coordinates
-            self._anchor_cache[tuple(image_shape)] = utils.norm_boxes(a, image_shape[:2], mode)
-
             if mode == 'grasping_points':
+                a = utils.generate_pyramid_anchors(
+                    self.config.GRASP_ANCHOR_SCALES,
+                    self.config.GRASP_ANCHOR_RATIOS,
+                    backbone_shapes,
+                    self.config.BACKBONE_STRIDES,
+                    self.config.RPN_ANCHOR_STRIDE,
+                    image_shape,
+                    mode,
+                    angles)
+
                 # Filter out anchors that have boundaries that are crossing the image boundary. Those anchors prevents convergence
                 # when training based on Faster RCNN's paper. This can be simplified by checking if an anchor rotated at 90 degrees
                 # cross the boundary of the image
@@ -3797,34 +4062,53 @@ class MaskRCNN():
                 valid_anchors_mask = np.logical_and(valid_anchors_mask, ((a[:, 1] - radius) >= 0))
                 import matplotlib.pyplot as plt
                 import matplotlib.patches as patches
-                # anchors_filtered = a[np.where((a[:, 0] == 80) & (a[:, 1] == 80))[0]]
-                # anchors_filtered = a#[valid_anchors_mask]
-                # fig, ax = plt.subplots(1)
-                # ax.imshow(np.zeros((500, 500)))
-                # cols = ['r', 'b', 'g', 'k']
-                # for i, rect2 in enumerate(anchors_filtered):
-                #
-                #     box = rect2
-                #     box[0] += 50
-                #     box[1] += 50
-                #     # import code;
-                #     # code.interact(local=dict(globals(), **locals()))
-                #     rect2 = utils.bbox_convert_to_four_vertices([box])
-                #     p = patches.Polygon(rect2[0], linewidth=1,edgecolor='r',facecolor='none')
-                #     ax.add_patch(p)
-                # image_boundary = np.array([[0,0],
-                #                            [320,0],
-                #                            [320,320],
-                #                            [0,320]])
-                # image_boundary += 50
-                # p = patches.Polygon(image_boundary, linewidth=1, edgecolor='g', facecolor='none')
-                # ax.add_patch(p)
-                # plt.show(block = False)
+                anchors_filtered = a[np.where((a[:, 0] == 80) & (a[:, 1] == 80))[0]]
+                anchors_filtered = a#[valid_anchors_mask]
+                fig, ax = plt.subplots(1)
+                ax.imshow(np.zeros((384, 384)))
+                cols = ['r', 'b', 'g', 'k']
+                for i, rect2 in enumerate(anchors_filtered):
+
+                    box = rect2
+                    box[0] += 50
+                    box[1] += 50
+                    # import code;
+                    # code.interact(local=dict(globals(), **locals()))
+                    rect2 = utils.bbox_convert_to_four_vertices([box])
+                    p = patches.Polygon(rect2[0], linewidth=1,edgecolor='r',facecolor='none')
+                    ax.add_patch(p)
+                    image_shape
+                image_boundary = np.array([[0,0],
+                                           [image_shape[1],0],
+                                           [image_shape[1],image_shape[0]],
+                                           [0,image_shape[0]]])
+                image_boundary += 50
+                p = patches.Polygon(image_boundary, linewidth=1, edgecolor='g', facecolor='none')
+                ax.add_patch(p)
+                plt.show(block = False)
                 # import code;
                 # code.interact(local=dict(globals(), **locals()))
-
+                self.anchors = a
+                self._anchor_cache[tuple(image_shape)] = utils.norm_boxes(a, image_shape[:2], mode)
                 return [self._anchor_cache[tuple(image_shape)], valid_anchors_mask]
             else:
+                # Generate Anchors
+                a = utils.generate_pyramid_anchors(
+                    self.config.RPN_ANCHOR_SCALES,
+                    self.config.RPN_ANCHOR_RATIOS,
+                    backbone_shapes,
+                    self.config.BACKBONE_STRIDES,
+                    self.config.RPN_ANCHOR_STRIDE,
+                    self.config.IMAGE_SHAPE,
+                    mode,
+                    angles)
+
+                # Keep a copy of the latest anchors in pixel coordinates because
+                # it's used in inspect_model notebooks.
+                # TODO: Remove this after the notebook are refactored to not use it
+                self.anchors = a
+                # Normalize coordinates
+                self._anchor_cache[tuple(image_shape)] = utils.norm_boxes(a, image_shape[:2], mode)
                 return self._anchor_cache[tuple(image_shape)]
 
     def ancestor(self, tensor, name, checked=None):

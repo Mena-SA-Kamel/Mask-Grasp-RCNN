@@ -76,7 +76,6 @@ for i in range(3):# batch size
     top_losses_sum = tf.add(top_losses_sum, K.sum(top_loss_values))
     print(top_loss_values)
 print(top_losses_sum)
-import code; code.interact(local=dict(globals(), **locals()))
 
 total_positive_loss = K.sum(tf.gather_nd(classification_loss, positive_indices))
 

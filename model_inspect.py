@@ -59,7 +59,7 @@ anchors = utils.generate_pyramid_anchors(config.RPN_ANCHOR_SCALES,
                                           config.RPN_ANCHOR_STRIDE,
                                           config.IMAGE_SHAPE)
 target_rpn_match, target_rpn_bbox = modellib.build_rpn_targets(
-    image.shape, anchors, gt_class_id, gt_bbox, model.config)
+    anchors, gt_class_id, gt_bbox, model.config)
 log("target_rpn_match", target_rpn_match)
 log("target_rpn_bbox", target_rpn_bbox)
 

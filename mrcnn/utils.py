@@ -293,8 +293,6 @@ def compute_grasping_training_anchors_new(gt_box, anchors, config):
     iou = compute_iou(gt_box_vertices, anchor_vertices, gt_box_area, anchor_areas)
     angle_differences = np.cos(np.radians(thetas) - np.radians(theta))
     arIoU = iou*angle_differences
-    import code;
-    code.interact(local=dict(globals(), **locals()))
 
     # final_anchors_ix = np.where(arIoU > 0)[0]
 
@@ -788,11 +786,13 @@ def resize_bbox(window, bbox_vertices, original_shape):
     final_points = np.float32([[x1, y1], [x1, y2-1], [x2-1, y1]])
     transformation_matrix = cv2.getAffineTransform(original_points, final_points)
     resized_bbox_vertices = []
-    for box in bbox_vertices:
-        box = np.array([np.float32(box)])
-        resized_bbox_vertices.extend(cv2.transform(box, transformation_matrix).astype(int))
-    resized_bbox_vertices = np.array(resized_bbox_vertices)
-    return resized_bbox_vertices
+    for object_instance in bbox_vertices:
+        instance_bbox_vertices = []
+        for box in object_instance:
+            box = np.array([np.float32(box)])
+            instance_bbox_vertices.extend(cv2.transform(box, transformation_matrix).astype(int))
+        resized_bbox_vertices.append(np.array(instance_bbox_vertices))
+    return np.array(resized_bbox_vertices)
 
 
 def resize_mask(mask, scale, padding, crop=None):
@@ -945,8 +945,8 @@ def generate_grasping_anchors(scales, ratios, shape, feature_stride, anchor_stri
     widths = scales * np.sqrt(ratios)
 
     # Enumerate shifts in feature space
-    shifts_y = np.arange(0, shape[0], anchor_stride) * feature_stride
-    shifts_x = np.arange(0, shape[1], anchor_stride) * feature_stride
+    shifts_y = (np.arange(0, shape[0], anchor_stride) * feature_stride[0]) + feature_stride[0]//2
+    shifts_x = (np.arange(0, shape[1], anchor_stride) * feature_stride[1]) + feature_stride[1]//2
 
     box_sizes = np.stack([heights, widths], axis = 1)
 
@@ -958,7 +958,6 @@ def generate_grasping_anchors(scales, ratios, shape, feature_stride, anchor_stri
         j += 1
     final_boxes[:,0:2] = boxes[:,0:2]
     final_boxes[:,-1] = boxes[:,-1]
-
     return final_boxes
 
 
@@ -980,14 +979,15 @@ def generate_pyramid_anchors(scales, ratios, feature_shapes, feature_strides,
         if mode == 'grasping_points':
             # Using only anchors for feature level #4
             if i == 2:
-                anchors.append(generate_anchors(scales[i], ratios, feature_shapes[i],
+                # anchors.append(generate_anchors(scales[i], ratios, feature_shapes[i],
+                #                                 feature_strides[i], anchor_stride, mode, angles))
+                anchors.append(generate_anchors(scales[i], ratios, [7, 7],
                                                 feature_strides[i], anchor_stride, mode, angles))
             else:
                 continue
         else:
             anchors.append(generate_anchors(scales[i], ratios, feature_shapes[i],
                                             feature_strides[i], anchor_stride, mode, angles))
-
     anchors = np.concatenate(anchors, axis=0)
 
     # anchors_filtered = anchors[valid_anchors_mask]

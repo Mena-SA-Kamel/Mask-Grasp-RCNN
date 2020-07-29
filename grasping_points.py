@@ -567,6 +567,7 @@ class GraspingPointsDataset(Dataset):
         Applies a NMS refinement algorithm on the proposals output by the RPN
         '''
         probabilities = results['scores'][0] # bg prob, fg prob
+        # deltas = results['refinements'][0] * config.RPN_BBOX_STD_DEV
         deltas = results['refinements'][0] * config.RPN_BBOX_STD_DEV
         mode = 'grasping_points'
         all_boxes = utils.apply_box_deltas(anchors, deltas, mode,
@@ -635,38 +636,38 @@ class GraspingPointsDataset(Dataset):
         return (r, g, b)
 
 # SETUP ##
-# import tensorflow as tf
-# config = tf.ConfigProto()
-# config.gpu_options.allow_growth = True
-# sess = tf.Session(config=config)
-#
-# # Directory to save logs and trained model
-# MODEL_DIR = "models"
-# MASKRCNN_MODEL_PATH = os.path.join(MODEL_DIR, "mask_rcnn_coco.h5")
-# config = GraspingPointsConfig()
-# inference_config = GraspingInferenceConfig()
-# DEVICE = "/gpu:0"
-# TEST_MODE = "inference"
-# mode = "grasping_points"
-#
-# training_dataset = GraspingPointsDataset()
-# # training_dataset.construct_jacquard_dataset()
-# # training_dataset.load_dataset(augmentation=True)
-# training_dataset.load_dataset(dataset_dir='../../../Datasets/jacquard_dataset_resized_new', augmentation=True)
-# training_dataset.prepare()
-# # channel_means = np.array(training_dataset.get_channel_means())
-# # import code; code.interact(local=dict(globals(), **locals()))
-# # config.MEAN_PIXEL = np.around(channel_means, decimals = 1)
-#
-# validating_dataset = GraspingPointsDataset()
-# validating_dataset.load_dataset(dataset_dir='../../../Datasets/jacquard_dataset_resized_new', type='val_set', augmentation=True)
-# # validating_dataset.load_dataset(type='val_set', augmentation=True)
-# validating_dataset.prepare()
-#
-# testing_dataset = GraspingPointsDataset()
-# testing_dataset.load_dataset(dataset_dir='../../../Datasets/jacquard_dataset_resized_new', type='test_set', augmentation=True)
-# # testing_dataset.load_dataset(type='test_set', augmentation=True)
-# testing_dataset.prepare()
+import tensorflow as tf
+config = tf.ConfigProto()
+config.gpu_options.allow_growth = True
+sess = tf.Session(config=config)
+
+# Directory to save logs and trained model
+MODEL_DIR = "models"
+MASKRCNN_MODEL_PATH = os.path.join(MODEL_DIR, "mask_rcnn_coco.h5")
+config = GraspingPointsConfig()
+inference_config = GraspingInferenceConfig()
+DEVICE = "/gpu:0"
+TEST_MODE = "inference"
+mode = "grasping_points"
+
+training_dataset = GraspingPointsDataset()
+# training_dataset.construct_jacquard_dataset()
+# training_dataset.load_dataset(augmentation=True)
+training_dataset.load_dataset(dataset_dir='../../../Datasets/jacquard_dataset_resized_new', augmentation=True)
+training_dataset.prepare()
+# channel_means = np.array(training_dataset.get_channel_means())
+# import code; code.interact(local=dict(globals(), **locals()))
+# config.MEAN_PIXEL = np.around(channel_means, decimals = 1)
+
+validating_dataset = GraspingPointsDataset()
+validating_dataset.load_dataset(dataset_dir='../../../Datasets/jacquard_dataset_resized_new', type='val_set', augmentation=True)
+# validating_dataset.load_dataset(type='val_set', augmentation=True)
+validating_dataset.prepare()
+
+testing_dataset = GraspingPointsDataset()
+testing_dataset.load_dataset(dataset_dir='../../../Datasets/jacquard_dataset_resized_new', type='test_set', augmentation=True)
+# testing_dataset.load_dataset(type='test_set', augmentation=True)
+testing_dataset.prepare()
 
 # # Create model in training mode
 # with tf.device(DEVICE):
@@ -756,7 +757,7 @@ class GraspingPointsDataset(Dataset):
 #                  '\nAugmentations : [\'angle\', \'dx\', \'dy\', \'flip\'] => ' +
 #                  str(dataset.image_info[image_id]['augmentation']))
 #     plt.show(block=False)
-#
+# #
 # import code;
 # code.interact(local=dict(globals(), **locals()))
 # plt.savefig(os.path.join('Grasping_anchors','P'+str(level+2)+ 'center_anchors.png'))
