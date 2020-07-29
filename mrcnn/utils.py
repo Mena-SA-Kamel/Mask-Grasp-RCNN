@@ -77,6 +77,7 @@ def compute_iou(box, boxes, box_area, boxes_area):
     y2 = np.minimum(box[2], boxes[:, 2])
     x1 = np.maximum(box[1], boxes[:, 1])
     x2 = np.minimum(box[3], boxes[:, 3])
+
     intersection = np.maximum(x2 - x1, 0) * np.maximum(y2 - y1, 0)
     union = box_area + boxes_area[:] - intersection[:]
     iou = intersection / union
@@ -120,13 +121,11 @@ def compute_overlaps(boxes1, boxes2, mode=''):
             arIoU = iou * angle_differences
             # arIoU = np.interp(arIoU, (arIoU.min(), arIoU.max()), (0, 1))
             overlaps[:, i] = arIoU
-
-        #
         #     image = np.zeros((384, 384))
         #     fig, ax = plt.subplots(1, figsize=(10, 10))
         #     ax.imshow(image)
         #
-        #     for rect in boxes1[np.where(arIoU>0.3)[0]]:
+        #     for rect in boxes1[np.where(arIoU>0.05)[0]]:
         #         rect = bbox_convert_to_four_vertices([rect])[0]
         #         p = patches.Polygon(rect, linewidth=1,edgecolor='c',facecolor='none')
         #         ax.add_patch(p)
@@ -406,7 +405,7 @@ def apply_box_deltas(boxes, deltas, mode='', num_angles=0):
     boxes: [N, (y1, x1, y2, x2)]. Note that (y2, x2) is outside the box.
     deltas: [N, (dy, dx, log(dh), log(dw))] # Modify this desription
     """
-    if mode == 'grasping_points':
+    if mode == 'grasping_points' or mode == 'mask_grasp_rcnn':
         boxes = boxes.astype(np.float32)
         center_x = boxes[:, 0]
         center_y = boxes[:, 1]
@@ -925,7 +924,7 @@ def generate_anchors(scales, ratios, shape, feature_stride, anchor_stride, mode=
     return boxes
 
 
-def generate_grasping_anchors(scales, ratios, shape, feature_stride, anchor_stride, thetas):
+def generate_grasping_anchors(scales, ratios, shape, feature_stride, anchor_stride, thetas, roi_boundaries):
     """
     scales: 1D array of anchor sizes in pixels. Example: [32, 64, 128]
     ratios: 1D array of anchor ratios of width/height. Example: [0.5, 1, 2]
@@ -935,7 +934,7 @@ def generate_grasping_anchors(scales, ratios, shape, feature_stride, anchor_stri
     anchor_stride: Stride of anchors on the feature map. For example, if the
         value is 2 then generate anchors for every other feature map pixel.
     """
-    # Main goal - Get bbox in the form {x, y, w, h, theta}
+    # Main goal - Get bbox in the form {x, y, w, h, thetas
     scales, ratios = np.meshgrid(np.array(scales), np.array(ratios))
     scales = scales.flatten()
     ratios = ratios.flatten()
@@ -944,16 +943,17 @@ def generate_grasping_anchors(scales, ratios, shape, feature_stride, anchor_stri
     heights = scales / np.sqrt(ratios)
     widths = scales * np.sqrt(ratios)
 
+    y1, x1, _, _ = roi_boundaries
     # Enumerate shifts in feature space
-    shifts_y = (np.arange(0, shape[0], anchor_stride) * feature_stride[0]) + feature_stride[0]//2
-    shifts_x = (np.arange(0, shape[1], anchor_stride) * feature_stride[1]) + feature_stride[1]//2
+    shifts_y = (np.arange(0, shape[0], anchor_stride) * feature_stride[0]) + feature_stride[0]//2 + y1
+    shifts_x = (np.arange(0, shape[1], anchor_stride) * feature_stride[1]) + feature_stride[1]//2 + x1
 
     box_sizes = np.stack([heights, widths], axis = 1)
-
-    boxes = np.array(np.meshgrid(shifts_x, shifts_y, ratios, thetas)).T.reshape(-1, 4)
+    num_anchor_sizes = np.arange(len(box_sizes))
+    boxes = np.array(np.meshgrid(shifts_x, shifts_y, num_anchor_sizes, thetas)).T.reshape(-1, 4)
     final_boxes = np.zeros((boxes.shape[0], 5))
     j = 0
-    for i in ratios:
+    for i in num_anchor_sizes:
         final_boxes[boxes[:, 2] == i, 2:4] = box_sizes[j]
         j += 1
     final_boxes[:,0:2] = boxes[:,0:2]

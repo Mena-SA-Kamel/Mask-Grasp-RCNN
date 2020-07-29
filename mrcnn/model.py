@@ -2151,6 +2151,115 @@ def build_detection_targets(rpn_rois, gt_class_ids, gt_boxes, gt_masks, config):
 
     return rois, roi_gt_class_ids, bboxes, masks
 
+def build_grasping_targets(anchors, gt_class_ids, gt_boxes, config):
+    # RPN bounding boxes: [max anchors per image, (dx, dy, log(dw), log(dh), dtheta)]
+    rpn_bbox = np.zeros((config.GRASP_ANCHORS_PER_ROI, 5))
+    rpn_match = np.zeros([anchors.shape[0]], dtype=np.int32)
+    overlaps = utils.compute_overlaps(anchors, gt_boxes, mode='grasping_points')
+
+    fg_neg_thresh = 0.01
+    fg_pos_thresh = 0.1
+    # 1. Set negative anchors first. They get overwritten below if a GT box is
+    # matched to them. Skip boxes in crowd areas.
+    anchor_iou_argmax = np.argmax(overlaps, axis=1)
+    anchor_iou_max = overlaps[np.arange(overlaps.shape[0]), anchor_iou_argmax]
+
+    rpn_match[(anchor_iou_max < fg_neg_thresh)] = -1
+    # 2. Set an anchor for each GT box (regardless of IoU value).
+    # If multiple anchors have the same IoU match all of them
+    gt_iou_argmax = np.argwhere(overlaps == np.max(overlaps, axis=0))[:, 0]
+    # gt_iou_argmax =  np.argmax(overlaps, axis=0)
+    rpn_match[gt_iou_argmax] = 1
+    # 3. Set anchors with high overlap as positive.
+    # import code;
+    # code.interact(local=dict(globals(), **locals()))
+    rpn_match[anchor_iou_max >= fg_pos_thresh] = 1
+
+    # rpn_match[positive_anchor_indices] = 1
+    positive_ids = np.where(rpn_match == 1)[0]
+    # ids = positive_anchor_indices
+    extra = len(positive_ids) - (config.GRASP_ANCHORS_PER_ROI // 2)
+    if extra > 0:
+        # Reset the extra ones to neutral
+        extra_ids = np.random.choice(positive_ids, extra, replace=False)
+        rpn_match[extra_ids] = 0
+
+    easy_negative_indices = np.where(rpn_match == -1)[0]
+    total_num_negative = len(easy_negative_indices)
+
+    # Case where an image has no negative samples
+    if total_num_negative == 0:
+        neutral_ids = np.where(rpn_match == 0)[0]
+        positive_ids = np.where(rpn_match == 1)[0]
+        negative_ids = np.random.choice(neutral_ids, config.GRASP_ANCHORS_PER_ROI - len(positive_ids),
+                                        replace=False)
+        rpn_match[negative_ids] = -1
+
+    else:
+        extra = (total_num_negative + np.sum(rpn_match == 1)) - config.GRASP_ANCHORS_PER_ROI
+        if extra > 0:
+            # Rest the extra ones to neutral
+            ids = np.random.choice(easy_negative_indices, extra, replace=False)
+            # forcing hard negative examples to be in the final 256 anchors to be used for training
+            rpn_match[ids] = 0
+            # rpn_match[hard_negative_indices] = -1
+        else:
+            neutral_ids = np.where(rpn_match == 0)[0]
+            negative_ids = np.random.choice(neutral_ids, abs(extra), replace=False)
+            rpn_match[negative_ids] = -1
+
+    final_id_set = np.where(np.logical_not(rpn_match == 0))[0]
+    positive_ids = np.where(rpn_match == 1)[0]
+    anchor_iou_argmax_filtered = anchor_iou_argmax[final_id_set]
+
+    # overlaps_filtered = overlaps[positive_ids]
+    # top_gt_box_per_anchor = np.argsort(overlaps_filtered, axis = 1)
+    # num_repeats = np.zeros(gt_class_ids.shape)
+    # anchor_iou_argmax_new = np.zeros(positive_ids.shape[0])
+    # for i, gt_id in enumerate(top_gt_box_per_anchor[:, -1]):
+    #     num_repeats[gt_id] += 1
+    #     # This is the case when several anchors got assigned to the same ground truth box, if thats the case, assign
+    #     # anchor to second highest overlapping gt_box
+    #     if num_repeats[gt_id] > 1:
+    #         gt_id = top_gt_box_per_anchor[i, -int(num_repeats[gt_id])]
+    #     anchor_iou_argmax_new[i] = gt_id
+    # import code;
+    # code.interact(local=dict(globals(), **locals()))
+
+    j = 0
+    for ix in final_id_set:
+        # For negative samples, rpn_bbox stays all zero [0,0,0,0,0]
+        if not (ix in positive_ids):
+            j += 1
+            continue
+        # For positive samples
+        else:
+            anchor = anchors[ix]
+            gt = gt_boxes[anchor_iou_argmax_filtered[j]]
+            # gt = gt_boxes[(anchor_data[:,0] == ix)]
+            gt_center_x, gt_center_y, gt_w, gt_h, gt_theta = gt
+            a_center_x, a_center_y, a_w, a_h, a_theta = anchor
+            if (a_w == 0 or a_h == 0):
+                print("ZERO DIMENSION - model.py line 1881")
+                import code;
+                code.interact(local=dict(globals(), **locals()))
+            # Compute the bbox refinement that the RPN should predict.
+            rpn_bbox[j] = [
+                (gt_center_x - a_center_x) / a_w,
+                (gt_center_y - a_center_y) / a_h,
+                np.log(gt_w / a_w),
+                np.log(gt_h / a_h),
+                (gt_theta - a_theta) / (180 / len(config.GRASP_ANCHOR_ANGLES)),
+            ]
+            rpn_bbox[j] /= config.GRASP_BBOX_STD_DEV  ## rpn_bbox[ix, :4]
+        j += 1
+    # print('num_positive = ', np.count_nonzero(rpn_match == 1), 'num_negative = ', np.count_nonzero(rpn_match == -1))
+    if not (np.count_nonzero(rpn_match == 1) + np.count_nonzero(
+            rpn_match == -1) == config.GRASP_ANCHORS_PER_ROI):
+        import code;
+        code.interact(local=dict(globals(), **locals()))
+    return rpn_match, rpn_bbox
+
 def build_rpn_targets(anchors, gt_class_ids, gt_boxes, config, mode=''):
 
     """Given the anchors and GT boxes, compute overlaps and identify positive

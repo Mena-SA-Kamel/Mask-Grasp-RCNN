@@ -49,10 +49,12 @@ class GraspMaskRCNNConfig(Config):
     GRASP_ANCHOR_RATIOS = [1]
     GRASP_ANCHOR_ANGLES = [-67.5, -22.5, 22.5, 67.5]
     GRASP_ANCHOR_RATIOS = [1]  # To modify based on image size
-    POOL_SIZE = 7
-    GRASP_ANCHORS_PER_ROI = POOL_SIZE * POOL_SIZE * len(GRASP_ANCHOR_RATIOS) * len(GRASP_ANCHOR_ANGLES)
-    GRASP_ANCHOR_SIZE = 12
+    GRASP_POOL_SIZE = 7
+    GRASP_ANCHOR_SIZE = [12, 24, 48]
+    GRASP_ANCHORS_PER_ROI = GRASP_POOL_SIZE * GRASP_POOL_SIZE * len(GRASP_ANCHOR_RATIOS) * len(GRASP_ANCHOR_ANGLES) * len(GRASP_ANCHOR_SIZE)
+    GRASP_BBOX_STD_DEV = np.array([0.1, 0.1, 0.2, 0.2, 1])
     TRAIN_ROIS_PER_IMAGE = 200
+
 
 
 class GraspMaskRCNNInferenceConfig(GraspMaskRCNNConfig):
@@ -713,46 +715,93 @@ for image_id in image_ids:
      # gt_grasp_boxes are specified relative to the resized image size. We want the coordinates to be specified
      # relative to the ROI's coordinates in order to represent them in terms of anchors over the ROI pooled feature space
 
-     fig, ax = plt.subplots()
-     ax.imshow(original_image)
+     fig, (ax1, ax2, ax3, ax4, ax5, ax6) = plt.subplots(1, 6)
+     ax1.imshow(original_image)
+     ax2.imshow(original_image)
+     ax3.imshow(original_image)
+     ax4.imshow(original_image)
+     ax5.imshow(original_image)
+     ax6.imshow(original_image)
      for i, rect in enumerate(gt_bbox):
          y1, x1, y2, x2 = rect
          w = abs(x2 - x1)
          h = abs(y2 - y1)
          grasping_points = gt_grasp_boxes[i]
-         anchor_size = 12
          ROI_shape = np.array([h, w])
          pooled_feature_stride = np.array(ROI_shape/config.POOL_SIZE).astype('uint8')
          anchors = utils.generate_grasping_anchors(config.GRASP_ANCHOR_SIZE,
                                                    config.GRASP_ANCHOR_RATIOS,
-                                                   [config.POOL_SIZE, config.POOL_SIZE],
+                                                   [config.GRASP_POOL_SIZE, config.GRASP_POOL_SIZE],
                                                    pooled_feature_stride,
                                                    1,
-                                                   config.GRASP_ANCHOR_ANGLES)
+                                                   config.GRASP_ANCHOR_ANGLES,
+                                                   rect)
 
-         import code;
-         code.interact(local=dict(globals(), **locals()))
-         target_rpn_match, target_rpn_bbox = modellib.build_rpn_targets(
-            anchors, gt_grasp_id[i], gt_grasp_boxes[i], config, mode = 'mask_grasp_rcnn')
+
+         # x_val = np.unique(anchors[:,1])[2]
+         # y_val = np.unique(anchors[:,0])[2]
+
+         # anchors_to_plot = anchors[np.logical_and((anchors[:, 0] == y_val), (anchors[:, 1] == x_val))]
+
+         target_rpn_match, target_rpn_bbox = modellib.build_grasping_targets(
+            anchors, gt_grasp_id[i], gt_grasp_boxes[i], config)
 
 
          # shift anchors to be over the RoI
-         anchors[:,0] += x1
-         anchors[:,1] += y1
 
-         for i, anchor in enumerate(anchors):
+         for j, anchor in enumerate(anchors):
              anchor = utils.bbox_convert_to_four_vertices([anchor])
              p = patches.Polygon(anchor[0], linewidth=1, edgecolor='r', facecolor='none')
-             ax.add_patch(p)
+             ax2.add_patch(p)
 
          p = patches.Rectangle((x1, y1), w, h, facecolor=None, fill=False, color='b')
-         ax.add_patch(p)
+         ax1.add_patch(p)
+
+         positive_anchor_ix = np.where(target_rpn_match[:] == 1)[0]
+         negative_anchor_ix = np.where(target_rpn_match[:] == -1)[0]
+         neutral_anchor_ix = np.where(target_rpn_match[:] == 0)[0]
+         positive_anchors = anchors[positive_anchor_ix]
+         negative_anchors = anchors[negative_anchor_ix]
+         neutral_anchors = anchors[neutral_anchor_ix]
+         image_final_anchors = np.where(np.logical_not(target_rpn_match[:] == 0))[0]
+         positive_anchors_mask = np.in1d(image_final_anchors, positive_anchor_ix)
+         deltas = target_rpn_bbox[positive_anchors_mask] * config.GRASP_BBOX_STD_DEV
+         refined_anchors = utils.apply_box_deltas(positive_anchors, deltas, 'mask_grasp_rcnn', len(config.GRASP_ANCHOR_ANGLES))
+
+         for j, rect in enumerate(gt_grasp_boxes[i]):
+             rect = validating_dataset.bbox_convert_to_four_vertices([rect])
+             p = patches.Polygon(rect[0], linewidth=1,edgecolor='g',facecolor='none')
+             ax3.add_patch(p)
+         ax3.set_title(validating_dataset.image_info[image_id]['path'])
+
+         print (len(positive_anchor_ix), len(negative_anchor_ix), len(neutral_anchor_ix))
 
 
+         for j, rect2 in enumerate(negative_anchors):
+             rect2 = validating_dataset.bbox_convert_to_four_vertices([rect2])
+             p = patches.Polygon(rect2[0], linewidth=1,edgecolor='r',facecolor='none')
+             ax4.add_patch(p)
 
+         for j, rect3 in enumerate(anchors[positive_anchor_ix]):
+             rect3= validating_dataset.bbox_convert_to_four_vertices([rect3])
+             q = patches.Polygon(rect3[0], linewidth=1, edgecolor='b', facecolor='none')
+             ax5.add_patch(q)
+
+         for j, rect4 in enumerate(refined_anchors):
+             rect4 = validating_dataset.bbox_convert_to_four_vertices([rect4])
+             r = patches.Polygon(rect4[0], linewidth=1, edgecolor='b', facecolor='none')
+             ax6.add_patch(r)
+
+     ax1.set_title('ROI')
+     ax2.set_title('Anchors')
+     ax3.set_title('GT grasp boxes')
+     ax4.set_title('Negative Anchors')
+     ax5.set_title('Positive Anchors')
+     ax6.set_title('Refined Anchors')
      plt.show(block=False)
+import code;
 
-
+code.interact(local=dict(globals(), **locals()))
 
 
 
