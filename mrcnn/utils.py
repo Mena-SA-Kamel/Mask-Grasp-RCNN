@@ -943,12 +943,20 @@ def generate_grasping_anchors(scales, ratios, shape, feature_stride, anchor_stri
     heights = scales / np.sqrt(ratios)
     widths = scales * np.sqrt(ratios)
 
-    y1, x1, _, _ = roi_boundaries
+    y1, x1, y2, x2 = roi_boundaries
+    roi_heights = y2 - y1
+    roi_widths = x2 - x1
+
+    # Adaptive anchor sizes
+    anchor_width = [roi_widths / shape[1]]
+    anchor_height = [roi_heights / shape[0]]
+
     # Enumerate shifts in feature space
     shifts_y = (np.arange(0, shape[0], anchor_stride) * feature_stride[0]) + feature_stride[0]//2 + y1
     shifts_x = (np.arange(0, shape[1], anchor_stride) * feature_stride[1]) + feature_stride[1]//2 + x1
 
-    box_sizes = np.stack([heights, widths], axis = 1)
+    # box_sizes = np.stack([heights, widths], axis = 1)
+    box_sizes = np.stack([anchor_height, anchor_width], axis = 1)
     num_anchor_sizes = np.arange(len(box_sizes))
     boxes = np.array(np.meshgrid(shifts_x, shifts_y, num_anchor_sizes, thetas)).T.reshape(-1, 4)
     final_boxes = np.zeros((boxes.shape[0], 5))

@@ -50,7 +50,7 @@ class GraspMaskRCNNConfig(Config):
     GRASP_ANCHOR_ANGLES = [-67.5, -22.5, 22.5, 67.5]
     GRASP_ANCHOR_RATIOS = [1]  # To modify based on image size
     GRASP_POOL_SIZE = 7
-    GRASP_ANCHOR_SIZE = [12, 24, 48]
+    GRASP_ANCHOR_SIZE = [12]
     GRASP_ANCHORS_PER_ROI = GRASP_POOL_SIZE * GRASP_POOL_SIZE * len(GRASP_ANCHOR_RATIOS) * len(GRASP_ANCHOR_ANGLES) * len(GRASP_ANCHOR_SIZE)
     GRASP_BBOX_STD_DEV = np.array([0.1, 0.1, 0.2, 0.2, 1])
     TRAIN_ROIS_PER_IMAGE = 200
@@ -715,6 +715,7 @@ for image_id in image_ids:
      # gt_grasp_boxes are specified relative to the resized image size. We want the coordinates to be specified
      # relative to the ROI's coordinates in order to represent them in terms of anchors over the ROI pooled feature space
 
+
      fig, (ax1, ax2, ax3, ax4, ax5, ax6) = plt.subplots(1, 6)
      ax1.imshow(original_image)
      ax2.imshow(original_image)
@@ -728,7 +729,7 @@ for image_id in image_ids:
          h = abs(y2 - y1)
          grasping_points = gt_grasp_boxes[i]
          ROI_shape = np.array([h, w])
-         pooled_feature_stride = np.array(ROI_shape/config.POOL_SIZE).astype('uint8')
+         pooled_feature_stride = np.array(ROI_shape/config.GRASP_POOL_SIZE).astype('uint8')
          anchors = utils.generate_grasping_anchors(config.GRASP_ANCHOR_SIZE,
                                                    config.GRASP_ANCHOR_RATIOS,
                                                    [config.GRASP_POOL_SIZE, config.GRASP_POOL_SIZE],
