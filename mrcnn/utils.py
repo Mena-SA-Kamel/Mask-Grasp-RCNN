@@ -947,9 +947,10 @@ def generate_grasping_anchors(scales, ratios, shape, feature_stride, anchor_stri
     roi_heights = y2 - y1
     roi_widths = x2 - x1
 
-    # Adaptive anchor sizes
-    anchor_width = [roi_widths / shape[1]]
-    anchor_height = [roi_heights / shape[0]]
+    # Adaptive anchor sizes with overlap factor
+    overlap_factor = 1.5
+    anchor_width = np.array([roi_widths / shape[1]])*overlap_factor
+    anchor_height = np.array([roi_heights / shape[0]])*overlap_factor
 
     # Enumerate shifts in feature space
     shifts_y = (np.arange(0, shape[0], anchor_stride) * feature_stride[0]) + feature_stride[0]//2 + y1

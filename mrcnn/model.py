@@ -676,7 +676,7 @@ def overlaps_graph(boxes1, boxes2):
     return overlaps
 
 
-def detection_targets_graph(proposals, gt_class_ids, gt_boxes, gt_masks, config):
+def detection_targets_graph(proposals, gt_class_ids, gt_boxes, gt_masks, gt_grasp_class, gt_grasp_boxes, config):
     """Generates detection targets for one image. Subsamples proposals and
     generates target class IDs, bounding box deltas, and masks for each.
 
@@ -686,6 +686,8 @@ def detection_targets_graph(proposals, gt_class_ids, gt_boxes, gt_masks, config)
     gt_class_ids: [MAX_GT_INSTANCES] int class IDs
     gt_boxes: [MAX_GT_INSTANCES, (y1, x1, y2, x2)] in normalized coordinates.
     gt_masks: [height, width, MAX_GT_INSTANCES] of boolean type.
+    gt_grasp_class: [MAX_GT_INSTANCES, NUM_GRASP_BOXES]
+    gt_grasp_boxes: [MAX_GT_INSTANCES, NUM_GRASP_BOXES, (x, y, w, h, theta)]
 
     Returns: Target ROIs and corresponding class IDs, bounding box shifts,
     and masks.
@@ -712,6 +714,10 @@ def detection_targets_graph(proposals, gt_class_ids, gt_boxes, gt_masks, config)
                                    name="trim_gt_class_ids")
     gt_masks = tf.gather(gt_masks, tf.where(non_zeros)[:, 0], axis=2,
                          name="trim_gt_masks")
+    gt_grasp_boxes = tf.boolean_mask(gt_grasp_boxes, non_zeros,
+                                     name="trim_grasp_gt_boxes")
+    gt_grasp_class = tf.boolean_mask(gt_grasp_class, non_zeros,
+                                     name="trim_gt_grasp_class")
 
     # Handle COCO crowds
     # A crowd box in COCO is a bounding box around several instances. Exclude
@@ -763,7 +769,6 @@ def detection_targets_graph(proposals, gt_class_ids, gt_boxes, gt_masks, config)
     roi_gt_boxes = tf.gather(gt_boxes, roi_gt_box_assignment)
     roi_gt_class_ids = tf.gather(gt_class_ids, roi_gt_box_assignment)
 
-    #### HERE roi_gt_boxes NOW REFERS TO THE BOXES THAT THE PROPOSALS ARE REFERRING TO
     # Compute bbox refinement for positive ROIs
     deltas = utils.box_refinement_graph(positive_rois, roi_gt_boxes)
     deltas /= config.BBOX_STD_DEV
@@ -799,9 +804,9 @@ def detection_targets_graph(proposals, gt_class_ids, gt_boxes, gt_masks, config)
     # binary cross entropy loss.
     masks = tf.round(masks)
 
-    # Compute Grasping targets
-    # import code;
-    # code.interact(local=dict(globals(), **locals()))
+    # Picking the right grasping gt boxes for each ROI
+    roi_gt_grasp_boxes = tf.gather(gt_grasp_boxes, roi_gt_box_assignment)
+    roi_gt_grasp_class = tf.gather(gt_grasp_class, roi_gt_box_assignment)
 
     # Append negative ROIs and pad bbox deltas and masks that
     # are not used for negative ROIs with zeros.
@@ -813,8 +818,9 @@ def detection_targets_graph(proposals, gt_class_ids, gt_boxes, gt_masks, config)
     roi_gt_class_ids = tf.pad(roi_gt_class_ids, [(0, N + P)])
     deltas = tf.pad(deltas, [(0, N + P), (0, 0)])
     masks = tf.pad(masks, [[0, N + P], (0, 0), (0, 0)])
+    ## Adding negatives
 
-    return rois, roi_gt_class_ids, deltas, masks
+    return rois, roi_gt_class_ids, deltas, masks, roi_gt_grasp_boxes, roi_gt_grasp_class
 
 
 class DetectionTargetLayer(KE.Layer):
@@ -851,14 +857,16 @@ class DetectionTargetLayer(KE.Layer):
         gt_class_ids = inputs[1]
         gt_boxes = inputs[2]
         gt_masks = inputs[3]
+        gt_grasp_class = inputs[4]
+        gt_grasp_boxes = inputs[5]
 
         # Slice the batch and run a graph for each slice
         # TODO: Rename target_bbox to target_deltas for clarity
-        names = ["rois", "target_class_ids", "target_bbox", "target_mask"]
+        names = ["rois", "target_class_ids", "target_bbox", "target_mask", 'target_grasp_class', 'target_grasp_bbox']
         outputs = utils.batch_slice(
-            [proposals, gt_class_ids, gt_boxes, gt_masks],
-            lambda w, x, y, z: detection_targets_graph(
-                w, x, y, z, self.config),
+            [proposals, gt_class_ids, gt_boxes, gt_masks, gt_grasp_class, gt_grasp_boxes],
+            lambda u, v, w, x, y, z: detection_targets_graph(
+                u, v, w, x, y, z, self.config),
             self.config.IMAGES_PER_GPU, names=names)
         return outputs
 
@@ -3208,12 +3216,12 @@ class MaskRCNN():
                     name="input_gt_masks", dtype=bool)
 
             # Grasping GT (class IDs, bounding boxes)
-            # RPN GT
-            input_grasp_rpn_match = KL.Input(
-                shape=[None, 1], name="input_grasp_rpn_match", dtype=tf.int32)
-            # Recall: rpn_bbox specifies the refinements required for each positive anchor to match the GT boxes. Shape
-            input_grasp_rpn_bbox = KL.Input(
-                shape=[None, 5], name="input_grasp_rpn_bbox", dtype=tf.float32)
+            # [batch, MAX_GT_INSTANCES, # of grasping anchors, 1]
+            input_grasp_match = KL.Input(
+                shape=[None, config.GRASP_ANCHORS_PER_ROI, 1], name="input_grasp_rpn_match", dtype=tf.int32)
+            # [batch, MAX_GT_INSTANCES, # of grasping anchors, [x, y, w, h, theta]]
+            input_grasp_bbox = KL.Input(
+                shape=[None, config.GRASP_ANCHORS_PER_ROI, 5], name="input_grasp_rpn_bbox", dtype=tf.float32)
 
         elif mode == "inference":
             # Anchors in normalized coordinates
@@ -3253,7 +3261,7 @@ class MaskRCNN():
         # Note that P6 is used in RPN, but not in the classifier heads.
         rpn_feature_maps = [P2, P3, P4, P5, P6]
         mrcnn_feature_maps = [P2, P3, P4, P5]
-
+        grasping_feature_maps = [P2, P3, P4, P5]
 
         # Anchors
         if mode == "training":
@@ -3318,9 +3326,15 @@ class MaskRCNN():
             # Subsamples proposals and generates target outputs for training
             # Note that proposal class IDs, gt_boxes, and gt_masks are zero
             # padded. Equally, returned rois and targets are zero padded.
-            rois, target_class_ids, target_bbox, target_mask =\
+
+            # want this to return the target_grasp_rectangles, target_grasp_class
+            # rois, target_class_ids, target_bbox, target_mask =\
+            #     DetectionTargetLayer(config, name="proposal_targets")([
+            #         target_rois, input_gt_class_ids, gt_boxes, input_gt_masks])
+
+            rois, target_class_ids, target_bbox, target_mask = \
                 DetectionTargetLayer(config, name="proposal_targets")([
-                    target_rois, input_gt_class_ids, gt_boxes, input_gt_masks])
+                    target_rois, input_gt_class_ids, gt_boxes, input_gt_masks, input_grasp_match, input_grasp_bbox])
 
             # Network Heads
             # TODO: verify that this handles zero padded ROIs
