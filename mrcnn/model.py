@@ -714,10 +714,18 @@ def detection_targets_graph(proposals, gt_class_ids, gt_boxes, gt_masks, gt_gras
                                    name="trim_gt_class_ids")
     gt_masks = tf.gather(gt_masks, tf.where(non_zeros)[:, 0], axis=2,
                          name="trim_gt_masks")
+    # Trimming zero instances
     gt_grasp_boxes = tf.boolean_mask(gt_grasp_boxes, non_zeros,
                                      name="trim_grasp_gt_boxes")
     gt_grasp_class = tf.boolean_mask(gt_grasp_class, non_zeros,
                                      name="trim_gt_grasp_class")
+    # import code;
+    # code.interact(local=dict(globals(), **locals()))
+    #
+    # # Trimming zero padded boxes at the instance level
+    # non_zero_grasp_boxes = tf.cast(tf.reduce_sum(tf.abs(gt_grasp_boxes), axis=2), tf.bool)
+    # gt_grasp_boxes = tf.boolean_mask(gt_grasp_boxes, non_zero_grasp_boxes, name="trim_grasp_gt_boxes_instance_level")
+    # gt_grasp_class = tf.boolean_mask(gt_grasp_class, non_zero_grasp_boxes, name="trim_grasp_gt_class_instance_level")
 
     # Handle COCO crowds
     # A crowd box in COCO is a bounding box around several instances. Exclude
@@ -771,6 +779,7 @@ def detection_targets_graph(proposals, gt_class_ids, gt_boxes, gt_masks, gt_gras
 
     # Compute bbox refinement for positive ROIs
     deltas = utils.box_refinement_graph(positive_rois, roi_gt_boxes)
+    denormalized_deltas = tf.identity(deltas)
     deltas /= config.BBOX_STD_DEV
 
     # Assign positive ROIs to GT masks
@@ -807,6 +816,51 @@ def detection_targets_graph(proposals, gt_class_ids, gt_boxes, gt_masks, gt_gras
     # Picking the right grasping gt boxes for each ROI
     roi_gt_grasp_boxes = tf.gather(gt_grasp_boxes, roi_gt_box_assignment)
     roi_gt_grasp_class = tf.gather(gt_grasp_class, roi_gt_box_assignment)
+
+    # At this point roi_gt_grasp_boxes are the GT grasping boxes for each positive ROI specified by positive_rois
+    # Need to specify the GT grasping boxes in the proposal frame of reference
+    # This can be done by subtracting dx and dy in the denormalized deltas from the roi_gt_grasp_boxes
+
+    # calculating dx and dy defined as the difference in [x1, y1] of positive_rois, roi_gt_boxes [y1, x1, y2, x2]
+    proposal_y1 = positive_rois[:, 0]
+    proposal_x1 = positive_rois[:, 1]
+    proposal_y2 = positive_rois[:, 2]
+    proposal_x2 = positive_rois[:, 3]
+
+    proposal_widths = proposal_x2 - proposal_x1
+    proposal_heights = proposal_y2 - proposal_y1
+
+    dx_s = roi_gt_boxes[:, 1] - proposal_x1
+    dy_s = roi_gt_boxes[:, 0] - proposal_y1
+
+    gt_grasp_box_x = tf.expand_dims(roi_gt_grasp_boxes[:, :, 0] - dx_s, axis=-1)
+    gt_grasp_box_y = tf.expand_dims(roi_gt_grasp_boxes[:, :, 1] - dy_s, axis=-1)
+    gt_grasp_box_w = tf.expand_dims(roi_gt_grasp_boxes[:, :, 2], axis=-1)
+    gt_grasp_box_h = tf.expand_dims(roi_gt_grasp_boxes[:, :, 3], axis=-1)
+    gt_grasp_box_theta = tf.expand_dims(roi_gt_grasp_boxes[:, :, 4], axis=-1)
+
+    # Gt grasp boxes specified in the reference frame of each proposal
+    referenced_grasp_boxes = tf.concat([gt_grasp_box_x, gt_grasp_box_y, gt_grasp_box_w, gt_grasp_box_h,
+                                       gt_grasp_box_theta], axis=-1)
+
+    # Next we need to remove the GT grasp boxes that cross the proposal boundary
+    # Then, represent the GT grasp boxes relative to the adaptive size proposal anchors
+
+    radius = ((gt_grasp_box_w/2)**2 + (gt_grasp_box_h/2)**2)**0.5
+    proposal_y1_reshaped = K.repeat(tf.expand_dims(proposal_y1, axis=-1), n=radius.shape[1])
+    proposal_x1_reshaped = K.repeat(tf.expand_dims(proposal_x1, axis=-1), n=radius.shape[1])
+    proposal_y2_reshaped = K.repeat(tf.expand_dims(proposal_y2, axis=-1), n=radius.shape[1])
+    proposal_x2_reshaped = K.repeat(tf.expand_dims(proposal_x2, axis=-1), n=radius.shape[1])
+
+    # valid_grasp_boxes is a mask for the boxes that lie within the boundary of the proposals, True for valid boxes,
+    # false otherwise
+    valid_grasp_boxes = tf.less(gt_grasp_box_x + radius, proposal_x2_reshaped)
+    valid_grasp_boxes = tf.logical_and(valid_grasp_boxes, tf.greater(gt_grasp_box_x - radius, proposal_x1_reshaped))
+    valid_grasp_boxes = tf.logical_and(valid_grasp_boxes, tf.less(gt_grasp_box_y + radius, proposal_y2_reshaped))
+    valid_grasp_boxes = tf.logical_and(valid_grasp_boxes, tf.greater(gt_grasp_box_y - radius, proposal_y1_reshaped))
+
+    import code;
+    code.interact(local=dict(globals(), **locals()))
 
     # Append negative ROIs and pad bbox deltas and masks that
     # are not used for negative ROIs with zeros.
@@ -1907,7 +1961,7 @@ def load_image_gt(dataset, config, image_id, augment=False, augmentation=None, o
     elif mode == 'mask_grasp_rcnn':
         image = dataset.load_image(image_id, augmentation=augmentations, image_type=image_type)
         original_shape = image.shape
-        grasp_bbox_vertices, grasp_bbox_5_dimensional, grasp_class_ids = dataset.load_bounding_boxes(image_id, augmentations)
+        grasp_bbox_vertices, grasp_bbox_5_dimensional, grasp_class_ids = dataset.load_bounding_boxes(image_id, augmentations, config.NUM_GRASP_BOXES_PER_INSTANCE)
         mask, class_ids = dataset.load_mask(image_id)
         image, window, scale, padding, crop = utils.resize_image(
             image,
@@ -3218,10 +3272,10 @@ class MaskRCNN():
             # Grasping GT (class IDs, bounding boxes)
             # [batch, MAX_GT_INSTANCES, # of grasping anchors, 1]
             input_grasp_match = KL.Input(
-                shape=[None, config.GRASP_ANCHORS_PER_ROI, 1], name="input_grasp_rpn_match", dtype=tf.int32)
+                shape=[None, config.NUM_GRASP_BOXES_PER_INSTANCE, 1], name="input_grasp_rpn_match", dtype=tf.int32)
             # [batch, MAX_GT_INSTANCES, # of grasping anchors, [x, y, w, h, theta]]
             input_grasp_bbox = KL.Input(
-                shape=[None, config.GRASP_ANCHORS_PER_ROI, 5], name="input_grasp_rpn_bbox", dtype=tf.float32)
+                shape=[None, config.NUM_GRASP_BOXES_PER_INSTANCE, 5], name="input_grasp_rpn_bbox", dtype=tf.float32)
 
         elif mode == "inference":
             # Anchors in normalized coordinates

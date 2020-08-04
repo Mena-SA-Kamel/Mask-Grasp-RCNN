@@ -54,6 +54,7 @@ class GraspMaskRCNNConfig(Config):
     GRASP_BBOX_STD_DEV = np.array([0.1, 0.1, 0.2, 0.2, 1])
     MAX_GT_INSTANCES = 50
     TRAIN_ROIS_PER_IMAGE = 200
+    NUM_GRASP_BOXES_PER_INSTANCE = 128
 
 
 
@@ -528,7 +529,7 @@ class GraspMaskRCNNDataset(Dataset):
         bbox_5_dimensional = np.array(bbox_5_dimensional)
         return bbox_5_dimensional
 
-    def load_bounding_boxes(self, image_id, augmentation=[]):
+    def load_bounding_boxes(self, image_id, augmentation=[], target_num_boxes=256):
         # bounding boxes here have a shape of N x 4 x 2, consisting of four vertices per rectangle given N rectangles
         # loading jacquard style bboxes. NOTE: class_ids will all be 1 since jacquard only has positive boxes
 
@@ -546,6 +547,19 @@ class GraspMaskRCNNDataset(Dataset):
 
         class_ids = np.array(class_ids)
         bounding_box_vertices = np.array(bounding_box_vertices)
+
+        num_boxes = bounding_box_vertices.shape[0]
+        extra = target_num_boxes - num_boxes
+        if extra > 0:
+            zero_pad_box = np.zeros((extra, ) + bounding_box_vertices[0].shape)
+            bounding_box_vertices = np.append(bounding_box_vertices, zero_pad_box, axis=0)
+            zero_pad_class_ids = np.zeros(extra)
+            class_ids = np.append(class_ids, zero_pad_class_ids)
+
+        else:
+            extra_ix_to_remove = np.random.permutation(abs(extra))
+            bounding_box_vertices = np.delete(bounding_box_vertices, extra_ix_to_remove, axis=0)
+            class_ids = np.delete(class_ids, extra_ix_to_remove)
 
         # shuffling the rectangles
         p = np.random.permutation(len(class_ids))
@@ -683,7 +697,7 @@ model_path = os.path.join(MODEL_DIR, "mask_rcnn_object_vs_background_HYBRID-Weig
 model.keras_model.save_weights(model_path)
 
 ##### TESTING #####
-# #
+#
 # MODEL_DIR = "models"
 #
 # mrcnn_model_path = 'models/Good_models/Training_SAMS_dataset_LR-div-5-div-10-HYBRID-weights/mask_rcnn_object_vs_background_0051.h5'
@@ -803,11 +817,11 @@ model.keras_model.save_weights(model_path)
 # import code;
 #
 # code.interact(local=dict(globals(), **locals()))
-#
-#
-#
-#
-#
+
+
+
+
+
 
 
 
