@@ -676,6 +676,50 @@ def overlaps_graph(boxes1, boxes2):
     return overlaps
 
 
+def generate_grasping_anchors_graph(inputs):
+    # Main goal - Get bbox in the form {x, y, w, h, thetas
+    stride_y, stride_x, y1, x1, y2, x2 = tf.split(inputs, num_or_size_splits=6)
+
+    roi_heights = y2 - y1
+    roi_widths = x2 - x1
+
+    # Values hard coded here because map_fn does not allow more than one input to the function
+    GRASP_POOL_SIZE = 7
+    GRASP_ANCHOR_RATIOS = [1]
+    GRASP_ANCHOR_ANGLES = [-67.5, -22.5, 22.5, 67.5]
+    GRASP_ANCHOR_SIZE = [48]
+    GRASP_ANCHOR_STRIDE = 1
+    GRASP_ANCHORS_PER_ROI = GRASP_POOL_SIZE * GRASP_POOL_SIZE * len(GRASP_ANCHOR_RATIOS) * len(
+        GRASP_ANCHOR_ANGLES) * len(GRASP_ANCHOR_SIZE)
+
+    # feature_map_shape = [config.GRASP_POOL_SIZE, config.GRASP_POOL_SIZE]
+    feature_map_shape = [GRASP_POOL_SIZE, GRASP_POOL_SIZE]
+
+    # Adaptive anchor sizes with overlap factor
+    overlap_factor = 1.5
+
+    anchor_width = (roi_widths / feature_map_shape[1]) * overlap_factor
+    anchor_height = (roi_heights / feature_map_shape[0]) * overlap_factor
+
+    # Enumerate shifts in feature space
+    shifts_y = tf.cast(tf.range(0, feature_map_shape[0], delta=GRASP_ANCHOR_STRIDE), dtype=tf.float32)
+    shifts_y = (shifts_y*stride_y) + stride_y/2 + y1
+
+    shifts_x = tf.cast(tf.range(0, feature_map_shape[1], delta=GRASP_ANCHOR_STRIDE), dtype=tf.float32)
+    shifts_x = (shifts_x*stride_x) + stride_x / 2 + x1
+
+    # Creating anchors
+    boxes = tf.reshape(tf.transpose(tf.meshgrid(shifts_x, shifts_y, GRASP_ANCHOR_ANGLES)), (-1, 3))
+    box_sizes = tf.concat([anchor_height, anchor_width / 2], axis=-1)
+
+    box_sizes = tf.expand_dims(box_sizes, axis=-1)
+    anchor_heights, anchor_widths = tf.split(K.repeat(box_sizes, n=GRASP_ANCHORS_PER_ROI), num_or_size_splits=2, axis=0)
+    anchor_x, anchor_y, anchor_thetas = tf.split(boxes, num_or_size_splits=3, axis=-1)
+    anchors = tf.concat([anchor_x, anchor_y, anchor_widths[0], anchor_heights[0], anchor_thetas], axis=-1)
+
+    return anchors
+
+
 def detection_targets_graph(proposals, gt_class_ids, gt_boxes, gt_masks, gt_grasp_class, gt_grasp_boxes, config):
     """Generates detection targets for one image. Subsamples proposals and
     generates target class IDs, bounding box deltas, and masks for each.
@@ -779,7 +823,6 @@ def detection_targets_graph(proposals, gt_class_ids, gt_boxes, gt_masks, gt_gras
 
     # Compute bbox refinement for positive ROIs
     deltas = utils.box_refinement_graph(positive_rois, roi_gt_boxes)
-    denormalized_deltas = tf.identity(deltas)
     deltas /= config.BBOX_STD_DEV
 
     # Assign positive ROIs to GT masks
@@ -827,8 +870,8 @@ def detection_targets_graph(proposals, gt_class_ids, gt_boxes, gt_masks, gt_gras
     proposal_y2 = positive_rois[:, 2]
     proposal_x2 = positive_rois[:, 3]
 
-    proposal_widths = proposal_x2 - proposal_x1
-    proposal_heights = proposal_y2 - proposal_y1
+    proposal_widths = tf.expand_dims(proposal_x2 - proposal_x1, axis=-1)
+    proposal_heights = tf.expand_dims(proposal_y2 - proposal_y1, axis=-1)
 
     dx_s = roi_gt_boxes[:, 1] - proposal_x1
     dy_s = roi_gt_boxes[:, 0] - proposal_y1
@@ -859,8 +902,19 @@ def detection_targets_graph(proposals, gt_class_ids, gt_boxes, gt_masks, gt_gras
     valid_grasp_boxes = tf.logical_and(valid_grasp_boxes, tf.less(gt_grasp_box_y + radius, proposal_y2_reshaped))
     valid_grasp_boxes = tf.logical_and(valid_grasp_boxes, tf.greater(gt_grasp_box_y - radius, proposal_y1_reshaped))
 
-    import code;
-    code.interact(local=dict(globals(), **locals()))
+    # Multiply the referenced_grasp_boxes and roi_gt_grasp_class with valid_grasp_boxes mask to convert the invalid
+    # boxes and their classes to zeros
+    final_roi_gt_grasp_boxes = referenced_grasp_boxes * tf.cast(valid_grasp_boxes, dtype='float32')
+    final_roi_gt_grasp_class = roi_gt_grasp_class * tf.cast(valid_grasp_boxes, dtype='int32')
+
+    # Next, we create adaptive size anchors for all the instances in positive_rois
+    pooled_feature_stride = tf.concat([proposal_heights, proposal_widths], axis = -1) /config.GRASP_POOL_SIZE
+    pooled_feature_stride = tf.cast(pooled_feature_stride, tf.float32)
+    grasping_anchors = tf.map_fn(generate_grasping_anchors_graph,
+                              tf.concat([pooled_feature_stride, positive_rois], axis=1))
+
+
+
 
     # Append negative ROIs and pad bbox deltas and masks that
     # are not used for negative ROIs with zeros.

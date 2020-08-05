@@ -2,6 +2,7 @@ import tensorflow as tf
 import keras.backend as K
 import keras.layers as KL
 import numpy as np
+from mrcnn import utils
 
 tf.enable_eager_execution()
 # loss = np.arange(60)
@@ -79,9 +80,9 @@ tf.enable_eager_execution()
 #
 # total_positive_loss = K.sum(tf.gather_nd(classification_loss, positive_indices))
 
-positive_rois = np.arange(0,8).reshape((2, 4))
+positive_rois = np.arange(0,8).reshape((2, 4))*10
 
-roi_gt_grasp_boxes = np.ones((2, 7, 5))
+roi_gt_grasp_boxes = np.ones((2, 7, 5)) + 5
 roi_gt_grasp_boxes[0,:, 2] = np.zeros((1, 7))
 roi_gt_grasp_boxes[0, 1, :] = np.zeros((1, 5))
 roi_gt_grasp_boxes[1, :, 3] = np.zeros((1, 7))
@@ -109,22 +110,88 @@ proposal_y1 = positive_rois[:, 0]
 proposal_x1 = positive_rois[:, 1]
 proposal_y2 = positive_rois[:, 2]
 proposal_x2 = positive_rois[:, 3]
+proposal_widths = tf.expand_dims(proposal_x2 - proposal_x1, axis=-1)
+proposal_heights = tf.expand_dims(proposal_y2 - proposal_y1, axis=-1)
+
 radius = ((gt_grasp_box_w/2)**2 + (gt_grasp_box_h/2)**2)**0.5
 proposal_y1_reshaped = K.repeat(tf.expand_dims(proposal_y1, axis=-1), n=radius.shape[1])
 proposal_x1_reshaped = K.repeat(tf.expand_dims(proposal_x1, axis=-1), n=radius.shape[1])
 proposal_y2_reshaped = K.repeat(tf.expand_dims(proposal_y2, axis=-1), n=radius.shape[1])
 proposal_x2_reshaped = K.repeat(tf.expand_dims(proposal_x2, axis=-1), n=radius.shape[1])
 
-import code; code.interact(local=dict(globals(), **locals()))
 valid_grasp_boxes = tf.less(gt_grasp_box_x + radius, proposal_x2_reshaped)
 valid_grasp_boxes = tf.logical_and(valid_grasp_boxes, tf.greater(gt_grasp_box_x - radius, proposal_x1_reshaped))
 valid_grasp_boxes = tf.logical_and(valid_grasp_boxes, tf.less(gt_grasp_box_y + radius, proposal_y2_reshaped))
 valid_grasp_boxes = tf.logical_and(valid_grasp_boxes, tf.greater(gt_grasp_box_y - radius, proposal_y1_reshaped))
 
-import code; code.interact(local=dict(globals(), **locals()))
+sample_arr = [True, False]
+valid_grasp_boxes = np.random.choice(sample_arr, size=14).reshape((2,7,1))
+valid_grasp_boxes = K.variable(value=valid_grasp_boxes)
+
+final_roi_gt_grasp_boxes = referenced_grasp_boxes * tf.cast(valid_grasp_boxes, dtype='float32')
+
+GRASP_POOL_SIZE = 7
+GRASP_ANCHOR_RATIOS = [1]
+GRASP_ANCHOR_ANGLES = [-67.5, -22.5, 22.5, 67.5]
+GRASP_ANCHOR_SIZE = [48]
 
 
-non_zero_grasp_boxes = tf.cast(tf.reduce_sum(tf.abs(gt_grasp_boxes), axis=2), tf.bool)
+def generate_grasping_anchors_graph(inputs):
+    # Main goal - Get bbox in the form {x, y, w, h, thetas
+    stride_y, stride_x, y1, x1, y2, x2 = tf.split(inputs, num_or_size_splits=6)
+
+    # To be replaced with config reference
+    GRASP_POOL_SIZE = 7
+    GRASP_ANCHOR_RATIOS = [1]
+    GRASP_ANCHOR_ANGLES = [-67.5, -22.5, 22.5, 67.5]
+    GRASP_ANCHOR_SIZE = [48]
+    GRASP_ANCHOR_STRIDE = 1
+    GRASP_ANCHORS_PER_ROI = GRASP_POOL_SIZE * GRASP_POOL_SIZE * len(GRASP_ANCHOR_RATIOS) * len(GRASP_ANCHOR_ANGLES) * len(GRASP_ANCHOR_SIZE)
+    # GRASP_POOL_SIZE = K.variable(value=GRASP_POOL_SIZE)
+    # GRASP_ANCHOR_RATIOS = K.variable(value=GRASP_ANCHOR_RATIOS)
+    # GRASP_ANCHOR_ANGLES = K.variable(value=GRASP_ANCHOR_ANGLES)
+    # GRASP_ANCHOR_SIZE = K.variable(value=GRASP_ANCHOR_SIZE)
+
+    roi_heights = y2 - y1
+    roi_widths = x2 - x1
+
+    # feature_map_shape = [config.GRASP_POOL_SIZE, config.GRASP_POOL_SIZE]
+    feature_map_shape = [GRASP_POOL_SIZE, GRASP_POOL_SIZE]
+
+    # Adaptive anchor sizes with overlap factor
+    overlap_factor = 1.5
+
+    anchor_width = (roi_widths / feature_map_shape[1]) * overlap_factor
+    anchor_height = (roi_heights / feature_map_shape[0]) * overlap_factor
+
+    # Enumerate shifts in feature space
+    shifts_y = tf.cast(tf.range(0, feature_map_shape[0], delta=GRASP_ANCHOR_STRIDE), dtype=tf.float32)
+    shifts_y = (shifts_y*stride_y) + stride_y/2 + y1
+
+    shifts_x = tf.cast(tf.range(0, feature_map_shape[1], delta=GRASP_ANCHOR_STRIDE), dtype=tf.float32)
+    shifts_x = (shifts_x*stride_x) + stride_x / 2 + x1
+
+    # Creating anchors
+    boxes = tf.reshape(tf.transpose(tf.meshgrid(shifts_x, shifts_y, GRASP_ANCHOR_ANGLES)), (-1, 3))
+    box_sizes = tf.concat([anchor_height, anchor_width / 2], axis=-1)
+    box_sizes = tf.expand_dims(box_sizes, axis=-1)
+
+    anchor_heights, anchor_widths = tf.split(K.repeat(box_sizes, n=GRASP_ANCHORS_PER_ROI), num_or_size_splits=2, axis=-1)
+    anchor_x, anchor_y, anchor_thetas = tf.split(boxes, num_or_size_splits=3, axis=-1)
+    anchors = tf.concat([anchor_x, anchor_y, anchor_widths, anchor_heights, anchor_thetas], axis=-1)
+    return anchors
+
+pooled_feature_stride = tf.concat([proposal_heights, proposal_widths], axis = -1) /GRASP_POOL_SIZE
+pooled_feature_stride = tf.cast(pooled_feature_stride, tf.float32)
+
+
+
+final_anchors = tf.map_fn(generate_grasping_anchors_graph,
+          tf.concat([pooled_feature_stride, positive_rois], axis=1))
+import code;
+
+code.interact(local=dict(globals(), **locals()))
+
 
 
 #
