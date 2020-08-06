@@ -485,6 +485,8 @@ class GraspMaskRCNNDataset(Dataset):
         return np.array(bounding_boxes_formatted), class_ids
 
     def get_five_dimensional_box(self, coordinates):
+        if np.sum(coordinates == 0):
+            return [0,0,0,0,0]
         x_coordinates = coordinates[:, 0]
         y_coordinates = coordinates[:, 1]
         gripper_orientation = coordinates[:2, :]
@@ -556,11 +558,13 @@ class GraspMaskRCNNDataset(Dataset):
             bounding_box_vertices = np.append(bounding_box_vertices, zero_pad_box, axis=0)
             zero_pad_class_ids = np.zeros(extra)
             class_ids = np.append(class_ids, zero_pad_class_ids)
-
+            zero_pad_5_dimensional = np.zeros((extra,) + bbox_5_dimensional[0].shape)
+            bbox_5_dimensional = np.append(bbox_5_dimensional, zero_pad_5_dimensional, axis=0)
         else:
             extra_ix_to_remove = np.random.permutation(abs(extra))
             bounding_box_vertices = np.delete(bounding_box_vertices, extra_ix_to_remove, axis=0)
             class_ids = np.delete(class_ids, extra_ix_to_remove)
+            bbox_5_dimensional = np.delete(bbox_5_dimensional, extra_ix_to_remove, axis=0)
 
         # shuffling the rectangles
         p = np.random.permutation(len(class_ids))
@@ -729,7 +733,6 @@ model.keras_model.save_weights(model_path)
 #      # (x,y,w,h,theta): shape [N, X, 4]
 #      # gt_grasp_boxes are specified relative to the resized image size. We want the coordinates to be specified
 #      # relative to the ROI's coordinates in order to represent them in terms of anchors over the ROI pooled feature space
-#
 #
 #      fig, (ax1, ax2, ax3, ax4, ax5, ax6) = plt.subplots(1, 6)
 #      ax1.imshow(original_image)

@@ -913,7 +913,8 @@ def detection_targets_graph(proposals, gt_class_ids, gt_boxes, gt_masks, gt_gras
     grasping_anchors = tf.map_fn(generate_grasping_anchors_graph,
                               tf.concat([pooled_feature_stride, positive_rois], axis=1))
 
-
+    import code;
+    code.interact(local=dict(globals(), **locals()))
 
 
     # Append negative ROIs and pad bbox deltas and masks that

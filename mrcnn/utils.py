@@ -934,8 +934,8 @@ def generate_grasping_anchors(scales, ratios, shape, feature_stride, anchor_stri
     anchor_stride: Stride of anchors on the feature map. For example, if the
         value is 2 then generate anchors for every other feature map pixel.
     """
-    feature_stride = feature_stride[0]
-    roi_boundaries = roi_boundaries[0]
+    feature_stride = feature_stride
+    roi_boundaries = roi_boundaries
     # Main goal - Get bbox in the form {x, y, w, h, thetas
     scales, ratios = np.meshgrid(np.array(scales), np.array(ratios))
     scales = scales.flatten()
