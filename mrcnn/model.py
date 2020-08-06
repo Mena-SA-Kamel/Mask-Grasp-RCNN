@@ -675,6 +675,49 @@ def overlaps_graph(boxes1, boxes2):
     overlaps = tf.reshape(iou, [tf.shape(boxes1)[0], tf.shape(boxes2)[0]])
     return overlaps
 
+def grasping_overlaps_graph(inputs):
+    # boxes1:  grasping_anchors (proposals)
+    # boxes2: final_roi_gt_grasp_boxes (gt)
+
+    grasp_anchors, gt_grasp_boxes = tf.split(inputs, num_or_size_splits=2, axis=-1)
+    b1_anchors = grasp_anchors
+    b2_grasp_boxes = gt_grasp_boxes
+
+    non_zero_grasp_boxes = tf.cast(tf.reduce_sum(tf.abs(b2_grasp_boxes), axis=1), tf.bool)
+
+    # b1_anchors = tf.reshape(tf.tile(tf.expand_dims(boxes1, 1),
+    #                         [1, 1, tf.shape(boxes2)[0]]), [-1, 5])
+    # b2_grasp_boxes = tf.tile(boxes2, [tf.shape(boxes1)[0], 1])
+
+    # Need to represent b1 and b2 in the form y1, x1, y2, x2
+    b1_x, b1_y, b1_w, b1_h, b1_theta = tf.split(b1_anchors, num_or_size_splits=5, axis=-1)
+    b2_x, b2_y, b2_w, b2_h, b2_theta = tf.split(b2_grasp_boxes, num_or_size_splits=5, axis=-1)
+
+    b1_y1, b1_x1, b1_y2, b1_x2  = [b1_y - (b1_h/2), b1_x - (b1_w/2), b1_y + (b1_h/2), b1_x + (b1_w/2)]
+    b2_y1, b2_x1, b2_y2, b2_x2 = [b2_y - (b2_h/2), b2_x - (b2_w/2), b2_y + (b2_h/2), b2_x + (b2_w/2)]
+
+    # Compute intersection
+    y1 = tf.maximum(b1_y1, b2_y1)
+    x1 = tf.maximum(b1_x1, b2_x1)
+    y2 = tf.minimum(b1_y2, b2_y2)
+    x2 = tf.minimum(b1_x2, b2_x2)
+    intersection = tf.maximum(x2 - x1, 0) * tf.maximum(y2 - y1, 0)
+
+    # Compute unions
+    b1_area = (b1_y2 - b1_y1) * (b1_x2 - b1_x1)
+    b2_area = (b2_y2 - b2_y1) * (b2_x2 - b2_x1)
+    union = b1_area + b2_area - intersection
+
+    # Compute IOU
+    iou = intersection / union
+
+    # Compute delta theta between boxes1 and boxes2 to get the ARIoU
+
+    angle_differences = tf.cos(tf_deg2rad(b1_theta) - tf_deg2rad(b2_theta))
+    angle_differences = tf.maximum(angle_differences, 0)
+    arIoU = iou * angle_differences
+    arIoU = arIoU * tf.expand_dims(tf.cast(non_zero_grasp_boxes, dtype=tf.float32), axis=-1)
+    return arIoU
 
 def generate_grasping_anchors_graph(inputs):
     # Main goal - Get bbox in the form {x, y, w, h, thetas
@@ -913,6 +956,17 @@ def detection_targets_graph(proposals, gt_class_ids, gt_boxes, gt_masks, gt_gras
     grasping_anchors = tf.map_fn(generate_grasping_anchors_graph,
                               tf.concat([pooled_feature_stride, positive_rois], axis=1))
 
+    # Computing overlaps between the grasping anchors and the final_roi_gt_grasp_boxes
+    boxes1 = grasping_anchors
+    boxes2 = final_roi_gt_grasp_boxes
+
+    # Reshaping to get equal sized tensors
+    grasping_anchors_reshaped = tf.tile(boxes1, [1, tf.shape(boxes2)[1], 1])
+    grasping_boxes_reshaped = tf.tile(boxes2, [1, tf.shape(boxes1)[1], 1])
+
+    # graso_overlaps [NUM_INSTANCES, 196(number of anchors) * number of grasping boxes]
+    grasp_overlaps = tf.map_fn(fn=grasping_overlaps_graph,
+                               elems=tf.concat([grasping_anchors_reshaped, grasping_boxes_reshaped], axis=-1))
     import code;
     code.interact(local=dict(globals(), **locals()))
 
