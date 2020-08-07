@@ -685,10 +685,6 @@ def grasping_overlaps_graph(inputs):
 
     non_zero_grasp_boxes = tf.cast(tf.reduce_sum(tf.abs(b2_grasp_boxes), axis=1), tf.bool)
 
-    # b1_anchors = tf.reshape(tf.tile(tf.expand_dims(boxes1, 1),
-    #                         [1, 1, tf.shape(boxes2)[0]]), [-1, 5])
-    # b2_grasp_boxes = tf.tile(boxes2, [tf.shape(boxes1)[0], 1])
-
     # Need to represent b1 and b2 in the form y1, x1, y2, x2
     b1_x, b1_y, b1_w, b1_h, b1_theta = tf.split(b1_anchors, num_or_size_splits=5, axis=-1)
     b2_x, b2_y, b2_w, b2_h, b2_theta = tf.split(b2_grasp_boxes, num_or_size_splits=5, axis=-1)
@@ -932,7 +928,9 @@ def detection_targets_graph(proposals, gt_class_ids, gt_boxes, gt_masks, gt_gras
     # Next we need to remove the GT grasp boxes that cross the proposal boundary
     # Then, represent the GT grasp boxes relative to the adaptive size proposal anchors
 
-    radius = ((gt_grasp_box_w/2)**2 + (gt_grasp_box_h/2)**2)**0.5
+    # Multiplying the radius by a sensitivity factor - Large sensitivity = removes more boxes
+    sensitivity = 0 # 0 means just checks if the gt_grasp_box center <x,y> is in the RoI
+    radius = (((gt_grasp_box_w/2)**2 + (gt_grasp_box_h/2)**2)**0.5) * sensitivity
     proposal_y1_reshaped = K.repeat(tf.expand_dims(proposal_y1, axis=-1), n=radius.shape[1])
     proposal_x1_reshaped = K.repeat(tf.expand_dims(proposal_x1, axis=-1), n=radius.shape[1])
     proposal_y2_reshaped = K.repeat(tf.expand_dims(proposal_y2, axis=-1), n=radius.shape[1])
@@ -946,12 +944,13 @@ def detection_targets_graph(proposals, gt_class_ids, gt_boxes, gt_masks, gt_gras
     valid_grasp_boxes = tf.logical_and(valid_grasp_boxes, tf.greater(gt_grasp_box_y - radius, proposal_y1_reshaped))
 
     # Multiply the referenced_grasp_boxes and roi_gt_grasp_class with valid_grasp_boxes mask to convert the invalid
-    # boxes and their classes to zeros
+    # boxes and their classes to zeros - THIS MIGHT OMIT ALL BOXES FOR CIRCULAR OBJECTS
     final_roi_gt_grasp_boxes = referenced_grasp_boxes * tf.cast(valid_grasp_boxes, dtype='float32')
     final_roi_gt_grasp_class = roi_gt_grasp_class * tf.cast(valid_grasp_boxes, dtype='int32')
 
     # Next, we create adaptive size anchors for all the instances in positive_rois
     pooled_feature_stride = tf.concat([proposal_heights, proposal_widths], axis = -1) /config.GRASP_POOL_SIZE
+
     pooled_feature_stride = tf.cast(pooled_feature_stride, tf.float32)
     grasping_anchors = tf.map_fn(generate_grasping_anchors_graph,
                               tf.concat([pooled_feature_stride, positive_rois], axis=1))
@@ -962,11 +961,39 @@ def detection_targets_graph(proposals, gt_class_ids, gt_boxes, gt_masks, gt_gras
 
     # Reshaping to get equal sized tensors
     grasping_anchors_reshaped = tf.tile(boxes1, [1, tf.shape(boxes2)[1], 1])
-    grasping_boxes_reshaped = tf.tile(boxes2, [1, tf.shape(boxes1)[1], 1])
+    grasping_boxes_reshaped = tf.tile(K.expand_dims(boxes2, axis=2), [1, 1, tf.shape(boxes1)[1], 1])
+    grasping_boxes_reshaped = tf.reshape(grasping_boxes_reshaped, tf.shape(grasping_anchors_reshaped))
 
     # graso_overlaps [NUM_INSTANCES, 196(number of anchors) * number of grasping boxes]
     grasp_overlaps = tf.map_fn(fn=grasping_overlaps_graph,
                                elems=tf.concat([grasping_anchors_reshaped, grasping_boxes_reshaped], axis=-1))
+
+    # grasp_overlaps_reshaped has the shape [num_instances, num_grasp_instances, num_anchors]
+    grasp_overlaps_reshaped = tf.reshape(tf.squeeze(grasp_overlaps),[-1, boxes2.shape[1], boxes1.shape[1]])
+
+    grasp_anchor_match = K.placeholder(shape=grasping_anchors.shape[:2])
+    grasp_anchor_match = K.ones_like(grasp_anchor_match) * -1
+
+    grasp_roi_iou_max = tf.reduce_max(grasp_overlaps_reshaped, axis=-1)
+    grasp_roi_iou_argmax = tf.expand_dims(tf.argmax(grasp_overlaps_reshaped, axis=-1), axis=-1)
+
+    grasp_instance_ix = tf.range(0, tf.shape(grasp_roi_iou_argmax)[0])
+    grasp_instance_ix = tf.tile(tf.expand_dims(grasp_instance_ix, axis=-1), [1, tf.shape(grasp_roi_iou_argmax)[1]])
+    grasp_instance_ix = tf.expand_dims(tf.cast(grasp_instance_ix, dtype=tf.int64), axis=-1)
+
+    positive_grasp_anchors_ix = tf.concat([grasp_instance_ix, grasp_roi_iou_argmax], axis=-1)
+    positive_grasp_anchors_ix = tf.reshape(positive_grasp_anchors_ix, [-1, 2])
+
+    updates = tf.ones(tf.shape(positive_grasp_anchors_ix)[0])
+    grasp_anchor_match = tf.tensor_scatter_nd_update(grasp_anchor_match, positive_grasp_anchors_ix, updates)
+
+    anchors_to_keep = tf.where(grasp_overlaps_reshaped > config.ARIOU_POS_THRESHOLD)
+    instance_ix, _, anchor_ix = tf.split(anchors_to_keep, num_or_size_splits=3, axis=-1)
+    anchors_to_keep_ix = tf.concat([instance_ix, anchor_ix], axis=-1)
+
+    updates = tf.ones(tf.shape(anchors_to_keep_ix)[0])
+    grasp_anchor_match = tf.tensor_scatter_nd_update(grasp_anchor_match, anchors_to_keep_ix, updates)
+
     import code;
     code.interact(local=dict(globals(), **locals()))
 

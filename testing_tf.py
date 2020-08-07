@@ -3,6 +3,9 @@ from math import pi
 import keras.backend as K
 import numpy as np
 import tensorflow as tf
+import matplotlib.pyplot as plt
+import mrcnn.utils as utils
+import matplotlib.patches as patches
 
 tf.enable_eager_execution()
 # loss = np.arange(60)
@@ -177,7 +180,7 @@ def grasping_overlaps_graph(inputs):
 
 
 positive_rois = [[ 70, 113, 313, 330],
-                 [ 90, 128, 270, 360]]
+                 [ 90, 128, 275, 360]]
 
 roi_gt_grasp_boxes = np.array([[[215, 272.5, 14.86606875, 28.31952463,-42.27368901],
                                      [240.5, 140.5,  36.05551275,   4.10478145,-70.55996517],
@@ -232,7 +235,8 @@ proposal_x2 = positive_rois[:, 3]
 proposal_widths = tf.expand_dims(proposal_x2 - proposal_x1, axis=-1)
 proposal_heights = tf.expand_dims(proposal_y2 - proposal_y1, axis=-1)
 
-radius = ((gt_grasp_box_w/2)**2 + (gt_grasp_box_h/2)**2)**0.5
+sensitivity = 0
+radius = (((gt_grasp_box_w/2)**2 + (gt_grasp_box_h/2)**2)**0.5) * sensitivity
 proposal_y1_reshaped = K.repeat(tf.expand_dims(proposal_y1, axis=-1), n=radius.shape[1])
 proposal_x1_reshaped = K.repeat(tf.expand_dims(proposal_x1, axis=-1), n=radius.shape[1])
 proposal_y2_reshaped = K.repeat(tf.expand_dims(proposal_y2, axis=-1), n=radius.shape[1])
@@ -270,14 +274,89 @@ boxes2 = final_roi_gt_grasp_boxes
 
 # Reshaping to get equal sized tensors
 grasping_anchors_reshaped = tf.tile(boxes1, [1, tf.shape(boxes2)[1], 1])
-grasping_boxes_reshaped = tf.tile(boxes2, [1, tf.shape(boxes1)[1], 1])
+grasping_boxes_reshaped = tf.tile(K.expand_dims(boxes2, axis=2), [1, 1,tf.shape(boxes1)[1], 1])
+grasping_boxes_reshaped = tf.reshape(grasping_boxes_reshaped, tf.shape(grasping_anchors_reshaped))
 
 
 grasp_overlaps = tf.map_fn(fn=grasping_overlaps_graph,
           elems=tf.concat([grasping_anchors_reshaped, grasping_boxes_reshaped], axis=-1))
-import code;
 
+# grasp_overlaps_reshaped has the shape [num_instances, num_grasp_instances, num_anchors]
+grasp_overlaps_reshaped = tf.reshape(tf.squeeze(grasp_overlaps), [grasp_overlaps.shape[0], boxes2.shape[1], boxes1.shape[1]])
+
+ARIOU_NEG_THRESHOLD = 0.01
+ARIOU_POS_THRESHOLD = 0.1
+
+grasp_anchor_match = tf.ones(grasping_anchors.shape[:2])*-1
+
+grasp_roi_iou_max = tf.reduce_max(grasp_overlaps_reshaped, axis=-1)
+# [num_instances, num_grasping_boxes]
+grasp_roi_iou_argmax = tf.expand_dims(tf.argmax(grasp_overlaps_reshaped, axis=-1), axis=-1)
+grasp_instance_ix = tf.range(0, tf.shape(grasp_roi_iou_argmax)[0])
+grasp_instance_ix = tf.tile(tf.expand_dims(grasp_instance_ix, axis=-1), [1, tf.shape(grasp_roi_iou_argmax)[1]])
+grasp_instance_ix = tf.expand_dims(tf.cast(grasp_instance_ix, dtype=tf.int64), axis=-1)
+
+positive_grasp_anchors_ix = tf.concat([grasp_instance_ix, grasp_roi_iou_argmax], axis=-1)
+positive_grasp_anchors_ix = tf.reshape(positive_grasp_anchors_ix, [-1, 2])
+
+updates = tf.ones(tf.shape(positive_grasp_anchors_ix)[0])
+grasp_anchor_match = tf.tensor_scatter_nd_update(grasp_anchor_match, positive_grasp_anchors_ix, updates)
+
+
+anchors_to_keep = tf.where(grasp_overlaps_reshaped > ARIOU_POS_THRESHOLD)
+instance_ix, _, anchor_ix = tf.split(anchors_to_keep, num_or_size_splits=3, axis=-1)
+anchors_to_keep_ix = tf.concat([instance_ix, anchor_ix], axis=-1)
+
+updates = tf.ones(tf.shape(anchors_to_keep_ix)[0])
+grasp_anchor_match = tf.tensor_scatter_nd_update(grasp_anchor_match, anchors_to_keep_ix, updates)
+
+
+import code;
 code.interact(local=dict(globals(), **locals()))
+
+
+
+
+# Visualizing Boxes and Anchors and Anchor selection strategy
+grasp_anchors_np = grasping_anchors.numpy()
+gt_boxes_np = positive_rois.numpy()
+gt_grasp_points_np = final_roi_gt_grasp_boxes.numpy()
+grasp_overlaps_reshaped_np = grasp_overlaps_reshaped.numpy()
+
+image = np.zeros((384, 384))
+fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(10, 10))
+ax1.imshow(image)
+ax2.imshow(image)
+
+
+for i in range(grasp_anchors_np.shape[1]):
+    rect_1 = utils.bbox_convert_to_four_vertices([grasp_anchors_np[0, i]])[0]
+    p = patches.Polygon(rect_1, linewidth=0.25, edgecolor='c', facecolor='none')
+    ax1.add_patch(p)
+
+    rect_2 = utils.bbox_convert_to_four_vertices([grasp_anchors_np[1, i]])[0]
+    p = patches.Polygon(rect_2, linewidth=0.25, edgecolor='c', facecolor='none')
+    ax2.add_patch(p)
+
+for i in range(gt_boxes_np.shape[0]):
+    y1, x1, y2, x2 = gt_boxes_np[i]
+    w = abs(x2 - x1)
+    h = abs(y2 - y1)
+    p = patches.Rectangle((x1, y1), w, h, facecolor=None, fill=False, color='k', linewidth=2)
+    fig.axes[i].add_patch(p)
+    for j in gt_grasp_points_np[i]:
+        rect = utils.bbox_convert_to_four_vertices([j])[0]
+        q = patches.Polygon(rect, linewidth=1.5, edgecolor='r', facecolor='none')
+        fig.axes[i].add_patch(q)
+    # [number_of_anchors, number of gt_grasp_boxes]
+    anchor_overlaps = grasp_overlaps_reshaped_np[i]
+    for matching_anchors in grasp_anchors_np[i, np.where(anchor_overlaps > 0.01)[1]]:
+        rect = utils.bbox_convert_to_four_vertices([matching_anchors])[0]
+        p = patches.Polygon(rect, linewidth=2,edgecolor='g',facecolor='none')
+        fig.axes[i].add_patch(p)
+
+
+plt.show(block=False)
 
 
 
