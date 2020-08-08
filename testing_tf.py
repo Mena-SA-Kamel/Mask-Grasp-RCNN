@@ -287,32 +287,55 @@ grasp_overlaps_reshaped = tf.reshape(tf.squeeze(grasp_overlaps), [grasp_overlaps
 ARIOU_NEG_THRESHOLD = 0.01
 ARIOU_POS_THRESHOLD = 0.1
 
+# grasp_anchor_match - this is 1 for positive anchors, -1 for negative anchors
+# grasp_box_match - this specifies the id of the grasp box for each positive anchor, -1 for negative anchors
 grasp_anchor_match = tf.ones(grasping_anchors.shape[:2])*-1
+grasp_box_match = tf.ones(grasping_anchors.shape[:2])*-1
 
 grasp_roi_iou_max = tf.reduce_max(grasp_overlaps_reshaped, axis=-1)
-# [num_instances, num_grasping_boxes]
 grasp_roi_iou_argmax = tf.expand_dims(tf.argmax(grasp_overlaps_reshaped, axis=-1), axis=-1)
-grasp_instance_ix = tf.range(0, tf.shape(grasp_roi_iou_argmax)[0])
-grasp_instance_ix = tf.tile(tf.expand_dims(grasp_instance_ix, axis=-1), [1, tf.shape(grasp_roi_iou_argmax)[1]])
-grasp_instance_ix = tf.expand_dims(tf.cast(grasp_instance_ix, dtype=tf.int64), axis=-1)
+grasp_roi_ix = tf.range(0, tf.shape(grasp_roi_iou_argmax)[0])
+grasp_roi_ix = tf.tile(tf.expand_dims(grasp_roi_ix, axis=-1), [1, tf.shape(grasp_roi_iou_argmax)[1]])
+grasp_roi_ix = tf.expand_dims(tf.cast(grasp_roi_ix, dtype=tf.int64), axis=-1)
 
-positive_grasp_anchors_ix = tf.concat([grasp_instance_ix, grasp_roi_iou_argmax], axis=-1)
+grasp_box_ix = tf.tile(tf.range(tf.shape(grasp_overlaps_reshaped)[1]), [tf.shape(grasp_overlaps_reshaped)[0]])
+grasp_box_ix = tf.cast(tf.reshape(grasp_box_ix, grasp_roi_iou_argmax.shape), dtype=tf.int64)
+
+positive_grasp_anchors_ix = tf.concat([grasp_roi_ix, grasp_roi_iou_argmax], axis=-1)
 positive_grasp_anchors_ix = tf.reshape(positive_grasp_anchors_ix, [-1, 2])
-
 updates = tf.ones(tf.shape(positive_grasp_anchors_ix)[0])
 grasp_anchor_match = tf.tensor_scatter_nd_update(grasp_anchor_match, positive_grasp_anchors_ix, updates)
 
+updates_grasp_box = tf.cast(tf.reshape(grasp_box_ix, [-1]), dtype=tf.float32)
+grasp_box_match = tf.tensor_scatter_nd_update(grasp_box_match, positive_grasp_anchors_ix, updates_grasp_box)
 
+# Keeping boxes that have an overlap higher than ARIOU_POS_THRESHOLD
 anchors_to_keep = tf.where(grasp_overlaps_reshaped > ARIOU_POS_THRESHOLD)
-instance_ix, _, anchor_ix = tf.split(anchors_to_keep, num_or_size_splits=3, axis=-1)
+instance_ix, grasp_ix, anchor_ix = tf.split(anchors_to_keep, num_or_size_splits=3, axis=-1)
 anchors_to_keep_ix = tf.concat([instance_ix, anchor_ix], axis=-1)
 
 updates = tf.ones(tf.shape(anchors_to_keep_ix)[0])
 grasp_anchor_match = tf.tensor_scatter_nd_update(grasp_anchor_match, anchors_to_keep_ix, updates)
 
+updates_grasp_box = tf.cast(tf.reshape(grasp_ix, [-1]), dtype=tf.float32)
+grasp_box_match = tf.tensor_scatter_nd_update(grasp_box_match, anchors_to_keep_ix, updates_grasp_box)
 
 import code;
+
 code.interact(local=dict(globals(), **locals()))
+
+#
+# grasping_anchor_iou_argmax = tf.argmax(grasp_overlaps_reshaped, axis=1)
+#
+# anchor_indices = tf.tile(tf.range(tf.shape(grasp_overlaps_reshaped)[-1]), [tf.shape(grasping_anchor_iou_argmax)[0]])
+# anchor_indices = tf.reshape(anchor_indices, grasping_anchor_iou_argmax.shape)
+# anchor_indices = tf.cast(anchor_indices, dtype=tf.int64)
+#
+# grasp_anchor_assignment = tf.concat([tf.expand_dims(anchor_indices, axis=-1), tf.expand_dims(grasping_anchor_iou_argmax, axis=-1)], axis=-1)
+#
+# negative_anchor_ix = tf.where(grasp_overlaps_reshaped < ARIOU_NEG_THRESHOLD)
+
+
 
 
 
