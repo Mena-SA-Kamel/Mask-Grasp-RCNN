@@ -759,7 +759,7 @@ def generate_grasping_anchors_graph(inputs):
     return anchors
 
 
-def detection_targets_graph(proposals, gt_class_ids, gt_boxes, gt_masks, gt_grasp_class, gt_grasp_boxes, config):
+def detection_targets_graph(proposals, gt_class_ids, gt_boxes, gt_masks, anchors, gt_grasp_class, gt_grasp_boxes, config):
     """Generates detection targets for one image. Subsamples proposals and
     generates target class IDs, bounding box deltas, and masks for each.
 
@@ -896,8 +896,8 @@ def detection_targets_graph(proposals, gt_class_ids, gt_boxes, gt_masks, gt_gras
     masks = tf.round(masks)
 
     # Picking the right grasping gt boxes for each ROI
-    roi_gt_grasp_boxes = tf.gather(gt_grasp_boxes, roi_gt_box_assignment)
-    roi_gt_grasp_class = tf.gather(gt_grasp_class, roi_gt_box_assignment)
+    roi_gt_grasp_boxes = tf.cast(tf.gather(gt_grasp_boxes, roi_gt_box_assignment), dtype=tf.float32)
+    roi_gt_grasp_class = tf.cast(tf.gather(gt_grasp_class, roi_gt_box_assignment), dtype=tf.float32)
 
     # At this point roi_gt_grasp_boxes are the GT grasping boxes for each positive ROI specified by positive_rois
     # Need to specify the GT grasping boxes in the proposal frame of reference
@@ -946,7 +946,7 @@ def detection_targets_graph(proposals, gt_class_ids, gt_boxes, gt_masks, gt_gras
     # Multiply the referenced_grasp_boxes and roi_gt_grasp_class with valid_grasp_boxes mask to convert the invalid
     # boxes and their classes to zeros - THIS MIGHT OMIT ALL BOXES FOR CIRCULAR OBJECTS
     final_roi_gt_grasp_boxes = referenced_grasp_boxes * tf.cast(valid_grasp_boxes, dtype='float32')
-    final_roi_gt_grasp_class = roi_gt_grasp_class * tf.cast(valid_grasp_boxes, dtype='int32')
+    final_roi_gt_grasp_class = roi_gt_grasp_class * tf.cast(valid_grasp_boxes, dtype='float32')
 
     # Next, we create adaptive size anchors for all the instances in positive_rois
     pooled_feature_stride = tf.concat([proposal_heights, proposal_widths], axis = -1) /config.GRASP_POOL_SIZE
@@ -1024,6 +1024,8 @@ def detection_targets_graph(proposals, gt_class_ids, gt_boxes, gt_masks, gt_gras
 
     grasp_deltas = tf.map_fn(fn=utils.grasp_box_refinement_graph,
                              elems=tf.concat([grasping_anchors, gt_grasp_boxes_filtered], axis=-1))
+    grasp_deltas /= config.GRASP_BBOX_STD_DEV
+    grasp_anchor_match = tf.expand_dims(grasp_anchor_match, axis=-1)
 
     # At this point:
     # grasp_anchor_match : Marks the positive anchors with 1 and negative anchors with -1
@@ -1044,7 +1046,7 @@ def detection_targets_graph(proposals, gt_class_ids, gt_boxes, gt_masks, gt_gras
     masks = tf.pad(masks, [[0, N + P], (0, 0), (0, 0)])
     ## Adding negatives
 
-    return rois, roi_gt_class_ids, deltas, masks, roi_gt_grasp_boxes, roi_gt_grasp_class
+    return rois, roi_gt_class_ids, deltas, masks, grasping_anchors, grasp_anchor_match, grasp_deltas
 
 
 class DetectionTargetLayer(KE.Layer):
@@ -1081,16 +1083,18 @@ class DetectionTargetLayer(KE.Layer):
         gt_class_ids = inputs[1]
         gt_boxes = inputs[2]
         gt_masks = inputs[3]
-        gt_grasp_class = inputs[4]
-        gt_grasp_boxes = inputs[5]
+        anchors = inputs[4]
+        gt_grasp_class = inputs[5]
+        gt_grasp_boxes = inputs[6]
+
 
         # Slice the batch and run a graph for each slice
         # TODO: Rename target_bbox to target_deltas for clarity
-        names = ["rois", "target_class_ids", "target_bbox", "target_mask", 'target_grasp_class', 'target_grasp_bbox']
+        names = ["rois", "target_class_ids", "target_bbox", "target_mask", "grasping_anchors", "target_grasp_class", "target_grasp_bbox"]
         outputs = utils.batch_slice(
-            [proposals, gt_class_ids, gt_boxes, gt_masks, gt_grasp_class, gt_grasp_boxes],
-            lambda u, v, w, x, y, z: detection_targets_graph(
-                u, v, w, x, y, z, self.config),
+            [proposals, gt_class_ids, gt_boxes, gt_masks, anchors, gt_grasp_class, gt_grasp_boxes],
+            lambda t, u, v, w, x, y, z: detection_targets_graph(
+                t, u, v, w, x, y, z, self.config),
             self.config.IMAGES_PER_GPU, names=names)
         return outputs
 
@@ -1100,7 +1104,10 @@ class DetectionTargetLayer(KE.Layer):
             (None, self.config.TRAIN_ROIS_PER_IMAGE),  # class_ids
             (None, self.config.TRAIN_ROIS_PER_IMAGE, 4),  # deltas
             (None, self.config.TRAIN_ROIS_PER_IMAGE, self.config.MASK_SHAPE[0],
-             self.config.MASK_SHAPE[1])  # masks
+             self.config.MASK_SHAPE[1]),  # masks
+            (None, self.config.TRAIN_ROIS_PER_IMAGE, self.config.GRASP_ANCHORS_PER_ROI, 5), # grasping anchors
+            (None, self.config.TRAIN_ROIS_PER_IMAGE, self.config.GRASP_ANCHORS_PER_ROI, 1), # grasping box class
+            (None, self.config.TRAIN_ROIS_PER_IMAGE, self.config.GRASP_ANCHORS_PER_ROI, 5), # grasping box deltas
         ]
 
     def compute_mask(self, inputs, mask=None):
@@ -1391,7 +1398,7 @@ def build_rpn_model(anchor_stride, anchors_per_location, depth, task='', name='i
 
 def fpn_classifier_graph(rois, feature_maps, image_meta,
                          pool_size, num_classes, train_bn=True,
-                         fc_layers_size=1024, task='mask_rcnn', angles=[]):
+                         fc_layers_size=1024, task='mask_rcnn', num_grasp_anchors= 196, angles=[]):
     """Builds the computation graph of the feature pyramid network classifier
     and regressor heads.
 
@@ -1413,8 +1420,6 @@ def fpn_classifier_graph(rois, feature_maps, image_meta,
     """
     # ROI Pooling
     # Shape: [batch, num_rois, POOL_SIZE, POOL_SIZE, channels]
-    # import code;
-    # code.interact(local=dict(globals(), **locals()))
     x = PyramidROIAlign([pool_size, pool_size],
                         name="roi_align_classifier")([rois, image_meta] + feature_maps)
     # Two 1024 FC layers (implemented with Conv2D for consistency)
@@ -1448,20 +1453,23 @@ def fpn_classifier_graph(rois, feature_maps, image_meta,
         # Grasp Proposal heads
         # Classification Head
         k = len(angles)
-        grasp_class_logits = KL.TimeDistributed(KL.Dense(k*2),
+        grasp_class_logits = KL.TimeDistributed(KL.Dense(num_grasp_anchors*num_classes),
                                                 name='grasp_class_logits')(shared)
+        s = K.int_shape(grasp_class_logits)
+        grasp_class_logits = KL.Reshape((s[1], num_grasp_anchors, 2), name="grasp_class_logits_reshaped")(grasp_class_logits)
+
+        # num_anchors = H*W*k
+        # [batch, num_rois, H*W*k, 2] : last dimension FG/BG
         grasp_probs = KL.TimeDistributed(KL.Activation("softmax"),
                                          name="grasp_class")(grasp_class_logits)
 
-        # Regression Head (should we multiply by 2 for foreground and background classes?)
-        # [batch, num_rois, k * (dx, dy, log(dx), log(dh), dtheta)]
-
-        x = KL.TimeDistributed(KL.Dense(k*5, activation='linear'),
+        # [batch, num_rois, num_anchors * (dx, dy, log(dx), log(dh), dtheta)]
+        x = KL.TimeDistributed(KL.Dense(num_grasp_anchors*5, activation='linear'),
                                name='grasp_bbox_fc')(shared)
-        # Reshape to [batch, num_rois, k, (dx, dy, log(dx), log(dh), dtheta)]
+        # Reshape to [batch, num_rois, num_anchors, (dx, dy, log(dx), log(dh), dtheta)]
         s = K.int_shape(x)
-        grasp_bbox = KL.Reshape((s[1], k, 5), name="grasp_bbox")(x)
-        return mrcnn_class_logits, mrcnn_probs, mrcnn_bbox, grasp_probs, grasp_bbox
+        grasp_bbox = KL.Reshape((s[1], num_grasp_anchors, 5), name="grasp_bbox")(x)
+        return mrcnn_class_logits, mrcnn_probs, mrcnn_bbox, grasp_class_logits, grasp_probs, grasp_bbox
     else:
         return mrcnn_class_logits, mrcnn_probs, mrcnn_bbox
 
@@ -1643,7 +1651,7 @@ def smooth_l1_loss(y_true, y_pred):
     loss = (less_than_one * 0.5 * diff**2) + (1 - less_than_one) * (diff - 0.5)
     return loss
 
-def rpn_combined_loss_graph_zhang_paper(config, target_bbox, target_class, rpn_bbox, rpn_class_logits, valid_anchor_mask):
+def rpn_combined_loss_graph_zhang_paper(config, target_bbox, target_class, rpn_bbox, rpn_class_logits):
     # Filtering anchors that cross the image boundary
     # valid_anchor_indices = tf.where(valid_anchor_mask)
     #
@@ -1675,7 +1683,8 @@ def rpn_combined_loss_graph_zhang_paper(config, target_bbox, target_class, rpn_b
                                                             from_logits=True)
 
     # Need to find the number of positive samples (N) and select the top 3N negative samples with the highest loss
-    N = tf.count_nonzero(positive_class_mask, axis = 1)
+    N = tf.count_nonzero(positive_class_mask, axis=-1)
+    N = tf.reduce_sum(N, axis=-1)
     N = K.cast(N, tf.int32)
 
     # Gather the negative anchors
@@ -1683,34 +1692,37 @@ def rpn_combined_loss_graph_zhang_paper(config, target_bbox, target_class, rpn_b
     positive_indices = tf.where(K.equal(positive_class_mask, 1))
 
     values = tf.gather_nd(classification_loss, negative_indices)
-    negative_class_losses = tf.sparse.SparseTensor(negative_indices, values, [config.BATCH_SIZE, config.RPN_TRAIN_ANCHORS_PER_IMAGE])
+    negative_class_losses = tf.sparse.SparseTensor(negative_indices, values, [config.BATCH_SIZE, config.TRAIN_ROIS_PER_IMAGE, config.GRASP_ANCHORS_PER_ROI])
     negative_class_losses = tf.sparse.to_dense(negative_class_losses)
 
-    # Summing the top 3N negative elements in each row
+    # Summing the top 3N negative elements in each image
     top_negative_losses_sum = K.variable(value=0)
-    for i in range(config.BATCH_SIZE):  # batch size
-        num_negatives = K.minimum(N[i]*3, config.RPN_TRAIN_ANCHORS_PER_IMAGE - N[i])
+    for i in range(config.BATCH_SIZE):
+        num_negatives = K.minimum(N[i] * 3, (config.GRASP_ANCHORS_PER_ROI * config.TRAIN_ROIS_PER_IMAGE) - N[i])
         num_negatives = tf.dtypes.cast(num_negatives, tf.int32)
-        top_loss_per_row = tf.nn.top_k(negative_class_losses[i], num_negatives, sorted=True).values
+        top_loss_per_row = tf.nn.top_k(K.flatten(negative_class_losses[i]), num_negatives, sorted=True).values
         top_negative_losses_sum = tf.add(top_negative_losses_sum, K.sum(top_loss_per_row))
 
     # Summing the positive elements
     total_positive_loss = K.sum(tf.gather_nd(classification_loss, positive_indices))
-
 
     # Classification Loss
     classification_loss = top_negative_losses_sum + total_positive_loss
 
     # Regression Loss
     regression_loss = smooth_l1_loss(target_bbox, rpn_bbox)
-    mean_regression_loss = K.mean(regression_loss, axis=2, keepdims=True)
+    # mean_regression_loss = K.mean(regression_loss, axis=2, keepdims=True)
+    mean_regression_loss = K.mean(regression_loss, axis=-1, keepdims=True)
     mean_regression_loss = tf.squeeze(mean_regression_loss, -1)
     # Only positive anchors count towards the loss
     total_regression_loss = K.sum(tf.gather_nd(mean_regression_loss, positive_indices))
 
-    alpha = K.variable(value = 2, dtype= tf.float32)
+    # Alpha is set here to 2 based on "A Real-time Robotic Grasp Approach..." Paper
+    # alpha is set to 10 in "ROI-based Robotic Grasp Detection..." Paper
+    alpha = K.variable(value = 10, dtype= tf.float32)
     num_positive_samples = tf.cast(K.sum(N), tf.float32)
-    combined_loss = (classification_loss + (alpha * total_regression_loss)) / (4 * num_positive_samples * config.BATCH_SIZE)
+    # combined_loss = (classification_loss + (alpha * total_regression_loss)) / (4 * num_positive_samples * config.BATCH_SIZE)
+    combined_loss = (classification_loss + (alpha * total_regression_loss)) / (4 * num_positive_samples)
 
     return combined_loss
 
@@ -3441,11 +3453,11 @@ class MaskRCNN():
 
             # Grasping GT (class IDs, bounding boxes)
             # [batch, MAX_GT_INSTANCES, # of grasping anchors, 1]
-            input_grasp_match = KL.Input(
-                shape=[None, config.NUM_GRASP_BOXES_PER_INSTANCE, 1], name="input_grasp_rpn_match", dtype=tf.int32)
+            input_gt_grasp_class = KL.Input(
+                shape=[None, config.NUM_GRASP_BOXES_PER_INSTANCE, 1], name="input_gt_grasp_box_id", dtype=tf.int32)
             # [batch, MAX_GT_INSTANCES, # of grasping anchors, [x, y, w, h, theta]]
-            input_grasp_bbox = KL.Input(
-                shape=[None, config.NUM_GRASP_BOXES_PER_INSTANCE, 5], name="input_grasp_rpn_bbox", dtype=tf.float32)
+            input_gt_grasp_box = KL.Input(
+                shape=[None, config.NUM_GRASP_BOXES_PER_INSTANCE, 5], name="input_gt_grasp_boxes", dtype=tf.float32)
 
         elif mode == "inference":
             # Anchors in normalized coordinates
@@ -3551,25 +3563,19 @@ class MaskRCNN():
             # Note that proposal class IDs, gt_boxes, and gt_masks are zero
             # padded. Equally, returned rois and targets are zero padded.
 
-            # want this to return the target_grasp_rectangles, target_grasp_class
-            # rois, target_class_ids, target_bbox, target_mask =\
-            #     DetectionTargetLayer(config, name="proposal_targets")([
-            #         target_rois, input_gt_class_ids, gt_boxes, input_gt_masks])
-
-            rois, target_class_ids, target_bbox, target_mask = \
+            rois, target_class_ids, target_bbox, target_mask, grasping_anchors, grasp_anchor_match, grasp_deltas = \
                 DetectionTargetLayer(config, name="proposal_targets")([
-                    target_rois, input_gt_class_ids, gt_boxes, input_gt_masks, input_grasp_match, input_grasp_bbox])
+                    target_rois, input_gt_class_ids, gt_boxes, input_gt_masks, anchors, input_gt_grasp_class, input_gt_grasp_box])
 
             # Network Heads
             # TODO: verify that this handles zero padded ROIs
-            mrcnn_class_logits, mrcnn_class, mrcnn_bbox, grasp_probs, grasp_bbox =\
+            mrcnn_class_logits, mrcnn_class, mrcnn_bbox, grasp_class_logits, grasp_probs, grasp_bbox=\
                 fpn_classifier_graph(rois, mrcnn_feature_maps, input_image_meta,
                                      config.POOL_SIZE, config.NUM_CLASSES,
                                      train_bn=config.TRAIN_BN,
                                      fc_layers_size=config.FPN_CLASSIF_FC_LAYERS_SIZE, task='mask_grasp_rcnn',
+                                     num_grasp_anchors=config.GRASP_ANCHORS_PER_ROI,
                                      angles=config.GRASP_ANCHOR_ANGLES)
-
-            ######################### STOPPED HERE
 
             mrcnn_mask = build_fpn_mask_graph(rois, mrcnn_feature_maps,
                                               input_image_meta,
@@ -3592,24 +3598,40 @@ class MaskRCNN():
             mask_loss = KL.Lambda(lambda x: mrcnn_mask_loss_graph(*x), name="mrcnn_mask_loss")(
                 [target_mask, target_class_ids, mrcnn_mask])
 
+            import code;
+            code.interact(local=dict(globals(), **locals()))
+
+            grasp_loss = rpn_combined_loss_graph_zhang_paper(config, grasp_deltas, grasp_anchor_match,
+                                                             grasp_bbox, grasp_class_logits)
+
+            # grasp_loss = KL.Lambda(lambda x: rpn_combined_loss_graph_zhang_paper(config, *x), name="grasp_loss")(
+            #     [grasp_deltas, grasp_anchor_match, grasp_bbox, grasp_class_logits])
+            # grasp_loss = KL.Lambda(lambda x: x * 1, name="grasp_loss")(grasp_loss)
+
             # Model
+
             inputs = [input_image, input_image_meta,
-                      input_rpn_match, input_rpn_bbox, input_gt_class_ids, input_gt_boxes, input_gt_masks]
+                      input_rpn_match, input_rpn_bbox, input_gt_class_ids, input_gt_boxes, input_gt_masks,
+                      input_gt_grasp_class, input_gt_grasp_box]
             if not config.USE_RPN_ROIS:
                 inputs.append(input_rois)
             outputs = [rpn_class_logits, rpn_class, rpn_bbox,
                        mrcnn_class_logits, mrcnn_class, mrcnn_bbox, mrcnn_mask,
-                       rpn_rois, output_rois,
-                       rpn_class_loss, rpn_bbox_loss, class_loss, bbox_loss, mask_loss]
-            model = KM.Model(inputs, outputs, name='mask_rcnn')
+                       rpn_rois, output_rois, grasp_class_logits, grasp_probs, grasp_bbox,
+                       rpn_class_loss, rpn_bbox_loss, class_loss, bbox_loss, mask_loss, grasp_loss]
+            model = KM.Model(inputs, outputs, name='mask_grasp_rcnn')
         else:
             # Network Heads
             # Proposal classifier and BBox regressor heads
-            mrcnn_class_logits, mrcnn_class, mrcnn_bbox =\
+            mrcnn_class_logits, mrcnn_class, mrcnn_bbox, grasp_class_logits, grasp_probs, grasp_bbox =\
                 fpn_classifier_graph(rpn_rois, mrcnn_feature_maps, input_image_meta,
                                      config.POOL_SIZE, config.NUM_CLASSES,
                                      train_bn=config.TRAIN_BN,
-                                     fc_layers_size=config.FPN_CLASSIF_FC_LAYERS_SIZE)
+                                     fc_layers_size=config.FPN_CLASSIF_FC_LAYERS_SIZE,
+                                     task='mask_grasp_rcnn',
+                                     num_grasp_anchors=config.GRASP_ANCHORS_PER_ROI,
+                                     angles=config.GRASP_ANCHOR_ANGLES
+                                     )
 
             # Detections
             # output is [batch, num_detections, (y1, x1, y2, x2, class_id, score)] in
@@ -3754,7 +3776,7 @@ class MaskRCNN():
         if mode == 'training':
             # Losses
             combined_loss = KL.Lambda(lambda x: rpn_combined_loss_graph_zhang_paper(config, *x), name="rpn_loss")(
-                [input_rpn_bbox, input_rpn_match, rpn_bbox, rpn_class_logits, valid_anchor_mask])
+                [input_rpn_bbox, input_rpn_match, rpn_bbox, rpn_class_logits])
 
             # Model
             inputs = [input_image, input_image_meta, input_rpn_match, input_rpn_bbox]

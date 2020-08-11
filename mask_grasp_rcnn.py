@@ -683,6 +683,8 @@ MODEL_DIR = "models"
 COCO_MODEL_PATH = os.path.join("models", "mask_rcnn_object_vs_background_HYBRID-50_head_50_all.h5")
 model = modellib.MaskRCNN(mode="training", config=config,
                              model_dir=MODEL_DIR, task='mask_grasp_rcnn')
+import code; code.interact(local=dict(globals(), **locals()))
+
 
 # model.load_weights(COCO_MODEL_PATH, by_name=True,
 #                       exclude=["conv1", "mrcnn_class_logits", "mrcnn_bbox_fc",
