@@ -759,7 +759,7 @@ def generate_grasping_anchors_graph(inputs):
     return anchors
 
 
-def detection_targets_graph(proposals, gt_class_ids, gt_boxes, gt_masks, anchors, gt_grasp_class, gt_grasp_boxes, config):
+def detection_targets_graph(proposals, gt_class_ids, gt_boxes, gt_masks, anchors, gt_grasp_class, gt_grasp_boxes, positive_roi_ix, config):
     """Generates detection targets for one image. Subsamples proposals and
     generates target class IDs, bounding box deltas, and masks for each.
 
@@ -847,6 +847,7 @@ def detection_targets_graph(proposals, gt_class_ids, gt_boxes, gt_masks, anchors
     negative_count = tf.cast(r * tf.cast(positive_count, tf.float32), tf.int32) - positive_count
     negative_indices = tf.random.shuffle(negative_indices)[:negative_count]
     # Gather selected ROIs
+    # positive_rois + negative_rois = 200
     positive_rois = tf.gather(proposals, positive_indices)
     negative_rois = tf.gather(proposals, negative_indices)
 
@@ -912,11 +913,15 @@ def detection_targets_graph(proposals, gt_class_ids, gt_boxes, gt_masks, anchors
     proposal_widths = tf.expand_dims(proposal_x2 - proposal_x1, axis=-1)
     proposal_heights = tf.expand_dims(proposal_y2 - proposal_y1, axis=-1)
 
-    dx_s = roi_gt_boxes[:, 1] - proposal_x1
-    dy_s = roi_gt_boxes[:, 0] - proposal_y1
-
-    gt_grasp_box_x = tf.expand_dims(roi_gt_grasp_boxes[:, :, 0] - dx_s, axis=-1)
-    gt_grasp_box_y = tf.expand_dims(roi_gt_grasp_boxes[:, :, 1] - dy_s, axis=-1)
+    dx_s = tf.expand_dims(roi_gt_boxes[:, 1] - proposal_x1, axis=-1)
+    dy_s = tf.expand_dims(roi_gt_boxes[:, 0] - proposal_y1, axis=-1)
+    dx_s = tf.tile(dx_s, [1, tf.shape(roi_gt_grasp_boxes[:, :, 0])[1]])
+    dy_s = tf.tile(dy_s, [1, tf.shape(roi_gt_grasp_boxes[:, :, 1])[1]])
+    #
+    # import code;
+    # code.interact(local=dict(globals(), **locals()))
+    gt_grasp_box_x = tf.expand_dims(tf.subtract(roi_gt_grasp_boxes[:, :, 0], dx_s), axis=-1)
+    gt_grasp_box_y = tf.expand_dims(tf.subtract(roi_gt_grasp_boxes[:, :, 1], dy_s), axis=-1)
     gt_grasp_box_w = tf.expand_dims(roi_gt_grasp_boxes[:, :, 2], axis=-1)
     gt_grasp_box_h = tf.expand_dims(roi_gt_grasp_boxes[:, :, 3], axis=-1)
     gt_grasp_box_theta = tf.expand_dims(roi_gt_grasp_boxes[:, :, 4], axis=-1)
@@ -971,11 +976,14 @@ def detection_targets_graph(proposals, gt_class_ids, gt_boxes, gt_masks, anchors
     # grasp_overlaps_reshaped has the shape [num_instances, num_grasp_instances, num_anchors]
     grasp_overlaps_reshaped = tf.reshape(tf.squeeze(grasp_overlaps),[-1, boxes2.shape[1], boxes1.shape[1]])
 
-    grasp_anchor_match = K.placeholder(shape=grasping_anchors.shape[:2])
-    grasp_anchor_match = K.ones_like(grasp_anchor_match) * -1
+    # grasp_anchor_match = K.placeholder(shape=grasping_anchors.shape[:2], name='ph_anchor')
+    # grasp_anchor_match = K.ones_like(grasp_anchor_match) * -1
+    #
+    # grasp_box_match = K.placeholder(shape=grasping_anchors.shape[:2], name='ph_box')
+    # grasp_box_match = K.ones_like(grasp_box_match) * -1
 
-    grasp_box_match = K.placeholder(shape=grasping_anchors.shape[:2])
-    grasp_box_match = K.ones_like(grasp_box_match) * -1
+    grasp_anchor_match = tf.ones(tf.shape(grasping_anchors)[:2])*-1
+    grasp_box_match = tf.ones(tf.shape(grasping_anchors)[:2])*-1
 
     grasp_roi_iou_max = tf.reduce_max(grasp_overlaps_reshaped, axis=-1)
     grasp_roi_iou_argmax = tf.expand_dims(tf.argmax(grasp_overlaps_reshaped, axis=-1), axis=-1)
@@ -1017,6 +1025,8 @@ def detection_targets_graph(proposals, gt_class_ids, gt_boxes, gt_masks, anchors
     # Format of anchor_assignment is [instance #, anchor_id, grasp_box_id]
     anchor_assignment = tf.concat([positive_grasp_box_locations, tf.reshape(grasp_box_ix, [-1, 1])], axis=-1)
     instance_ix, anchor_ix, grasp_ix = tf.split(anchor_assignment, num_or_size_splits=3, axis=-1)
+    # om[ code;
+    # code.interact(local=dict(globals(), **locals()))
     updates = tf.gather_nd(final_roi_gt_grasp_boxes, tf.concat([instance_ix, grasp_ix], axis=-1))
 
     gt_grasp_boxes_filtered = tf.tensor_scatter_nd_update(grasp_bbox, tf.concat([instance_ix, anchor_ix], axis=-1),
@@ -1026,6 +1036,7 @@ def detection_targets_graph(proposals, gt_class_ids, gt_boxes, gt_masks, anchors
                              elems=tf.concat([grasping_anchors, gt_grasp_boxes_filtered], axis=-1))
     grasp_deltas /= config.GRASP_BBOX_STD_DEV
     grasp_anchor_match = tf.expand_dims(grasp_anchor_match, axis=-1)
+
 
     # At this point:
     # grasp_anchor_match : Marks the positive anchors with 1 and negative anchors with -1
@@ -1044,9 +1055,15 @@ def detection_targets_graph(proposals, gt_class_ids, gt_boxes, gt_masks, anchors
     roi_gt_class_ids = tf.pad(roi_gt_class_ids, [(0, N + P)])
     deltas = tf.pad(deltas, [(0, N + P), (0, 0)])
     masks = tf.pad(masks, [[0, N + P], (0, 0), (0, 0)])
-    ## Adding negatives
 
-    return rois, roi_gt_class_ids, deltas, masks, grasping_anchors, grasp_anchor_match, grasp_deltas
+    updates = tf.ones(tf.shape(positive_indices))
+    updates = tf.expand_dims(updates, axis=-1)
+    positive_indices = tf.expand_dims(positive_indices, axis=-1)
+
+    # positive_indices_mask = tf.tensor_scatter_nd_update(positive_indices_mask, positive_indices, updates)
+    positive_indices_mask = tf.scatter_nd(positive_indices, updates, [config.TRAIN_ROIS_PER_IMAGE, 1])
+
+    return rois, roi_gt_class_ids, deltas, masks, grasping_anchors, grasp_anchor_match, grasp_deltas, positive_indices_mask
 
 
 class DetectionTargetLayer(KE.Layer):
@@ -1086,15 +1103,16 @@ class DetectionTargetLayer(KE.Layer):
         anchors = inputs[4]
         gt_grasp_class = inputs[5]
         gt_grasp_boxes = inputs[6]
+        positive_roi_ix = tf.ones(tf.shape(proposals)[:2])
 
 
         # Slice the batch and run a graph for each slice
         # TODO: Rename target_bbox to target_deltas for clarity
-        names = ["rois", "target_class_ids", "target_bbox", "target_mask", "grasping_anchors", "target_grasp_class", "target_grasp_bbox"]
+        names = ["rois", "target_class_ids", "target_bbox", "target_mask", "grasping_anchors", "target_grasp_class", "target_grasp_bbox", "positive_roi_ix"]
         outputs = utils.batch_slice(
-            [proposals, gt_class_ids, gt_boxes, gt_masks, anchors, gt_grasp_class, gt_grasp_boxes],
-            lambda t, u, v, w, x, y, z: detection_targets_graph(
-                t, u, v, w, x, y, z, self.config),
+            [proposals, gt_class_ids, gt_boxes, gt_masks, anchors, gt_grasp_class, gt_grasp_boxes, positive_roi_ix],
+            lambda r, t, u, v, w, x, y, z: detection_targets_graph(
+                r, t, u, v, w, x, y, z, self.config),
             self.config.IMAGES_PER_GPU, names=names)
         return outputs
 
@@ -1108,10 +1126,11 @@ class DetectionTargetLayer(KE.Layer):
             (None, self.config.TRAIN_ROIS_PER_IMAGE, self.config.GRASP_ANCHORS_PER_ROI, 5), # grasping anchors
             (None, self.config.TRAIN_ROIS_PER_IMAGE, self.config.GRASP_ANCHORS_PER_ROI, 1), # grasping box class
             (None, self.config.TRAIN_ROIS_PER_IMAGE, self.config.GRASP_ANCHORS_PER_ROI, 5), # grasping box deltas
+            (None, self.config.TRAIN_ROIS_PER_IMAGE, 1), # positive roi mask
         ]
 
     def compute_mask(self, inputs, mask=None):
-        return [None, None, None, None]
+        return [None, None, None, None, None, None, None, None]
 
 
 ############################################################
@@ -1651,7 +1670,97 @@ def smooth_l1_loss(y_true, y_pred):
     loss = (less_than_one * 0.5 * diff**2) + (1 - less_than_one) * (diff - 0.5)
     return loss
 
-def rpn_combined_loss_graph_zhang_paper(config, target_bbox, target_class, rpn_bbox, rpn_class_logits):
+def cumpute_top_negative_losses_graph(inputs):
+    negative_anchor_losses, N = tf.split(inputs, num_or_size_splits=2, axis=-1)
+    N = tf.squeeze(N[0]) # N is just repeated to have the same shape as negative_anchor_losses, so just pich the first entry
+    num_anchors = tf.cast(tf.shape(negative_anchor_losses)[0], dtype=tf.float32)
+    num_negatives = K.minimum(N * 3, num_anchors - N)
+    num_negatives = tf.dtypes.cast(num_negatives, tf.int32)
+    top_loss_per_row, top_loss_locations = tf.math.top_k(tf.squeeze(negative_anchor_losses), tf.squeeze(num_negatives), sorted=True)
+    top_loss_per_row = tf.expand_dims(top_loss_per_row, axis=-1)
+    top_loss_locations = tf.expand_dims(top_loss_locations, axis=-1)
+    top_losses = tf.scatter_nd(top_loss_locations, top_loss_per_row, [num_anchors, 1])
+
+    return top_losses
+
+def grasp_loss_graph(config, target_bbox, target_class, bbox, class_logits, positive_roi_mask):
+
+    positive_roi_mask = tf.squeeze(positive_roi_mask, axis=-1)
+    total_grasp_loss = K.variable(value=0)
+    for i in range(config.BATCH_SIZE):
+        batch_target_bbox = target_bbox[i]
+        batch_target_class = target_class[i]
+        batch_bbox = bbox[i]
+        batch_class_logits = class_logits[i]
+        batch_positive_roi_mask = positive_roi_mask[i]
+
+        # Squeeze last dim to simplify
+        batch_target_class = tf.squeeze(batch_target_class, -1)
+
+        # Get anchor classes. Convert the -1/+1 match to 0/1 values. Positive anchors are 1, negative and
+        # neutral are zero
+        # SHAPE = [number of positive ROIs, number of anchors]
+        positive_anchor_mask = K.cast(K.equal(batch_target_class, 1), tf.int32)
+        negative_anchor_mask = K.cast(K.equal(batch_target_class, -1), tf.int32)
+
+        # Only select the class logits for the positive ROIs
+        positive_roi_ix = tf.where(tf.cast(batch_positive_roi_mask, dtype=tf.bool))
+        batch_class_logits_filtered = tf.gather_nd(batch_class_logits, positive_roi_ix)
+
+        # Classification Loss - only considering the positive ROIs
+        classification_loss = K.sparse_categorical_crossentropy(target=positive_anchor_mask,
+                                                                output=batch_class_logits_filtered,
+                                                                from_logits=True)
+
+        # Need to find the number of positive samples (N) in each ROI and select the top 3N negative samples with the highest loss
+        N = tf.count_nonzero(positive_anchor_mask, axis=-1)
+        N = K.cast(N, tf.int32)
+
+        # Gather the negative anchor losses
+        negative_indices = tf.where(K.equal(negative_anchor_mask, 1))
+        positive_indices = tf.where(K.equal(positive_anchor_mask, 1))
+
+        values = tf.gather_nd(classification_loss, negative_indices)
+        # import code;
+        # code.interact(local=dict(globals(), **locals()))
+        negative_anchor_losses = tf.cast(negative_anchor_mask, dtype=tf.float32) * classification_loss
+        # negative_anchor_losses = tf.sparse.SparseTensor(negative_indices, values,
+        #                                                [tf.shape(N)[0], config.GRASP_ANCHORS_PER_ROI])
+        # negative_anchor_losses = tf.sparse.to_dense(negative_anchor_losses)
+
+        # Summing the top 3N negative elements in each ROI
+
+        negative_anchor_losses = tf.expand_dims(negative_anchor_losses, axis=-1)
+        N = tf.expand_dims(N, axis=-1)
+        N_repeats = tf.cast(tf.tile(N, [1, config.GRASP_ANCHORS_PER_ROI]), dtype=tf.float32)
+        N_repeats = tf.expand_dims(N_repeats, axis=-1)
+
+        top_negative_losses_sum = tf.map_fn(cumpute_top_negative_losses_graph, tf.concat([negative_anchor_losses, N_repeats], axis=-1))
+        total_negative_loss = K.sum(top_negative_losses_sum)
+
+        # Summing the positive elements
+        total_positive_loss = K.sum(tf.gather_nd(classification_loss, positive_indices))
+
+        # Classification Loss
+        classification_loss = total_negative_loss + total_positive_loss
+
+        # Regression Loss
+        batch_bbox_filtered = tf.gather_nd(batch_bbox, positive_roi_ix)
+        regression_loss = smooth_l1_loss(batch_target_bbox, batch_bbox_filtered)
+        mean_regression_loss = K.mean(regression_loss, axis=-1)
+
+        # Only positive anchors count towards the loss
+        total_regression_loss = K.sum(tf.gather_nd(mean_regression_loss, positive_indices))
+        beta = K.variable(value=config.GRASP_LOSS_BETA, dtype=tf.float32)
+        num_positive_samples = tf.cast(K.sum(N), tf.float32)
+
+        # Combined Loss
+        combined_loss = (classification_loss + (beta * total_regression_loss)) / (4 * num_positive_samples)
+        total_grasp_loss = tf.add(total_grasp_loss, combined_loss)
+
+    return total_grasp_loss/ config.BATCH_SIZE
+
+def rpn_combined_loss_graph_zhang_paper(config, target_bbox, target_class, rpn_bbox, rpn_class_logits, positive_roi_mask):
     # Filtering anchors that cross the image boundary
     # valid_anchor_indices = tf.where(valid_anchor_mask)
     #
@@ -1683,8 +1792,7 @@ def rpn_combined_loss_graph_zhang_paper(config, target_bbox, target_class, rpn_b
                                                             from_logits=True)
 
     # Need to find the number of positive samples (N) and select the top 3N negative samples with the highest loss
-    N = tf.count_nonzero(positive_class_mask, axis=-1)
-    N = tf.reduce_sum(N, axis=-1)
+    N = tf.count_nonzero(positive_class_mask, axis=1)
     N = K.cast(N, tf.int32)
 
     # Gather the negative anchors
@@ -1692,15 +1800,16 @@ def rpn_combined_loss_graph_zhang_paper(config, target_bbox, target_class, rpn_b
     positive_indices = tf.where(K.equal(positive_class_mask, 1))
 
     values = tf.gather_nd(classification_loss, negative_indices)
-    negative_class_losses = tf.sparse.SparseTensor(negative_indices, values, [config.BATCH_SIZE, config.TRAIN_ROIS_PER_IMAGE, config.GRASP_ANCHORS_PER_ROI])
+    negative_class_losses = tf.sparse.SparseTensor(negative_indices, values,
+                                                   [config.BATCH_SIZE, config.RPN_TRAIN_ANCHORS_PER_IMAGE])
     negative_class_losses = tf.sparse.to_dense(negative_class_losses)
 
-    # Summing the top 3N negative elements in each image
+    # Summing the top 3N negative elements in each row
     top_negative_losses_sum = K.variable(value=0)
-    for i in range(config.BATCH_SIZE):
-        num_negatives = K.minimum(N[i] * 3, (config.GRASP_ANCHORS_PER_ROI * config.TRAIN_ROIS_PER_IMAGE) - N[i])
+    for i in range(config.BATCH_SIZE):  # batch size
+        num_negatives = K.minimum(N[i] * 3, config.RPN_TRAIN_ANCHORS_PER_IMAGE - N[i])
         num_negatives = tf.dtypes.cast(num_negatives, tf.int32)
-        top_loss_per_row = tf.nn.top_k(K.flatten(negative_class_losses[i]), num_negatives, sorted=True).values
+        top_loss_per_row = tf.nn.top_k(negative_class_losses[i], num_negatives, sorted=True).values
         top_negative_losses_sum = tf.add(top_negative_losses_sum, K.sum(top_loss_per_row))
 
     # Summing the positive elements
@@ -1711,18 +1820,15 @@ def rpn_combined_loss_graph_zhang_paper(config, target_bbox, target_class, rpn_b
 
     # Regression Loss
     regression_loss = smooth_l1_loss(target_bbox, rpn_bbox)
-    # mean_regression_loss = K.mean(regression_loss, axis=2, keepdims=True)
-    mean_regression_loss = K.mean(regression_loss, axis=-1, keepdims=True)
+    mean_regression_loss = K.mean(regression_loss, axis=2, keepdims=True)
     mean_regression_loss = tf.squeeze(mean_regression_loss, -1)
     # Only positive anchors count towards the loss
     total_regression_loss = K.sum(tf.gather_nd(mean_regression_loss, positive_indices))
 
-    # Alpha is set here to 2 based on "A Real-time Robotic Grasp Approach..." Paper
-    # alpha is set to 10 in "ROI-based Robotic Grasp Detection..." Paper
-    alpha = K.variable(value = 10, dtype= tf.float32)
+    alpha = K.variable(value=2, dtype=tf.float32)
     num_positive_samples = tf.cast(K.sum(N), tf.float32)
-    # combined_loss = (classification_loss + (alpha * total_regression_loss)) / (4 * num_positive_samples * config.BATCH_SIZE)
-    combined_loss = (classification_loss + (alpha * total_regression_loss)) / (4 * num_positive_samples)
+    combined_loss = (classification_loss + (alpha * total_regression_loss)) / (
+                4 * num_positive_samples * config.BATCH_SIZE)
 
     return combined_loss
 
@@ -2804,6 +2910,222 @@ def generate_random_rois(image_shape, count, gt_class_ids, gt_boxes):
     rois[-remaining_count:] = global_rois
     return rois
 
+def mask_grasp_data_generator(dataset, config, shuffle=True, augment=False, augmentation=None,
+                   random_rois=0, batch_size=1, detection_targets=False,
+                   no_augmentation_sources=None):
+    """A generator that returns images and corresponding target class ids,
+    bounding box deltas, and masks.
+
+    dataset: The Dataset object to pick data from
+    config: The model config object
+    shuffle: If True, shuffles the samples before every epoch
+    augment: (deprecated. Use augmentation instead). If true, apply random
+        image augmentation. Currently, only horizontal flipping is offered.
+    augmentation: Optional. An imgaug (https://github.com/aleju/imgaug) augmentation.
+        For example, passing imgaug.augmenters.Fliplr(0.5) flips images
+        right/left 50% of the time.
+    random_rois: If > 0 then generate proposals to be used to train the
+                 network classifier and mask heads. Useful if training
+                 the Mask RCNN part without the RPN.
+    batch_size: How many images to return in each call
+    detection_targets: If True, generate detection targets (class IDs, bbox
+        deltas, and masks). Typically for debugging or visualizations because
+        in trainig detection targets are generated by DetectionTargetLayer.
+    no_augmentation_sources: Optional. List of sources to exclude for
+        augmentation. A source is string that identifies a dataset and is
+        defined in the Dataset class.
+
+    Returns a Python generator. Upon calling next() on it, the
+    generator returns two lists, inputs and outputs. The contents
+    of the lists differs depending on the received arguments:
+    inputs list:
+    - images: [batch, H, W, C]
+    - image_meta: [batch, (meta data)] Image details. See compose_image_meta()
+    - rpn_match: [batch, N] Integer (1=positive anchor, -1=negative, 0=neutral)
+    - rpn_bbox: [batch, N, (dy, dx, log(dh), log(dw))] Anchor bbox deltas.
+    - gt_class_ids: [batch, MAX_GT_INSTANCES] Integer class IDs
+    - gt_boxes: [batch, MAX_GT_INSTANCES, (y1, x1, y2, x2)]
+    - gt_masks: [batch, height, width, MAX_GT_INSTANCES]. The height and width
+                are those of the image unless use_mini_mask is True, in which
+                case they are defined in MINI_MASK_SHAPE.
+
+    outputs list: Usually empty in regular training. But if detection_targets
+        is True then the outputs list contains target class_ids, bbox deltas,
+        and masks.
+    """
+    b = 0  # batch item index
+    image_index = -1
+    image_ids = np.copy(dataset.image_ids)
+    error_count = 0
+    no_augmentation_sources = no_augmentation_sources or []
+    mode='mask_grasp_rcnn'
+
+    # Anchors
+    # [anchor_count, (y1, x1, y2, x2)]
+    backbone_shapes = compute_backbone_shapes(config, config.IMAGE_SHAPE)
+    anchors = utils.generate_pyramid_anchors(config.RPN_ANCHOR_SCALES,
+                                             config.RPN_ANCHOR_RATIOS,
+                                             backbone_shapes,
+                                             config.BACKBONE_STRIDES,
+                                             config.RPN_ANCHOR_STRIDE,
+                                             config.IMAGE_SHAPE)
+
+    # Keras requires a generator to run indefinitely.
+    while True:
+        try:
+            # Increment index to pick next image. Shuffle if at the start of an epoch.
+            image_index = (image_index + 1) % len(image_ids)
+            if shuffle and image_index == 0:
+                np.random.shuffle(image_ids)
+
+            # Get GT bounding boxes and masks for image.
+            image_id = image_ids[image_index]
+
+            # If the image source is not to be augmented pass None as augmentation
+            if dataset.image_info[image_id]['source'] in no_augmentation_sources:
+                # image, image_meta, gt_class_ids, gt_boxes, gt_masks = \
+                # load_image_gt(dataset, config, image_id, augment=augment,
+                #               augmentation=None,
+                #               use_mini_mask=config.USE_MINI_MASK)
+
+                image, image_meta, gt_class_ids, gt_boxes, gt_masks, gt_grasp_boxes, gt_grasp_id = \
+                load_image_gt(dataset, config, image_id, augment=augment,
+                              augmentation=None,
+                              use_mini_mask=config.USE_MINI_MASK,
+                              image_type='rgbd',
+                              mode=mode)
+            else:
+                # image, image_meta, gt_class_ids, gt_boxes, gt_masks = \
+                #     load_image_gt(dataset, config, image_id, augment=augment,
+                #                 augmentation=augmentation,
+                #                 use_mini_mask=config.USE_MINI_MASK)
+                image, image_meta, gt_class_ids, gt_boxes, gt_masks, gt_grasp_boxes, gt_grasp_id = \
+                    load_image_gt(dataset, config, image_id, augment=augment,
+                                  augmentation=augmentation,
+                                  use_mini_mask=config.USE_MINI_MASK,
+                                  image_type='rgbd',
+                                  mode=mode)
+
+            # Skip images that have no instances. This can happen in cases
+            # where we train on a subset of classes and the image doesn't
+            # have any of the classes we care about.
+            if not np.any(gt_class_ids > 0):
+                continue
+
+            # RPN Targets
+            rpn_match, rpn_bbox = build_rpn_targets(anchors,
+                                                    gt_class_ids, gt_boxes, config)
+
+            # Mask R-CNN Targets
+            if random_rois:
+                rpn_rois = generate_random_rois(
+                    image.shape, random_rois, gt_class_ids, gt_boxes)
+                if detection_targets:
+                    rois, mrcnn_class_ids, mrcnn_bbox, mrcnn_mask =\
+                        build_detection_targets(
+                            rpn_rois, gt_class_ids, gt_boxes, gt_masks, config)
+
+            # Init batch arrays
+            if b == 0:
+                batch_image_meta = np.zeros(
+                    (batch_size,) + image_meta.shape, dtype=image_meta.dtype)
+                batch_rpn_match = np.zeros(
+                    [batch_size, anchors.shape[0], 1], dtype=rpn_match.dtype)
+                batch_rpn_bbox = np.zeros(
+                    [batch_size, config.RPN_TRAIN_ANCHORS_PER_IMAGE, 4], dtype=rpn_bbox.dtype)
+                batch_images = np.zeros(
+                    (batch_size,) + image.shape, dtype=np.float32)
+                batch_gt_class_ids = np.zeros(
+                    (batch_size, config.MAX_GT_INSTANCES), dtype=np.int32)
+                batch_gt_boxes = np.zeros(
+                    (batch_size, config.MAX_GT_INSTANCES, 4), dtype=np.int32)
+                batch_gt_masks = np.zeros(
+                    (batch_size, gt_masks.shape[0], gt_masks.shape[1],
+                     config.MAX_GT_INSTANCES), dtype=gt_masks.dtype)
+                batch_gt_grasp_boxes = np.zeros(
+                    (batch_size, config.MAX_GT_INSTANCES, config.NUM_GRASP_BOXES_PER_INSTANCE, 5),
+                    dtype=gt_grasp_boxes.dtype)
+                batch_gt_grasp_id = np.zeros(
+                    (batch_size, config.MAX_GT_INSTANCES, config.NUM_GRASP_BOXES_PER_INSTANCE, 1),
+                    dtype=gt_grasp_boxes.dtype)
+
+
+                if random_rois:
+                    # Disable this functionality for now
+                    batch_rpn_rois = np.zeros(
+                        (batch_size, rpn_rois.shape[0], 4), dtype=rpn_rois.dtype)
+                    if detection_targets:
+                        batch_rois = np.zeros(
+                            (batch_size,) + rois.shape, dtype=rois.dtype)
+                        batch_mrcnn_class_ids = np.zeros(
+                            (batch_size,) + mrcnn_class_ids.shape, dtype=mrcnn_class_ids.dtype)
+                        batch_mrcnn_bbox = np.zeros(
+                            (batch_size,) + mrcnn_bbox.shape, dtype=mrcnn_bbox.dtype)
+                        batch_mrcnn_mask = np.zeros(
+                            (batch_size,) + mrcnn_mask.shape, dtype=mrcnn_mask.dtype)
+
+            # # If more instances than fits in the array, sub-sample from them.
+            # if gt_boxes.shape[0] > config.MAX_GT_INSTANCES:
+            #     ids = np.random.choice(
+            #         np.arange(gt_boxes.shape[0]), config.MAX_GT_INSTANCES, replace=False)
+            #     gt_class_ids = gt_class_ids[ids]
+            #     gt_boxes = gt_boxes[ids]
+            #     gt_masks = gt_masks[:, :, ids]
+            #     gt_grasp_boxes = gt_grasp_boxes[ids]
+            #     gt_grasp_id = gt_grasp_id[ids]
+
+            # Add to batch
+            batch_image_meta[b] = image_meta
+            batch_rpn_match[b] = rpn_match[:, np.newaxis]
+            batch_rpn_bbox[b] = rpn_bbox
+            batch_images[b] = mold_image(image.astype(np.float32), config)
+            batch_gt_class_ids[b, :gt_class_ids.shape[0]] = gt_class_ids
+            batch_gt_boxes[b, :gt_boxes.shape[0]] = gt_boxes
+            batch_gt_masks[b, :, :, :gt_masks.shape[-1]] = gt_masks
+            batch_gt_grasp_boxes[b, :gt_grasp_boxes.shape[0]] = gt_grasp_boxes
+            batch_gt_grasp_id[b, :gt_grasp_id.shape[0]] = gt_grasp_id
+
+            if random_rois:
+                # Disable this functionality for now
+                batch_rpn_rois[b] = rpn_rois
+                if detection_targets:
+                    batch_rois[b] = rois
+                    batch_mrcnn_class_ids[b] = mrcnn_class_ids
+                    batch_mrcnn_bbox[b] = mrcnn_bbox
+                    batch_mrcnn_mask[b] = mrcnn_mask
+            b += 1
+
+            # Batch full?
+            if b >= batch_size:
+                inputs = [batch_images, batch_image_meta, batch_rpn_match, batch_rpn_bbox,
+                          batch_gt_class_ids, batch_gt_boxes, batch_gt_masks, batch_gt_grasp_id, batch_gt_grasp_boxes]
+                outputs = []
+
+                if random_rois:
+                    # Disable this functionality for now
+                    inputs.extend([batch_rpn_rois])
+                    if detection_targets:
+                        inputs.extend([batch_rois])
+                        # Keras requires that output and targets have the same number of dimensions
+                        batch_mrcnn_class_ids = np.expand_dims(
+                            batch_mrcnn_class_ids, -1)
+                        outputs.extend(
+                            [batch_mrcnn_class_ids, batch_mrcnn_bbox, batch_mrcnn_mask])
+
+                yield inputs, outputs
+
+                # start a new batch
+                b = 0
+        except (GeneratorExit, KeyboardInterrupt):
+            raise
+        except:
+            # Log it and skip the image
+            logging.exception("Error processing image {}".format(
+                dataset.image_info[image_id]))
+            error_count += 1
+            if error_count > 5:
+                raise
+
 
 def data_generator(dataset, config, shuffle=True, augment=False, augmentation=None,
                    random_rois=0, batch_size=1, detection_targets=False,
@@ -3563,7 +3885,7 @@ class MaskRCNN():
             # Note that proposal class IDs, gt_boxes, and gt_masks are zero
             # padded. Equally, returned rois and targets are zero padded.
 
-            rois, target_class_ids, target_bbox, target_mask, grasping_anchors, grasp_anchor_match, grasp_deltas = \
+            rois, target_class_ids, target_bbox, target_mask, grasping_anchors, target_grasp_anchor_match, target_grasp_deltas, positive_roi_mask = \
                 DetectionTargetLayer(config, name="proposal_targets")([
                     target_rois, input_gt_class_ids, gt_boxes, input_gt_masks, anchors, input_gt_grasp_class, input_gt_grasp_box])
 
@@ -3597,16 +3919,8 @@ class MaskRCNN():
                 [target_bbox, target_class_ids, mrcnn_bbox])
             mask_loss = KL.Lambda(lambda x: mrcnn_mask_loss_graph(*x), name="mrcnn_mask_loss")(
                 [target_mask, target_class_ids, mrcnn_mask])
-
-            import code;
-            code.interact(local=dict(globals(), **locals()))
-
-            grasp_loss = rpn_combined_loss_graph_zhang_paper(config, grasp_deltas, grasp_anchor_match,
-                                                             grasp_bbox, grasp_class_logits)
-
-            # grasp_loss = KL.Lambda(lambda x: rpn_combined_loss_graph_zhang_paper(config, *x), name="grasp_loss")(
-            #     [grasp_deltas, grasp_anchor_match, grasp_bbox, grasp_class_logits])
-            # grasp_loss = KL.Lambda(lambda x: x * 1, name="grasp_loss")(grasp_loss)
+            grasp_loss = KL.Lambda(lambda x: grasp_loss_graph(config, *x), name="grasp_loss")(
+                [target_grasp_deltas, target_grasp_anchor_match, grasp_bbox, grasp_class_logits, positive_roi_mask])
 
             # Model
 
@@ -3901,6 +4215,10 @@ class MaskRCNN():
             # loss_names = [
             #     "rpn_class_loss", "rpn_bbox_loss"]
             loss_names = ["rpn_loss"]
+        elif task == 'mask_grasp_rcnn':
+            loss_names = [
+                "rpn_class_loss", "rpn_bbox_loss",
+                "mrcnn_class_loss", "mrcnn_bbox_loss", "mrcnn_mask_loss", "grasp_loss"]
         else:
             loss_names = [
                 "rpn_class_loss",  "rpn_bbox_loss",
@@ -4074,6 +4392,13 @@ class MaskRCNN():
             val_generator = grasp_data_generator(val_dataset, self.config, shuffle=True,
                                            batch_size=self.config.BATCH_SIZE,
                                            pre_augment = True)
+        elif task == 'mask_grasp_rcnn':
+            train_generator = mask_grasp_data_generator(train_dataset, self.config, shuffle=True,
+                                             augmentation=augmentation,
+                                             batch_size=self.config.BATCH_SIZE,
+                                             no_augmentation_sources=no_augmentation_sources)
+            val_generator = mask_grasp_data_generator(val_dataset, self.config, shuffle=True,
+                                           batch_size=self.config.BATCH_SIZE)
         else:
             train_generator = data_generator(train_dataset, self.config, shuffle=True,
                                              augmentation=augmentation,

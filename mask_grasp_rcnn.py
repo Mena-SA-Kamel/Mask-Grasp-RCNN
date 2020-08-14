@@ -58,7 +58,15 @@ class GraspMaskRCNNConfig(Config):
     NUM_GRASP_BOXES_PER_INSTANCE = 128
     ARIOU_NEG_THRESHOLD = 0.01
     ARIOU_POS_THRESHOLD = 0.1
-
+    LOSS_WEIGHTS = {
+        "rpn_class_loss": 1.,
+        "rpn_bbox_loss": 1.,
+        "mrcnn_class_loss": 1.,
+        "mrcnn_bbox_loss": 1.,
+        "mrcnn_mask_loss": 1.,
+        "grasp_loss": 1.,
+    }
+    GRASP_LOSS_BETA = 10
 
 
 class GraspMaskRCNNInferenceConfig(GraspMaskRCNNConfig):
@@ -575,6 +583,7 @@ class GraspMaskRCNNDataset(Dataset):
         bounding_box_vertices = np.array([bounding_box_vertices[p]])
         bbox_5_dimensional = np.array([bbox_5_dimensional[p]])
         class_ids = np.array([class_ids[p].astype('uint8')])
+        class_ids = np.expand_dims(class_ids, axis=-1)
         return bounding_box_vertices, bbox_5_dimensional, class_ids
 
     def bbox_convert_to_four_vertices(self, bbox_5_dimension):
@@ -679,11 +688,12 @@ inference_config = GraspMaskRCNNInferenceConfig()
 ##### TRAINING #####
 
 MODEL_DIR = "models"
+mode = "mask_grasp_rcnn"
 # COCO_MODEL_PATH = os.path.join("models", "mask_rcnn_object_vs_background_100_heads_50_all.h5")
 COCO_MODEL_PATH = os.path.join("models", "mask_rcnn_object_vs_background_HYBRID-50_head_50_all.h5")
 model = modellib.MaskRCNN(mode="training", config=config,
                              model_dir=MODEL_DIR, task='mask_grasp_rcnn')
-import code; code.interact(local=dict(globals(), **locals()))
+
 
 
 # model.load_weights(COCO_MODEL_PATH, by_name=True,
@@ -694,13 +704,15 @@ model.load_weights(COCO_MODEL_PATH, by_name=True)
 model.train(training_dataset, validating_dataset,
                learning_rate=config.LEARNING_RATE,
                epochs=50,
-               layers=r"(conv1)|(mrcnn\_.*)|(rpn\_.*)|(fpn\_.*)")
+               layers=r"(conv1)|(mrcnn\_.*)|(rpn\_.*)|(fpn\_.*)|(grasp\_.*)",
+               task=mode)
 
 
 model.train(training_dataset, validating_dataset,
                 learning_rate=config.LEARNING_RATE/10,
                 epochs=250,
-                layers="all")
+                layers="all",
+                task=mode)
 
 model_path = os.path.join(MODEL_DIR, "mask_rcnn_object_vs_background_HYBRID-Weights_SAMS-50_head_50_all.h5")
 model.keras_model.save_weights(model_path)
