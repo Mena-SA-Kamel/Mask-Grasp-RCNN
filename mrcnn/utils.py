@@ -439,7 +439,7 @@ def apply_box_deltas(boxes, deltas, mode='', num_angles=0):
         x2 = x1 + width
         return np.stack([y1, x1, y2, x2], axis=1)
 
-def grasp_box_refinement_graph(inputs):
+def grasp_box_refinement_graph_old(inputs):
     """Compute refinement needed to transform box to gt_box.
     box and gt_box are [N, (y1, x1, y2, x2)]
     """
@@ -477,6 +477,40 @@ def grasp_box_refinement_graph(inputs):
     # Replacing refinements of zero boxes with zeros
     final_result = tf.tensor_scatter_nd_update(result, invalid_locations, refinements_replace)
     return final_result
+
+def grasp_box_refinement_graph(box, gt_box, config):
+    # Need to create a mask to keep valid refinements, ie: where the grasp box is not all zeros
+    box_flattened = tf.reshape(box, [-1, 5])
+    gt_box_flattened = tf.reshape(gt_box, [-1, 5])
+
+    refinements_to_remove = tf.cast(tf.reduce_sum(gt_box_flattened, axis=-1), tf.bool)
+    refinements_to_remove = tf.logical_not(refinements_to_remove)
+    invalid_locations = tf.where(refinements_to_remove)
+    refinements_replace = tf.zeros([tf.shape(invalid_locations)[0], 5])
+
+    a_center_x = box_flattened[:, 0]
+    a_center_y = box_flattened[:, 1]
+    a_width = box_flattened[:, 2]
+    a_height = box_flattened[:, 3]
+    a_theta = box_flattened[:, 4]
+
+    gt_center_x = gt_box_flattened[:, 0]
+    gt_center_y = gt_box_flattened[:, 1]
+    gt_width = gt_box_flattened[:, 2]
+    gt_height = gt_box_flattened[:, 3]
+    gt_theta = gt_box_flattened[:, 4]
+
+    dx = (gt_center_x - a_center_x) / a_width
+    dy = (gt_center_y - a_center_y) / a_height
+    dw = tf.math.log(gt_width / a_width)
+    dh = tf.math.log(gt_height / a_height)
+    dtheta = (gt_theta - a_theta) / (180 / len(config.GRASP_ANCHOR_ANGLES))
+
+    result = tf.stack([dx, dy, dw, dh, dtheta], axis=1)
+    # Replacing refinements of zero boxes with zeros
+    final_result = tf.tensor_scatter_nd_update(result, invalid_locations, refinements_replace)
+    final_result_reshaped = tf.reshape(final_result, tf.shape(gt_box))
+    return final_result_reshaped
 
 def box_refinement_graph(box, gt_box):
     """Compute refinement needed to transform box to gt_box.
