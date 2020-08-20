@@ -376,7 +376,7 @@ proposal_x2 = positive_rois[:, 3]
 proposal_widths = tf.expand_dims(proposal_x2 - proposal_x1, axis=-1)
 proposal_heights = tf.expand_dims(proposal_y2 - proposal_y1, axis=-1)
 
-sensitivity = 0
+sensitivity = 0.7
 radius = (((gt_grasp_box_w/2)**2 + (gt_grasp_box_h/2)**2)**0.5) * sensitivity
 proposal_y1_reshaped = K.repeat(tf.expand_dims(proposal_y1, axis=-1), n=radius.shape[1])
 proposal_x1_reshaped = K.repeat(tf.expand_dims(proposal_x1, axis=-1), n=radius.shape[1])
@@ -423,7 +423,7 @@ grasping_boxes_reshaped = tf.reshape(grasping_boxes_reshaped, tf.shape(grasping_
 #           elems=tf.concat([grasping_anchors_reshaped, grasping_boxes_reshaped], axis=-1))
 
 
-grasp_overlaps_new = grasping_overlaps_graph_new(grasping_anchors_reshaped, grasping_boxes_reshaped)
+grasp_overlaps = grasping_overlaps_graph_new(grasping_anchors_reshaped, grasping_boxes_reshaped)
 
 
 

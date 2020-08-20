@@ -37,8 +37,8 @@ class GraspMaskRCNNConfig(Config):
     RPN_ANCHOR_SCALES = (16, 32, 64, 128, 256) # To modify based on image size
     TRAIN_ROIS_PER_IMAGE = 200 # Default (Paper uses 512)
     RPN_NMS_THRESHOLD = 0.7 # Default Value. Update to increase the number of proposals out of the RPN
-    STEPS_PER_EPOCH = 1
-    VALIDATION_STEPS = 1
+    STEPS_PER_EPOCH = 50
+    VALIDATION_STEPS = 10
     IMAGE_CHANNEL_COUNT = 4 # For RGB-D images of 4 channels
     # MEAN_PIXEL = np.array([134.6, 125.7, 119.0, 147.6]) # Added a 4th channel. Modify the mean of the pixel depth
     # MEAN_PIXEL = np.array([112.7, 112.1, 113.5, 123.5]) # Added a 4th channel. Modify the mean of the pixel depth
@@ -58,22 +58,23 @@ class GraspMaskRCNNConfig(Config):
     NUM_GRASP_BOXES_PER_INSTANCE = 128
     ARIOU_NEG_THRESHOLD = 0.01
     ARIOU_POS_THRESHOLD = 0.1
-    # LOSS_WEIGHTS = {
-    #     "rpn_class_loss": 1.,
-    #     "rpn_bbox_loss": 1.,
-    #     "mrcnn_class_loss": 1.,
-    #     "mrcnn_bbox_loss": 1.,
-    #     "mrcnn_mask_loss": 1.,
-    #     "grasp_loss": 1.,
-    # }
+    # LEARNING_RATE = 0.00002
+    LEARNING_RATE = 0.00001
+    # WEIGHT_DECAY = 0.000003
+    WEIGHT_DECAY = 0.0000003
+    #GRADIENT_CLIP_NORM = 5.0
+    LEARNING_MOMENTUM = 0.8
     LOSS_WEIGHTS = {
         "rpn_class_loss": 1.,
         "rpn_bbox_loss": 1.,
         "mrcnn_class_loss": 1.,
         "mrcnn_bbox_loss": 1.,
-        "mrcnn_mask_loss": 1.
+        "mrcnn_mask_loss": 1.,
+        "grasp_loss": 1.,
     }
     GRASP_LOSS_BETA = 10
+    GRADIENT_CLIP_VALUE = 0.1
+    # TRAIN_BN=True
 
 
 class GraspMaskRCNNInferenceConfig(GraspMaskRCNNConfig):
@@ -590,8 +591,9 @@ class GraspMaskRCNNDataset(Dataset):
         # Reshaping boxes to have a shape [num_instances, num_grasp_boxes, ..]
         bounding_box_vertices = np.array([bounding_box_vertices[p]])
         bbox_5_dimensional = np.array([bbox_5_dimensional[p]])
-        class_ids = np.array([class_ids[p].astype('uint8')])
+        class_ids = np.array([class_ids[p].astype('int8')])
         class_ids = np.expand_dims(class_ids, axis=-1)
+
         return bounding_box_vertices, bbox_5_dimensional, class_ids
 
     def bbox_convert_to_four_vertices(self, bbox_5_dimension):
@@ -704,20 +706,26 @@ model = modellib.MaskRCNN(mode="training", config=config,
 
 
 
-model.load_weights(COCO_MODEL_PATH, by_name=True,
-                      exclude=["conv1", "mrcnn_class_logits", "mrcnn_bbox_fc",
-                               "mrcnn_bbox", "mrcnn_mask"])
-# model.load_weights(COCO_MODEL_PATH, by_name=True)
+# model.load_weights(COCO_MODEL_PATH, by_name=True,
+#                       exclude=["conv1", "mrcnn_class_logits", "mrcnn_bbox_fc",
+#                                "mrcnn_bbox", "mrcnn_mask"])
+model.load_weights(COCO_MODEL_PATH, by_name=True)
 
 model.train(training_dataset, validating_dataset,
-               learning_rate=config.LEARNING_RATE,
+               learning_rate=config.LEARNING_RATE/15,
                epochs=50,
                layers=r"(conv1)|(mrcnn\_.*)|(rpn\_.*)|(fpn\_.*)|(grasp\_.*)",
                task=mode)
 
+# model.train(training_dataset, validating_dataset,
+#                learning_rate=config.LEARNING_RATE,
+#                epochs=50,
+#                layers=r"(conv1)(grasp\_.*)",
+#                task=mode)
+
 
 model.train(training_dataset, validating_dataset,
-                learning_rate=config.LEARNING_RATE/10,
+                learning_rate=config.LEARNING_RATE,
                 epochs=250,
                 layers="all",
                 task=mode)
