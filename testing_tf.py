@@ -501,6 +501,7 @@ gt_grasp_boxes_filtered = tf.tensor_scatter_nd_update(grasp_bbox, tf.concat([roi
 
 grasp_deltas = grasp_box_refinement_graph(grasping_anchors, gt_grasp_boxes_filtered)
 
+import code; code.interact(local=dict(globals(), **locals()))
 
 GRASP_BBOX_STD_DEV = np.array([0.1, 0.1, 0.2, 0.2, 1])
 grasp_deltas /= GRASP_BBOX_STD_DEV

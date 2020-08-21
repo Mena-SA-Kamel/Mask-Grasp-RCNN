@@ -681,12 +681,93 @@ def overlaps_graph(boxes1, boxes2):
     overlaps = tf.reshape(iou, [tf.shape(boxes1)[0], tf.shape(boxes2)[0]])
     return overlaps
 
-def grasping_overlaps_graph(grasping_anchors, grasping_boxes):
+def generate_zero_targets(grasping_anchors, config):
+    grasp_anchor_match = tf.ones([0, config.GRASP_ANCHORS_PER_ROI, 1]) * -1
+    deltas = tf.zeros([0, config.GRASP_ANCHORS_PER_ROI, 5])
+    return grasping_anchors, grasp_anchor_match, deltas
+
+def generate_grasping_targets(grasp_overlaps, grasping_anchors, final_roi_gt_grasp_boxes, config):
+    grasp_anchor_match = tf.ones(tf.shape(grasping_anchors)[:2]) * -1
+    grasp_box_match = tf.ones(tf.shape(grasping_anchors)[:2]) * -1
+    grasp_bbox = tf.zeros(tf.shape(grasping_anchors))
+
+    # Specifies the max overlap for each GT box: shape [num of ROIs, num of GT grasp boxes]
+    grasp_roi_iou_max = tf.reduce_max(grasp_overlaps, axis=-1)
+
+    # Specifies the max overlap anchor for each GT box: shape [num of ROIs, num of GT grasp boxes, 1]
+    # Unmatched boxes match to anchor #0
+    grasp_roi_iou_argmax = tf.expand_dims(tf.argmax(grasp_overlaps, axis=-1), axis=-1)
+
+    # Creating an ROI index variable that specifies the ROI that each GT grasp box belongs to
+    grasp_roi_ix = tf.range(0, tf.shape(grasp_roi_iou_argmax)[0])
+    grasp_roi_ix = tf.tile(tf.expand_dims(grasp_roi_ix, axis=-1), [1, tf.shape(grasp_roi_iou_argmax)[1]])
+    grasp_roi_ix = tf.expand_dims(tf.cast(grasp_roi_ix, dtype=tf.int64), axis=-1)
+
+    # Creating a grasp box index variable
+    grasp_box_ix = tf.tile(tf.range(tf.shape(grasp_overlaps)[1]), [tf.shape(grasp_overlaps)[0]])
+    grasp_box_ix = tf.cast(tf.reshape(grasp_box_ix, tf.shape(grasp_roi_iou_argmax)), dtype=tf.int64)
+
+    # Creating a tensor that specifies the indices of the positive anchors [ROI number, anchor id].
+    # Number of indices == number of GT grasp boxes
+    positive_grasp_anchors_ix = tf.concat([grasp_roi_ix, grasp_roi_iou_argmax], axis=-1)
+    positive_grasp_anchors_ix = tf.reshape(positive_grasp_anchors_ix, [-1, 2])
+    ones_tensor_1 = tf.ones(tf.shape(positive_grasp_anchors_ix)[0])
+
+    # PROBLEM: zero padded GT boxes will also match to anchor at index 0, need to set those anchors to negative
+    grasp_anchor_match = tf.tensor_scatter_nd_update(grasp_anchor_match, positive_grasp_anchors_ix, ones_tensor_1)
+
+    # grasp_box_match specifies the GT grasp box index an anchor matched to
+    updates_grasp_box = tf.cast(tf.reshape(grasp_box_ix, [-1]), dtype=tf.float32)
+    grasp_box_match = tf.tensor_scatter_nd_update(grasp_box_match, positive_grasp_anchors_ix, updates_grasp_box)
+
+    # Keeping boxes that have an overlap higher than ARIOU_POS_THRESHOLD
+    anchors_to_keep = tf.where(grasp_overlaps > config.ARIOU_POS_THRESHOLD)
+    roi_ix, grasp_box_ix, anchor_ix = tf.split(anchors_to_keep, num_or_size_splits=3, axis=-1)
+    anchors_to_keep_ix = tf.concat([roi_ix, anchor_ix], axis=-1)
+
+    ones_tensor_2 = tf.ones(tf.shape(anchors_to_keep_ix)[0])
+    grasp_anchor_match = tf.tensor_scatter_nd_update(grasp_anchor_match, anchors_to_keep_ix, ones_tensor_2)
+
+    updates_grasp_box = tf.cast(tf.reshape(grasp_box_ix, [-1]), dtype=tf.float32)
+    grasp_box_match = tf.tensor_scatter_nd_update(grasp_box_match, anchors_to_keep_ix, updates_grasp_box)
+
+    # Creating mask for positive anchors. True for positive anchors False for negative anchors
+    positive_anchors_mask = grasp_anchor_match > 0
+
+    # Compute deltas
+    positive_grasp_box_locations = tf.where(positive_anchors_mask)
+    grasp_box_ix = tf.gather_nd(grasp_box_match, positive_grasp_box_locations)
+    grasp_box_ix = tf.cast(grasp_box_ix, dtype=tf.int64)
+
+    # Format of anchor_assignment is [instance #, anchor_id, grasp_box_id]
+    anchor_assignment = tf.concat([positive_grasp_box_locations, tf.reshape(grasp_box_ix, [-1, 1])], axis=-1)
+    roi_ix, anchor_ix, grasp_box_ix = tf.split(anchor_assignment, num_or_size_splits=3, axis=-1)
+    updates = tf.gather_nd(final_roi_gt_grasp_boxes, tf.concat([roi_ix, grasp_box_ix], axis=-1))
+
+    # gt_grasp_boxes_filtered is a tensor that specifies the gt grasp box that matches with each tensor.
+    # Shape is [num of rois, num of anchors, 5]
+    gt_grasp_boxes_filtered = tf.tensor_scatter_nd_update(grasp_bbox, tf.concat([roi_ix, anchor_ix], axis=-1), updates)
+
+    # grasp_deltas = tf.map_fn(fn=utils.grasp_box_refinement_graph,
+    #                          elems=tf.concat([grasping_anchors, gt_grasp_boxes_filtered], axis=-1))
+    grasp_deltas = utils.grasp_box_refinement_graph(grasping_anchors, gt_grasp_boxes_filtered, config)
+    grasp_deltas /= config.GRASP_BBOX_STD_DEV
+    grasp_anchor_match = tf.expand_dims(grasp_anchor_match, axis=-1)
+    return grasping_anchors, grasp_anchor_match, grasp_deltas
+
+
+
+def grasping_overlaps_graph(anchors, boxes):
     # boxes1:  grasping_anchors (proposals)
     # boxes2: final_roi_gt_grasp_boxes (gt)
+    # Reshaping to get equal sized tensors
+    grasping_anchors_reshaped = tf.tile(anchors, [1, tf.shape(boxes)[1], 1])
+    grasping_boxes_reshaped = tf.tile(K.expand_dims(boxes, axis=2),
+                                      [1, 1, tf.shape(anchors)[1], 1])
+    grasping_boxes_reshaped = tf.reshape(grasping_boxes_reshaped, tf.shape(grasping_anchors_reshaped))
 
-    grasp_anchors = tf.reshape(grasping_anchors, [-1, 5])
-    gt_grasp_boxes = tf.reshape(grasping_boxes, [-1, 5])
+    grasp_anchors = tf.reshape(grasping_anchors_reshaped, [-1, 5])
+    gt_grasp_boxes = tf.reshape(grasping_boxes_reshaped, [-1, 5])
 
     # grasp_anchors, gt_grasp_boxes = tf.split(inputs, num_or_size_splits=2, axis=-1)
     b1_anchors = grasp_anchors
@@ -694,10 +775,6 @@ def grasping_overlaps_graph(grasping_anchors, grasping_boxes):
 
     non_zero_grasp_boxes = tf.cast(tf.reduce_sum(tf.abs(b2_grasp_boxes), axis=1), tf.bool)
 
-    # b1_anchors = tf.reshape(tf.tile(tf.expand_dims(boxes1, 1),
-    #                         [1, 1, tf.shape(boxes2)[0]]), [-1, 5])
-    # b2_grasp_boxes = tf.tile(boxes2, [tf.shape(boxes1)[0], 1])
-
     # Need to represent b1 and b2 in the form y1, x1, y2, x2
     b1_x, b1_y, b1_w, b1_h, b1_theta = tf.split(b1_anchors, num_or_size_splits=5, axis=-1)
     b2_x, b2_y, b2_w, b2_h, b2_theta = tf.split(b2_grasp_boxes, num_or_size_splits=5, axis=-1)
@@ -725,49 +802,8 @@ def grasping_overlaps_graph(grasping_anchors, grasping_boxes):
     angle_differences = tf.maximum(angle_differences, 0)
     arIoU = iou * angle_differences
     arIoU = arIoU * tf.expand_dims(tf.cast(non_zero_grasp_boxes, dtype=tf.float32), axis=-1)
-    arIoU = tf.expand_dims(tf.reshape(arIoU, tf.shape(grasping_anchors)[:2]), axis=-1)
-    return arIoU
-
-def grasping_overlaps_graph_old(inputs):
-    # boxes1:  grasping_anchors (proposals)
-    # boxes2: final_roi_gt_grasp_boxes (gt)
-
-    grasp_anchors, gt_grasp_boxes = tf.split(inputs, num_or_size_splits=2, axis=-1)
-
-    b1_anchors = grasp_anchors
-    b2_grasp_boxes = gt_grasp_boxes
-
-    non_zero_grasp_boxes = tf.cast(tf.reduce_sum(tf.abs(b2_grasp_boxes), axis=1), tf.bool)
-
-    # Need to represent b1 and b2 in the form y1, x1, y2, x2
-    b1_x, b1_y, b1_w, b1_h, b1_theta = tf.split(b1_anchors, num_or_size_splits=5, axis=-1)
-    b2_x, b2_y, b2_w, b2_h, b2_theta = tf.split(b2_grasp_boxes, num_or_size_splits=5, axis=-1)
-
-    b1_y1, b1_x1, b1_y2, b1_x2  = [b1_y - (b1_h/2), b1_x - (b1_w/2), b1_y + (b1_h/2), b1_x + (b1_w/2)]
-    b2_y1, b2_x1, b2_y2, b2_x2 = [b2_y - (b2_h/2), b2_x - (b2_w/2), b2_y + (b2_h/2), b2_x + (b2_w/2)]
-
-    # Compute intersection
-    y1 = tf.maximum(b1_y1, b2_y1)
-    x1 = tf.maximum(b1_x1, b2_x1)
-    y2 = tf.minimum(b1_y2, b2_y2)
-    x2 = tf.minimum(b1_x2, b2_x2)
-    intersection = tf.maximum(x2 - x1, 0) * tf.maximum(y2 - y1, 0)
-
-    # Compute unions
-    b1_area = (b1_y2 - b1_y1) * (b1_x2 - b1_x1)
-    b2_area = (b2_y2 - b2_y1) * (b2_x2 - b2_x1)
-    union = b1_area + b2_area - intersection
-
-    # Compute IOU
-    iou = intersection / union
-
-    # Compute delta theta between boxes1 and boxes2 to get the ARIoU
-
-    angle_differences = tf.cos(tf_deg2rad(b1_theta) - tf_deg2rad(b2_theta))
-    angle_differences = tf.maximum(angle_differences, 0)
-    arIoU = iou * angle_differences
-    arIoU = arIoU * tf.expand_dims(tf.cast(non_zero_grasp_boxes, dtype=tf.float32), axis=-1)
-
+    arIoU = tf.expand_dims(tf.reshape(arIoU, tf.shape(grasping_anchors_reshaped)[:2]), axis=-1)
+    arIoU = tf.reshape(tf.squeeze(arIoU), [-1, tf.shape(boxes)[1], tf.shape(anchors)[1]])
     return arIoU
 
 def generate_grasping_anchors_graph(inputs):
@@ -936,7 +972,13 @@ def detection_targets_graph(proposals, gt_class_ids, gt_boxes, gt_masks, anchors
     roi_iou_max = tf.reduce_max(overlaps, axis=1)
     # 1. Positive ROIs are those with >= 0.5 IoU with a GT box
     positive_roi_bool = (roi_iou_max >= 0.5)
-    positive_indices = tf.where(positive_roi_bool)[:, 0]
+    num_positives = tf.reduce_sum(tf.cast(positive_roi_bool, dtype=tf.float32))
+    positive_indices = tf.cond(
+        tf.greater(num_positives, 0.),
+        true_fn=lambda: tf.where(positive_roi_bool)[:, 0],
+        false_fn=lambda: tf.reshape(tf.argmax(roi_iou_max), [1])
+    )
+    # positive_indices = tf.where(positive_roi_bool)[:, 0]
     # 2. Negative ROIs are those with < 0.5 with every GT box. Skip crowds.
     negative_indices = tf.where(tf.logical_and(roi_iou_max < 0.5, no_crowd_bool))[:, 0]
 
@@ -946,6 +988,7 @@ def detection_targets_graph(proposals, gt_class_ids, gt_boxes, gt_masks, anchors
                          config.ROI_POSITIVE_RATIO)
     positive_indices = tf.random.shuffle(positive_indices)[:positive_count]
     positive_count = tf.shape(positive_indices)[0]
+
     # Negative ROIs. Add enough to maintain positive:negative ratio.
     r = 1.0 / config.ROI_POSITIVE_RATIO
     negative_count = tf.cast(r * tf.cast(positive_count, tf.float32), tf.int32) - positive_count
@@ -972,7 +1015,6 @@ def detection_targets_graph(proposals, gt_class_ids, gt_boxes, gt_masks, anchors
     # Assign positive ROIs to GT masks
     # Permute masks to [N, height, width, 1]
     transposed_masks = tf.expand_dims(tf.transpose(gt_masks, [2, 0, 1]), -1)
-    # Pick the right mask for each ROI (Can use this to pick right grasping points for ROI)
     roi_masks = tf.gather(transposed_masks, roi_gt_box_assignment)
 
     # Compute mask targets
@@ -1001,13 +1043,8 @@ def detection_targets_graph(proposals, gt_class_ids, gt_boxes, gt_masks, anchors
     masks = tf.round(masks)
 
     # Picking the right grasping gt boxes for each ROI
-    roi_gt_box_assignment = tf.Print(roi_gt_box_assignment, [roi_gt_box_assignment],
-                                message="\n____________________roi_gt_box_assignment____________________ =")
-
-
     roi_gt_grasp_boxes = tf.cast(tf.gather(gt_grasp_boxes, roi_gt_box_assignment), dtype=tf.float32)
     roi_gt_grasp_class = tf.cast(tf.gather(gt_grasp_class, roi_gt_box_assignment), dtype=tf.float32)
-
 
     # At this point roi_gt_grasp_boxes are the GT grasping boxes for each positive ROI specified by positive_rois
     # Need to specify the GT grasping boxes in the proposal frame of reference
@@ -1020,113 +1057,51 @@ def detection_targets_graph(proposals, gt_class_ids, gt_boxes, gt_masks, anchors
     proposal_x1 = positive_rois[:, 1]
     proposal_y2 = positive_rois[:, 2]
     proposal_x2 = positive_rois[:, 3]
-
     proposal_widths = tf.expand_dims(proposal_x2 - proposal_x1, axis=-1)
     proposal_heights = tf.expand_dims(proposal_y2 - proposal_y1, axis=-1)
 
     # Next, we create adaptive size anchors for all the instances in positive_rois
     pooled_feature_stride = tf.concat([proposal_heights, proposal_widths], axis=-1) /config.GRASP_POOL_SIZE
-
     pooled_feature_stride = tf.cast(pooled_feature_stride, tf.float32)
 
-    grasping_anchors = tf.map_fn(generate_grasping_anchors_graph,
-                              tf.concat([pooled_feature_stride, positive_rois], axis=1))
+    # import code;
+    # code.interact(local=dict(globals(), **locals()))
+
+    grasping_anchors = tf.cond(
+        tf.greater(tf.shape(positive_rois)[0], 0),
+        true_fn=lambda: tf.map_fn(generate_grasping_anchors_graph,
+                              tf.concat([pooled_feature_stride, positive_rois], axis=1)),
+        false_fn=lambda: tf.cast(tf.zeros([0, config.GRASP_ANCHORS_PER_ROI, 5]), tf.float32)
+    )
 
     # Computing overlaps between the grasping anchors and the final_roi_gt_grasp_boxes
-    boxes1 = grasping_anchors
-    boxes2 = final_roi_gt_grasp_boxes
-
-    # Reshaping to get equal sized tensors
-    grasping_anchors_reshaped = tf.tile(boxes1, [1, tf.shape(boxes2)[1], 1])
-    grasping_boxes_reshaped = tf.tile(K.expand_dims(boxes2, axis=2), [1, 1, tf.shape(boxes1)[1], 1])
-    grasping_boxes_reshaped = tf.reshape(grasping_boxes_reshaped, tf.shape(grasping_anchors_reshaped))
-
     # grasp_overlaps [NUM_INSTANCES, 196(number of anchors) * number of grasping boxes]
-    grasp_overlaps = grasping_overlaps_graph(grasping_anchors_reshaped, grasping_boxes_reshaped)
+    # grasp_overlaps has the shape [num_instances, num_grasp_instances, num_anchors]
+    grasp_overlaps = tf.cond(
+        tf.greater(tf.shape(grasping_anchors)[0], 0),
+        true_fn=lambda: grasping_overlaps_graph(grasping_anchors, final_roi_gt_grasp_boxes),
+        false_fn=lambda: tf.cast(tf.constant([]), tf.float32)
+    )
 
-    # grasp_overlaps_reshaped has the shape [num_instances, num_grasp_instances, num_anchors]
-    grasp_overlaps_reshaped = tf.reshape(tf.squeeze(grasp_overlaps),[-1, tf.shape(boxes2)[1], tf.shape(boxes1)[1]])
+    grasping_anchors, grasp_anchor_match, grasp_deltas = tf.cond(
+        tf.greater(tf.shape(grasp_overlaps)[0], 0),
+        true_fn=lambda: generate_grasping_targets(grasp_overlaps, grasping_anchors,
+                                                    final_roi_gt_grasp_boxes, config),
+        false_fn=lambda: generate_zero_targets(grasping_anchors, config)
+    )
 
-    # grasp_anchor_match - this is 1 for positive anchors, -1 for negative anchors
-    # grasp_box_match - this specifies the id of the grasp box for each positive anchor, -1 for negative anchors
-    grasp_anchor_match = tf.ones(tf.shape(grasping_anchors)[:2])*-1
-    grasp_box_match = tf.ones(tf.shape(grasping_anchors)[:2])*-1
-
-    # Specifies the max overlap for each GT box: shape [num of ROIs, num of GT grasp boxes]
-    grasp_roi_iou_max = tf.reduce_max(grasp_overlaps_reshaped, axis=-1)
-
-    # Specifies the max overlap anchor for each GT box: shape [num of ROIs, num of GT grasp boxes, 1]
-    # Unmatched boxes match to anchor #0
-    grasp_roi_iou_argmax = tf.expand_dims(tf.argmax(grasp_overlaps_reshaped, axis=-1), axis=-1)
-
-    # Creating an ROI index variable that specifies the ROI that each GT grasp box belongs to
-    grasp_roi_ix = tf.range(0, tf.shape(grasp_roi_iou_argmax)[0])
-    grasp_roi_ix = tf.tile(tf.expand_dims(grasp_roi_ix, axis=-1), [1, tf.shape(grasp_roi_iou_argmax)[1]])
-    grasp_roi_ix = tf.expand_dims(tf.cast(grasp_roi_ix, dtype=tf.int64), axis=-1)
-
-    # Creating a grasp box index variable
-    grasp_box_ix = tf.tile(tf.range(tf.shape(grasp_overlaps_reshaped)[1]), [tf.shape(grasp_overlaps_reshaped)[0]])
-    grasp_box_ix = tf.cast(tf.reshape(grasp_box_ix, tf.shape(grasp_roi_iou_argmax)), dtype=tf.int64)
-
-    # Creating a tensor that specifies the indices of the positive anchors [ROI number, anchor id].
-    # Number of indices == number of GT grasp boxes
-    positive_grasp_anchors_ix = tf.concat([grasp_roi_ix, grasp_roi_iou_argmax], axis=-1)
-    positive_grasp_anchors_ix = tf.reshape(positive_grasp_anchors_ix, [-1, 2])
-    ones_tensor_1 = tf.ones(tf.shape(positive_grasp_anchors_ix)[0])
-
-    # PROBLEM: zero padded GT boxes will also match to anchor at index 0, need to set those anchors to negative
-    grasp_anchor_match = tf.tensor_scatter_nd_update(grasp_anchor_match, positive_grasp_anchors_ix, ones_tensor_1)
-
-    # grasp_box_match specifies the GT grasp box index an anchor matched to
-    updates_grasp_box = tf.cast(tf.reshape(grasp_box_ix, [-1]), dtype=tf.float32)
-    grasp_box_match = tf.tensor_scatter_nd_update(grasp_box_match, positive_grasp_anchors_ix, updates_grasp_box)
-
-    # Keeping boxes that have an overlap higher than ARIOU_POS_THRESHOLD
-    anchors_to_keep = tf.where(grasp_overlaps_reshaped > config.ARIOU_POS_THRESHOLD)
-    roi_ix, grasp_box_ix, anchor_ix = tf.split(anchors_to_keep, num_or_size_splits=3, axis=-1)
-    anchors_to_keep_ix = tf.concat([roi_ix, anchor_ix], axis=-1)
-
-    ones_tensor_2 = tf.ones(tf.shape(anchors_to_keep_ix)[0])
-    grasp_anchor_match = tf.tensor_scatter_nd_update(grasp_anchor_match, anchors_to_keep_ix, ones_tensor_2)
-
-    updates_grasp_box = tf.cast(tf.reshape(grasp_box_ix, [-1]), dtype=tf.float32)
-    grasp_box_match = tf.tensor_scatter_nd_update(grasp_box_match, anchors_to_keep_ix, updates_grasp_box)
-
-    # Creating mask for positive anchors. True for positive anchors False for negative anchors
-    positive_anchors_mask = grasp_anchor_match > 0
-
-    # Compute deltas, shape of grasp_bbox : [number of ROIs, num of positive grasp instances, 5]
-    grasp_bbox = tf.zeros(tf.shape(grasping_anchors))
-
-    positive_grasp_box_locations = tf.where(positive_anchors_mask)
-    grasp_box_ix = tf.gather_nd(grasp_box_match, positive_grasp_box_locations)
-    grasp_box_ix = tf.cast(grasp_box_ix, dtype=tf.int64)
-
-    # Format of anchor_assignment is [instance #, anchor_id, grasp_box_id]
-    anchor_assignment = tf.concat([positive_grasp_box_locations, tf.reshape(grasp_box_ix, [-1, 1])], axis=-1)
-    roi_ix, anchor_ix, grasp_box_ix = tf.split(anchor_assignment, num_or_size_splits=3, axis=-1)
-    updates = tf.gather_nd(final_roi_gt_grasp_boxes, tf.concat([roi_ix, grasp_box_ix], axis=-1))
-
-    # gt_grasp_boxes_filtered is a tensor that specifies the gt grasp box that matches with each tensor.
-    # Shape is [num of rois, num of anchors, 5]
-    gt_grasp_boxes_filtered = tf.tensor_scatter_nd_update(grasp_bbox, tf.concat([roi_ix, anchor_ix], axis=-1), updates)
-
-    # grasp_deltas = tf.map_fn(fn=utils.grasp_box_refinement_graph,
-    #                          elems=tf.concat([grasping_anchors, gt_grasp_boxes_filtered], axis=-1))
-    grasp_deltas = utils.grasp_box_refinement_graph(grasping_anchors, gt_grasp_boxes_filtered, config)
-    grasp_deltas /= config.GRASP_BBOX_STD_DEV
-    grasp_anchor_match = tf.expand_dims(grasp_anchor_match, axis=-1)
-
+    # grasping_anchors, grasp_anchor_match, grasp_deltas = generate_grasping_targets(grasp_overlaps, grasping_anchors,
+    #                                                                                final_roi_gt_grasp_boxes, config)
     # At this point:
     # grasp_anchor_match : Marks the positive anchors with 1 and negative anchors with -1
     # grasp_box_match : Specifies the id of the grasp box the positive anchor matched to, -1 for negative anchors
     # grasp_deltas : Specifies the refinements [dx, dy, dw, dh, dtheta] to go from the anchor to the gt grasp box
     # grasping_anchors : The adaptive sized anchors for each ROI, covering the 7x7 pooled feature space
 
-
     # Append negative ROIs and pad bbox deltas and masks that
     # are not used for negative ROIs with zeros.
     rois = tf.concat([positive_rois, negative_rois], axis=0)
+
     N = tf.shape(negative_rois)[0]
     P = tf.maximum(config.TRAIN_ROIS_PER_IMAGE - tf.shape(rois)[0], 0)
     rois = tf.pad(rois, [(0, P), (0, 0)])
@@ -1134,6 +1109,8 @@ def detection_targets_graph(proposals, gt_class_ids, gt_boxes, gt_masks, anchors
     roi_gt_class_ids = tf.pad(roi_gt_class_ids, [(0, N + P)])
     deltas = tf.pad(deltas, [(0, N + P), (0, 0)])
     masks = tf.pad(masks, [[0, N + P], (0, 0), (0, 0)])
+    grasp_anchor_match = tf.pad(grasp_anchor_match, [[0, N + P], (0, 0), (0, 0)])
+    grasp_deltas = tf.pad(grasp_deltas, [[0, N + P], (0, 0), (0, 0)])
 
     return rois, roi_gt_class_ids, deltas, masks, grasping_anchors, grasp_anchor_match, grasp_deltas
 
@@ -1205,6 +1182,116 @@ class DetectionTargetLayer(KE.Layer):
 ############################################################
 #  Detection Layer
 ############################################################
+def refine_mask_grasp_detections_graph(rois, probs, deltas, window, grasp_probs, grasp_bbox, config):
+    """Refine classified proposals and filter overlaps and return final
+    detections.
+
+    Inputs:
+        rois: [N, (y1, x1, y2, x2)] in normalized coordinates
+        probs: [N, num_classes]. Class probabilities.
+        deltas: [N, num_classes, (dy, dx, log(dh), log(dw))]. Class-specific
+                bounding box deltas.
+        window: (y1, x1, y2, x2) in normalized coordinates. The part of the image
+            that contains the image excluding the padding.
+
+    Returns detections shaped: [num_detections, (y1, x1, y2, x2, class_id, score)] where
+        coordinates are normalized.
+    """
+    # Class IDs per ROI
+    class_ids = tf.argmax(probs, axis=1, output_type=tf.int32)
+    # Class probability of the top class of each ROI
+    indices = tf.stack([tf.range(probs.shape[0]), class_ids], axis=1)
+    class_scores = tf.gather_nd(probs, indices)
+    # Class-specific bounding box deltas
+    deltas_specific = tf.gather_nd(deltas, indices)
+    # Apply bounding box deltas
+    # Shape: [boxes, (y1, x1, y2, x2)] in normalized coordinates
+    refined_rois = apply_box_deltas_graph(
+        rois, deltas_specific * config.BBOX_STD_DEV)
+    # Clip boxes to image window
+    refined_rois = clip_boxes_graph(refined_rois, window)
+
+    # TODO: Filter out boxes with zero area
+
+    # Filter out background boxes
+    keep = tf.where(class_ids > 0)[:, 0]
+    # Filter out low confidence boxes
+    if config.DETECTION_MIN_CONFIDENCE:
+        conf_keep = tf.where(class_scores >= config.DETECTION_MIN_CONFIDENCE)[:, 0]
+        keep = tf.sets.intersection(tf.expand_dims(keep, 0),
+                                        tf.expand_dims(conf_keep, 0))
+        keep = tf.sparse.to_dense(keep)[0]
+
+    # Apply per-class NMS
+    # 1. Prepare variables
+
+    pre_nms_class_ids = tf.gather(class_ids, keep)
+    pre_nms_scores = tf.gather(class_scores, keep)
+    pre_nms_rois = tf.gather(refined_rois,   keep)
+    unique_pre_nms_class_ids = tf.unique(pre_nms_class_ids)[0]
+
+    def nms_keep_map(class_id):
+        """Apply Non-Maximum Suppression on ROIs of the given class."""
+        # Indices of ROIs of the given class
+        ixs = tf.where(tf.equal(pre_nms_class_ids, class_id))[:, 0]
+        # Apply NMS
+        class_keep = tf.image.non_max_suppression(
+                tf.gather(pre_nms_rois, ixs),
+                tf.gather(pre_nms_scores, ixs),
+                max_output_size=config.DETECTION_MAX_INSTANCES,
+                iou_threshold=config.DETECTION_NMS_THRESHOLD)
+        # Map indices
+        class_keep = tf.gather(keep, tf.gather(ixs, class_keep))
+        # Pad with -1 so returned tensors have the same shape
+        gap = config.DETECTION_MAX_INSTANCES - tf.shape(class_keep)[0]
+        class_keep = tf.pad(class_keep, [(0, gap)],
+                            mode='CONSTANT', constant_values=-1)
+        # Set shape so map_fn() can infer result shape
+        class_keep.set_shape([config.DETECTION_MAX_INSTANCES])
+        return class_keep
+
+    # 2. Map over class IDs
+    nms_keep = tf.map_fn(nms_keep_map, unique_pre_nms_class_ids,
+                         dtype=tf.int64)
+    # 3. Merge results into one list, and remove -1 padding
+    nms_keep = tf.reshape(nms_keep, [-1])
+    nms_keep = tf.gather(nms_keep, tf.where(nms_keep > -1)[:, 0])
+    # 4. Compute intersection between keep and nms_keep
+    keep = tf.sets.intersection(tf.expand_dims(keep, 0),
+                                    tf.expand_dims(nms_keep, 0))
+    keep = tf.sparse.to_dense(keep)[0]
+    # Keep top detections
+    roi_count = config.DETECTION_MAX_INSTANCES
+    class_scores_keep = tf.gather(class_scores, keep)
+    num_keep = tf.minimum(tf.shape(class_scores_keep)[0], roi_count)
+    top_ids = tf.nn.top_k(class_scores_keep, k=num_keep, sorted=True)[1]
+    keep = tf.gather(keep, top_ids)
+
+    roi_duplicates = tf.gather(refined_rois, keep)
+    roi_duplicates = tf.tile(tf.expand_dims(roi_duplicates, axis=1), [1, config.GRASP_ANCHORS_PER_ROI, 1])
+
+    class_ids_duplicates = tf.cast(tf.gather(class_ids, keep), tf.float32)[..., tf.newaxis]
+    class_ids_duplicates = tf.tile(tf.expand_dims(class_ids_duplicates, axis=1), [1, config.GRASP_ANCHORS_PER_ROI, 1])
+
+    class_scores_duplicates = tf.gather(class_scores, keep)[..., tf.newaxis]
+    class_scores_duplicates = tf.tile(tf.expand_dims(class_scores_duplicates, axis=1), [1, config.GRASP_ANCHORS_PER_ROI, 1])
+
+    # Arrange output as [N, (y1, x1, y2, x2, class_id, score)]
+    # Coordinates are normalized.
+    # detections: rois:0-3, class_ids: 4, scores: 5, grasp_boxes: 6:10, grasp_probs: 11-12
+    detections = tf.concat([
+        roi_duplicates,
+        # tf.to_float(tf.gather(class_ids, keep))[..., tf.newaxis],
+        class_ids_duplicates,
+        class_scores_duplicates,
+        tf.gather(grasp_bbox, keep),
+        tf.gather(grasp_probs, keep),
+        ], axis=2)
+
+    # Pad with zeros if detections < DETECTION_MAX_INSTANCES
+    gap = config.DETECTION_MAX_INSTANCES - tf.shape(detections)[0]
+    detections = tf.pad(detections, [(0, gap), (0, 0), (0, 0)], "CONSTANT")
+    return detections
 
 def refine_detections_graph(rois, probs, deltas, window, config):
     """Refine classified proposals and filter overlaps and return final
@@ -1303,6 +1390,51 @@ def refine_detections_graph(rois, probs, deltas, window, config):
     gap = config.DETECTION_MAX_INSTANCES - tf.shape(detections)[0]
     detections = tf.pad(detections, [(0, gap), (0, 0)], "CONSTANT")
     return detections
+
+class GraspDetectionLayer(KE.Layer):
+    """Takes classified proposal boxes and their bounding box deltas and
+    returns the final detection boxes.
+
+    Returns:
+    [batch, num_detections, (y1, x1, y2, x2, class_id, class_score)] where
+    coordinates are normalized.
+    """
+
+    def __init__(self, config=None, **kwargs):
+        super(GraspDetectionLayer, self).__init__(**kwargs)
+        self.config = config
+
+    def call(self, inputs):
+        rois = inputs[0]
+        mrcnn_class = inputs[1]
+        mrcnn_bbox = inputs[2]
+        image_meta = inputs[3]
+        grasp_probs = inputs[4]
+        grasp_bbox = inputs[5]
+
+        # Get windows of images in normalized coordinates. Windows are the area
+        # in the image that excludes the padding.
+        # Use the shape of the first image in the batch to normalize the window
+        # because we know that all images get resized to the same size.
+        m = parse_image_meta_graph(image_meta)
+        image_shape = m['image_shape'][0]
+        window = norm_boxes_graph(m['window'], image_shape[:2])
+
+        # Run detection refinement graph on each item in the batch
+        detections_batch = utils.batch_slice(
+            [rois, mrcnn_class, mrcnn_bbox, window, grasp_probs, grasp_bbox],
+            lambda u, v, x, y, w, z: refine_mask_grasp_detections_graph(u, v, x, y, w, z, self.config),
+            self.config.IMAGES_PER_GPU)
+
+        # Reshape output
+        # [batch, num_detections, (y1, x1, y2, x2, class_id, class_score)] in
+        # normalized coordinates
+        return tf.reshape(
+            detections_batch,
+            [self.config.BATCH_SIZE, self.config.DETECTION_MAX_INSTANCES, self.config.GRASP_ANCHORS_PER_ROI, 13])
+
+    def compute_output_shape(self, input_shape):
+        return (None, self.config.DETECTION_MAX_INSTANCES, self.config.GRASP_ANCHORS_PER_ROI, 13)
 
 
 class DetectionLayer(KE.Layer):
@@ -1775,12 +1907,14 @@ def grasp_loss_graph(config, target_bbox, target_class, bbox, class_logits, roi_
 
         # Squeeze last dim to simplify
         batch_target_class = tf.squeeze(batch_target_class, -1)
+        batch_target_class_filtered = tf.gather(batch_target_class, positive_roi_ix)
+        batch_target_bbox_filtered = tf.gather(batch_target_bbox, positive_roi_ix)
 
         # Get anchor classes. Convert the -1/+1 match to 0/1 values. Positive anchors are 1, negative and
         # neutral are zero
         # SHAPE = [number of positive ROIs, number of anchors]
-        positive_anchor_mask = K.cast(K.equal(batch_target_class, 1), tf.int32)
-        negative_anchor_mask = K.cast(K.equal(batch_target_class, -1), tf.int32)
+        positive_anchor_mask = K.cast(K.equal(batch_target_class_filtered, 1), tf.int32)
+        negative_anchor_mask = K.cast(K.equal(batch_target_class_filtered, -1), tf.int32)
 
         # Classification Loss - only considering the positive ROIs
         classification_loss = K.sparse_categorical_crossentropy(target=positive_anchor_mask,
@@ -1798,16 +1932,21 @@ def grasp_loss_graph(config, target_bbox, target_class, bbox, class_logits, roi_
 
         values = tf.gather_nd(classification_loss, negative_indices)
         negative_anchor_losses = tf.cast(negative_anchor_mask, dtype=tf.float32) * classification_loss
-        #
-        # import code;
-        # code.interact(local=dict(globals(), **locals()))
+
         # Summing the top 3N negative elements in each ROI
         negative_anchor_losses = tf.expand_dims(negative_anchor_losses, axis=-1)
 
         N_repeats = tf.cast(tf.tile(N, [1, config.GRASP_ANCHORS_PER_ROI]), dtype=tf.float32)
         N_repeats = tf.expand_dims(N_repeats, axis=-1)
 
-        top_negative_losses_sum = tf.map_fn(cumpute_top_negative_losses_graph, tf.concat([negative_anchor_losses, N_repeats], axis=-1))
+        top_negative_losses_sum = tf.cond(
+            tf.greater(tf.shape(N)[0], 0),
+            true_fn=lambda: tf.map_fn(cumpute_top_negative_losses_graph, tf.concat([negative_anchor_losses, N_repeats], axis=-1)),
+            false_fn=lambda: tf.cast(tf.zeros([0, config.GRASP_ANCHORS_PER_ROI, 1]), tf.float32)
+        )
+
+        # top_negative_losses_sum = tf.map_fn(cumpute_top_negative_losses_graph, tf.concat([negative_anchor_losses, N_repeats], axis=-1))
+
         total_negative_loss = K.sum(top_negative_losses_sum)
 
         # Summing the positive elements
@@ -1818,7 +1957,7 @@ def grasp_loss_graph(config, target_bbox, target_class, bbox, class_logits, roi_
         classification_loss = total_negative_loss + total_positive_loss
 
         # Regression Loss
-        regression_loss = smooth_l1_loss(batch_target_bbox, batch_bbox_filtered)
+        regression_loss = smooth_l1_loss(batch_target_bbox_filtered, batch_bbox_filtered)
         mean_regression_loss = K.mean(regression_loss, axis=-1)
 
         # Only positive anchors count towards the loss
@@ -4032,11 +4171,12 @@ class MaskRCNN():
             # Detections
             # output is [batch, num_detections, (y1, x1, y2, x2, class_id, score)] in
             # normalized coordinates
-            detections = DetectionLayer(config, name="mrcnn_detection")(
-                [rpn_rois, mrcnn_class, mrcnn_bbox, input_image_meta])
+
+            detections = GraspDetectionLayer(config, name="mrcnn_detection")(
+                [rpn_rois, mrcnn_class, mrcnn_bbox, input_image_meta, grasp_probs, grasp_bbox])
 
             # Create masks for detections
-            detection_boxes = KL.Lambda(lambda x: x[..., :4])(detections)
+            detection_boxes = KL.Lambda(lambda x: x[:,:,1][..., :4])(detections)
             mrcnn_mask = build_fpn_mask_graph(detection_boxes, mrcnn_feature_maps,
                                               input_image_meta,
                                               config.MASK_POOL_SIZE,
@@ -4045,7 +4185,7 @@ class MaskRCNN():
 
             model = KM.Model([input_image, input_image_meta, input_anchors],
                              [detections, mrcnn_class, mrcnn_bbox,
-                                 mrcnn_mask, rpn_rois, rpn_class, rpn_bbox, grasp_class_logits, grasp_probs, grasp_bbox],
+                                 mrcnn_mask, rpn_rois, rpn_class, rpn_bbox],
                              name='mask_grasp_rcnn')
 
         # Add multi-GPU support.
@@ -4498,11 +4638,11 @@ class MaskRCNN():
             os.makedirs(self.log_dir)
 
         # Callbacks
-        # clr_triangular = CyclicLR(base_lr=self.config.LEARNING_RATE/15, max_lr=self.config.LEARNING_RATE,
-        #                           step_size=self.config.STEPS_PER_EPOCH*4, mode='triangular',
-        #          gamma=1., scale_fn=None, scale_mode='cycle')
+        clr_triangular = CyclicLR(base_lr=self.config.LEARNING_RATE/15, max_lr=self.config.LEARNING_RATE,
+                                  step_size=self.config.STEPS_PER_EPOCH*4, mode='triangular',
+                 gamma=1., scale_fn=None, scale_mode='cycle')
         callbacks = [
-            # clr_triangular,
+            clr_triangular,
             keras.callbacks.TensorBoard(log_dir=self.log_dir,
                                         histogram_freq=0, write_graph=True, write_images=False),
             keras.callbacks.ModelCheckpoint(self.checkpoint_path,
@@ -4613,6 +4753,80 @@ class MaskRCNN():
             boxes = np.delete(boxes, exclude_ix, axis=0)
 
         return boxes, rpn_class, rpn_bbox
+
+    def unmold_mask_grasp_detections(self, detections, mrcnn_mask, original_image_shape,
+                          image_shape, window):
+        """Reformats the detections of one image from the format of the neural
+        network output to a format suitable for use in the rest of the
+        application.
+
+        detections: [N, (y1, x1, y2, x2, class_id, score)] in normalized coordinates
+        mrcnn_mask: [N, height, width, num_classes]
+        original_image_shape: [H, W, C] Original image shape before resizing
+        image_shape: [H, W, C] Shape of the image after resizing and padding
+        window: [y1, x1, y2, x2] Pixel coordinates of box in the image where the real
+                image is excluding the padding.
+
+        Returns:
+        boxes: [N, (y1, x1, y2, x2)] Bounding boxes in pixels
+        class_ids: [N] Integer class IDs for each bounding box
+        scores: [N] Float probability scores of the class_id
+        masks: [height, width, num_instances] Instance masks
+        """
+        # How many detections do we have?
+        # Detections array is padded with zeros. Find the first class_id == 0.
+
+
+        original_detections = detections.copy()
+        detections = detections[:, 1]
+        zero_ix = np.where(detections[:, :4] == 0)[0]
+        N = zero_ix[0] if zero_ix.shape[0] > 0 else detections.shape[0]
+
+        # Extract boxes, class_ids, scores, and class-specific masks
+        boxes = detections[:N, :4]
+        class_ids = detections[:N, 4].astype(np.int32)
+        scores = detections[:N, 5]
+        masks = mrcnn_mask[np.arange(N), :, :, class_ids]
+        grasp_boxes = original_detections[:N, :, 6:11]
+        grasp_probs = original_detections[:N, :, 11:]
+
+
+        # Translate normalized coordinates in the resized image to pixel
+        # coordinates in the original image before resizing
+        window = utils.norm_boxes(window, image_shape[:2])
+        wy1, wx1, wy2, wx2 = window
+        shift = np.array([wy1, wx1, wy1, wx1])
+        wh = wy2 - wy1  # window height
+        ww = wx2 - wx1  # window width
+        scale = np.array([wh, ww, wh, ww])
+        # Convert boxes to normalized coordinates on the window
+        boxes = np.divide(boxes - shift, scale)
+        # Convert boxes to pixel coordinates on the original image
+        boxes = utils.denorm_boxes(boxes, original_image_shape[:2])
+
+        # Filter out detections with zero area. Happens in early training when
+        # network weights are still random
+        exclude_ix = np.where(
+            (boxes[:, 2] - boxes[:, 0]) * (boxes[:, 3] - boxes[:, 1]) <= 0)[0]
+        if exclude_ix.shape[0] > 0:
+            boxes = np.delete(boxes, exclude_ix, axis=0)
+            class_ids = np.delete(class_ids, exclude_ix, axis=0)
+            scores = np.delete(scores, exclude_ix, axis=0)
+            masks = np.delete(masks, exclude_ix, axis=0)
+            grasp_boxes = np.delete(grasp_boxes, axis=0)
+            grasp_probs = np.delete(grasp_probs, axis=0)
+            N = class_ids.shape[0]
+
+        # Resize masks to original image size and set boundary threshold.
+        full_masks = []
+        for i in range(N):
+            # Convert neural network mask to full size mask
+            full_mask = utils.unmold_mask(masks[i], boxes[i], original_image_shape)
+            full_masks.append(full_mask)
+        full_masks = np.stack(full_masks, axis=-1)\
+            if full_masks else np.empty(original_image_shape[:2] + (0,))
+
+        return boxes, class_ids, scores, full_masks, grasp_boxes, grasp_probs
 
     def unmold_detections(self, detections, mrcnn_mask, original_image_shape,
                           image_shape, window):
@@ -4727,13 +4941,28 @@ class MaskRCNN():
             rpn_class, rpn_bbox = self.keras_model.predict([molded_images, image_metas, anchors], verbose=0)
             results = []
             for i, image in enumerate(images):
-                # boxes, rpn_class, rpn_bbox =\
-                #     self.unmold_grasping_detections(rpn_rois[i], rpn_class[i], rpn_bbox[i],
-                #                            image.shape, molded_images[i].shape,
-                #                            windows[i])
                 results.append({
                     "scores": rpn_class,
                     "refinements": rpn_bbox,
+                })
+        elif task == 'mask_grasp_rcnn':
+
+            detections, _, _, mrcnn_mask, _, _, _  = \
+                self.keras_model.predict([molded_images, image_metas, anchors], verbose=0)
+
+            results = []
+            for i, image in enumerate(images):
+                final_rois, final_class_ids, final_scores, final_masks, grasp_boxes, grasp_probs= \
+                    self.unmold_mask_grasp_detections(detections[i], mrcnn_mask[i],
+                                           image.shape, molded_images[i].shape,
+                                           windows[i])
+                results.append({
+                    "rois": final_rois,
+                    "class_ids": final_class_ids,
+                    "scores": final_scores,
+                    "masks": final_masks,
+                    "grasp_boxes": grasp_boxes,
+                    "grasp_probs": grasp_probs,
                 })
         else:
             detections, _, _, mrcnn_mask, _, _, _ =\
