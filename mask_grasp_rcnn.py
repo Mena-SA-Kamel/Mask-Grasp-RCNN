@@ -28,7 +28,7 @@ class GraspMaskRCNNConfig(Config):
     NAME = 'grasp_and_mask'
     BACKBONE = "resnet50"
     GPU_COUNT = 1
-    IMAGES_PER_GPU = 2
+    IMAGES_PER_GPU = 1
     NUM_CLASSES = 1 + 1 # Object and background classes
     IMAGE_MIN_DIM = 288
     IMAGE_MAX_DIM = 384
@@ -71,7 +71,7 @@ class GraspMaskRCNNConfig(Config):
         "mrcnn_class_loss": 1.,
         "mrcnn_bbox_loss": 1.,
         "mrcnn_mask_loss": 1.,
-        "grasp_loss": 0.2,
+        "grasp_loss": 1.,
     }
     GRASP_LOSS_BETA = 10
     GRADIENT_CLIP_VALUE = 0.5 # was 0.1
@@ -700,10 +700,10 @@ class GraspMaskRCNNDataset(Dataset):
 
         # top_boxes = all_boxes[probabilities[:,1] > config.DETECTION_MIN_CONFIDENCE]
         # top_box_probabilities = probabilities[probabilities[:,1] > config.DETECTION_MIN_CONFIDENCE]
-        # top_boxes = all_boxes[probabilities[:,1] > 0.10]
-        # top_box_probabilities = probabilities[probabilities[:,1] > 0.10]
-        top_boxes = all_boxes[sorting_ix]
-        top_box_probabilities = probabilities[sorting_ix]
+        top_boxes = all_boxes[probabilities[:,1] > 0.10]
+        top_box_probabilities = probabilities[probabilities[:,1] > 0.10]
+        # top_boxes = all_boxes[sorting_ix]
+        # top_box_probabilities = probabilities[sorting_ix]
         top_boxes, top_box_probabilities, pre_nms_boxes, pre_nms_scores = self.orient_box_nms(top_boxes, top_box_probabilities, config)
 
         return top_boxes, pre_nms_boxes
@@ -781,8 +781,9 @@ model.keras_model.save_weights(model_path)
 
 ##### TESTING #####
 
-## mrcnn_model_path = 'models/Good_models/Training_SAMS_dataset_LR-div-5-div-10-HYBRID-weights/mask_rcnn_object_vs_background_0051.h5'
+# mrcnn_model_path = 'models/Good_models/Training_SAMS_dataset_LR-div-5-div-10-HYBRID-weights/mask_rcnn_object_vs_background_0051.h5'
 # mask_grasp_model_path = 'models/grasp_and_mask20200824T1226/mask_rcnn_grasp_and_mask_0096.h5'
+# mask_grasp_model_path = 'models/colab_result_id#1/mask_rcnn_grasp_and_mask_0200.h5'
 #
 #
 # mask_grasp_model = modellib.MaskRCNN(mode="inference",
@@ -853,7 +854,7 @@ model.keras_model.save_weights(model_path)
 # import code;
 #
 # code.interact(local=dict(globals(), **locals()))
-#
+
 #
 #
 #
