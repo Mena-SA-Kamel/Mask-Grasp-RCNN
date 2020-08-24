@@ -880,7 +880,8 @@ def process_gt_grasp_boxes(positive_rois, roi_gt_boxes, roi_gt_grasp_boxes, roi_
     # Then, represent the GT grasp boxes relative to the adaptive size proposal anchors
 
     # Multiplying the radius by a sensitivity factor - Large sensitivity = removes more boxes
-    sensitivity = 0.7  # 0 means just checks if the gt_grasp_box center <x,y> is in the RoI
+    # sensitivity = 0.7  # 0 means just checks if the gt_grasp_box center <x,y> is in the RoI
+    sensitivity = 0  # 0 means just checks if the gt_grasp_box center <x,y> is in the RoI
     radius = (((gt_grasp_box_w / 2) ** 2 + (gt_grasp_box_h / 2) ** 2) ** 0.5) * sensitivity
     proposal_y1_reshaped = K.repeat(tf.expand_dims(proposal_y1, axis=-1), n=radius.shape[1])
     proposal_x1_reshaped = K.repeat(tf.expand_dims(proposal_x1, axis=-1), n=radius.shape[1])
@@ -1669,29 +1670,89 @@ def fpn_classifier_graph(rois, feature_maps, image_meta,
     s = K.int_shape(x)
     mrcnn_bbox = KL.Reshape((s[1], num_classes, 4), name="mrcnn_bbox")(x)
 
-    if task == 'mask_grasp_rcnn':
-        # Grasp Proposal heads
-        # Classification Head
-        k = len(angles)
-        grasp_class_logits = KL.TimeDistributed(KL.Dense(num_grasp_anchors*num_classes),
-                                                name='grasp_class_logits')(shared)
-        s = K.int_shape(grasp_class_logits)
-        grasp_class_logits = KL.Reshape((s[1], num_grasp_anchors, 2), name="grasp_class_logits_reshaped")(grasp_class_logits)
+    # if task == 'mask_grasp_rcnn':
+    #     # Grasp Proposal heads
+    #     # Classification Head
+    #     k = len(angles)
+    #     grasp_class_logits = KL.TimeDistributed(KL.Dense(num_grasp_anchors*num_classes),
+    #                                             name='grasp_class_logits')(shared)
+    #     s = K.int_shape(grasp_class_logits)
+    #     grasp_class_logits = KL.Reshape((s[1], num_grasp_anchors, 2), name="grasp_class_logits_reshaped")(grasp_class_logits)
+    #
+    #     # num_anchors = H*W*k
+    #     # [batch, num_rois, H*W*k, 2] : last dimension FG/BG
+    #     grasp_probs = KL.TimeDistributed(KL.Activation("softmax"),
+    #                                      name="grasp_class")(grasp_class_logits)
+    #
+    #     # [batch, num_rois, num_anchors * (dx, dy, log(dx), log(dh), dtheta)]
+    #     x = KL.TimeDistributed(KL.Dense(num_grasp_anchors*5, activation='linear'),
+    #                            name='grasp_bbox_fc')(shared)
+    #     # Reshape to [batch, num_rois, num_anchors, (dx, dy, log(dx), log(dh), dtheta)]
+    #     s = K.int_shape(x)
+    #     grasp_bbox = KL.Reshape((s[1], num_grasp_anchors, 5), name="grasp_bbox")(x)
+    #     return mrcnn_class_logits, mrcnn_probs, mrcnn_bbox, grasp_class_logits, grasp_probs, grasp_bbox
+    # else:
+    #     return mrcnn_class_logits, mrcnn_probs, mrcnn_bbox
+    return mrcnn_class_logits, mrcnn_probs, mrcnn_bbox
 
-        # num_anchors = H*W*k
-        # [batch, num_rois, H*W*k, 2] : last dimension FG/BG
-        grasp_probs = KL.TimeDistributed(KL.Activation("softmax"),
-                                         name="grasp_class")(grasp_class_logits)
+def fpn_grasp_graph(rois, feature_maps, image_meta,
+                         pool_size, num_classes, train_bn=True,
+                         fc_layers_size=1024, num_grasp_anchors= 196):
+    """Builds the computation graph of the feature pyramid network classifier
+    and regressor heads.
 
-        # [batch, num_rois, num_anchors * (dx, dy, log(dx), log(dh), dtheta)]
-        x = KL.TimeDistributed(KL.Dense(num_grasp_anchors*5, activation='linear'),
-                               name='grasp_bbox_fc')(shared)
-        # Reshape to [batch, num_rois, num_anchors, (dx, dy, log(dx), log(dh), dtheta)]
-        s = K.int_shape(x)
-        grasp_bbox = KL.Reshape((s[1], num_grasp_anchors, 5), name="grasp_bbox")(x)
-        return mrcnn_class_logits, mrcnn_probs, mrcnn_bbox, grasp_class_logits, grasp_probs, grasp_bbox
-    else:
-        return mrcnn_class_logits, mrcnn_probs, mrcnn_bbox
+    rois: [batch, num_rois, (y1, x1, y2, x2)] Proposal boxes in normalized
+          coordinates.
+    feature_maps: List of feature maps from different layers of the pyramid,
+                  [P2, P3, P4, P5]. Each has a different resolution.
+    image_meta: [batch, (meta data)] Image details. See compose_image_meta()
+    pool_size: The width of the square feature map generated from ROI Pooling.
+    num_classes: number of classes, which determines the depth of the results
+    train_bn: Boolean. Train or freeze Batch Norm layers
+    fc_layers_size: Size of the 2 FC layers
+
+    Returns:
+        logits: [batch, num_rois, NUM_CLASSES] classifier logits (before softmax)
+        probs: [batch, num_rois, NUM_CLASSES] classifier probabilities
+        bbox_deltas: [batch, num_rois, NUM_CLASSES, (dy, dx, log(dh), log(dw))] Deltas to apply to
+                     proposal boxes
+    """
+    # ROI Pooling
+    # Shape: [batch, num_rois, POOL_SIZE, POOL_SIZE, channels]
+    x = PyramidROIAlign([pool_size, pool_size],
+                        name="roi_align_grasp_classifier")([rois, image_meta] + feature_maps)
+    # Two 1024 FC layers (implemented with Conv2D for consistency)
+    x = KL.TimeDistributed(KL.Conv2D(fc_layers_size, (pool_size, pool_size), padding="valid"),
+                           name="grasp_class_conv1")(x)
+    x = KL.TimeDistributed(BatchNorm(), name='grasp_class_bn1')(x, training=train_bn)
+    x = KL.Activation('relu')(x)
+    x = KL.TimeDistributed(KL.Conv2D(fc_layers_size, (1, 1)),
+                           name="grasp_class_conv2")(x)
+    x = KL.TimeDistributed(BatchNorm(), name='grasp_class_bn2')(x, training=train_bn)
+    x = KL.Activation('relu')(x)
+
+    shared = KL.Lambda(lambda x: K.squeeze(K.squeeze(x, 3), 2),
+                       name="pool_squeeze_grasp")(x)
+
+    grasp_class_logits = KL.TimeDistributed(KL.Dense(num_grasp_anchors * num_classes),
+                                            name='grasp_class_logits')(shared)
+    s = K.int_shape(grasp_class_logits)
+    grasp_class_logits = KL.Reshape((s[1], num_grasp_anchors, 2), name="grasp_class_logits_reshaped")(
+        grasp_class_logits)
+
+    # num_anchors = H*W*k
+    # [batch, num_rois, H*W*k, 2] : last dimension FG/BG
+    grasp_probs = KL.TimeDistributed(KL.Activation("softmax"),
+                                     name="grasp_class")(grasp_class_logits)
+
+    # [batch, num_rois, num_anchors * (dx, dy, log(dx), log(dh), dtheta)]
+    x = KL.TimeDistributed(KL.Dense(num_grasp_anchors * 5, activation='linear'),
+                           name='grasp_bbox_fc')(shared)
+    # Reshape to [batch, num_rois, num_anchors, (dx, dy, log(dx), log(dh), dtheta)]
+    s = K.int_shape(x)
+    grasp_bbox = KL.Reshape((s[1], num_grasp_anchors, 5), name="grasp_bbox")(x)
+    return grasp_class_logits, grasp_probs, grasp_bbox
+
 
 
 def build_fpn_mask_graph(rois, feature_maps, image_meta,
@@ -4112,13 +4173,19 @@ class MaskRCNN():
 
             # Network Heads
             # TODO: verify that this handles zero padded ROIs
-            mrcnn_class_logits, mrcnn_class, mrcnn_bbox, grasp_class_logits, grasp_probs, grasp_bbox=\
+            mrcnn_class_logits, mrcnn_class, mrcnn_bbox =\
                 fpn_classifier_graph(rois, mrcnn_feature_maps, input_image_meta,
                                      config.POOL_SIZE, config.NUM_CLASSES,
                                      train_bn=config.TRAIN_BN,
                                      fc_layers_size=config.FPN_CLASSIF_FC_LAYERS_SIZE, task='mask_grasp_rcnn',
                                      num_grasp_anchors=config.GRASP_ANCHORS_PER_ROI,
                                      angles=config.GRASP_ANCHOR_ANGLES)
+
+            grasp_class_logits, grasp_probs, grasp_bbox = fpn_grasp_graph(rois, mrcnn_feature_maps, input_image_meta,
+                                     config.POOL_SIZE, config.NUM_CLASSES,
+                                     train_bn= True,
+                                     fc_layers_size=config.FPN_CLASSIF_FC_LAYERS_SIZE,
+                                     num_grasp_anchors=config.GRASP_ANCHORS_PER_ROI)
 
             mrcnn_mask = build_fpn_mask_graph(rois, mrcnn_feature_maps,
                                               input_image_meta,
@@ -4158,7 +4225,7 @@ class MaskRCNN():
         else:
             # Network Heads
             # Proposal classifier and BBox regressor heads
-            mrcnn_class_logits, mrcnn_class, mrcnn_bbox, grasp_class_logits, grasp_probs, grasp_bbox =\
+            mrcnn_class_logits, mrcnn_class, mrcnn_bbox =\
                 fpn_classifier_graph(rpn_rois, mrcnn_feature_maps, input_image_meta,
                                      config.POOL_SIZE, config.NUM_CLASSES,
                                      train_bn=config.TRAIN_BN,
@@ -4167,6 +4234,12 @@ class MaskRCNN():
                                      num_grasp_anchors=config.GRASP_ANCHORS_PER_ROI,
                                      angles=config.GRASP_ANCHOR_ANGLES
                                      )
+
+            grasp_class_logits, grasp_probs, grasp_bbox = fpn_grasp_graph(rpn_rois, mrcnn_feature_maps, input_image_meta,
+                                                                          config.POOL_SIZE, config.NUM_CLASSES,
+                                                                          train_bn=True,
+                                                                          fc_layers_size=config.FPN_CLASSIF_FC_LAYERS_SIZE,
+                                                                          num_grasp_anchors=config.GRASP_ANCHORS_PER_ROI)
 
             # Detections
             # output is [batch, num_detections, (y1, x1, y2, x2, class_id, score)] in
