@@ -52,6 +52,7 @@ class GraspMaskRCNNConfig(Config):
     GRASP_ANCHOR_SIZE = [48]
     GRASP_ANCHORS_PER_ROI = GRASP_POOL_SIZE * GRASP_POOL_SIZE * len(GRASP_ANCHOR_RATIOS) * len(GRASP_ANCHOR_ANGLES) * len(GRASP_ANCHOR_SIZE)
     GRASP_BBOX_STD_DEV = np.array([0.1, 0.1, 0.2, 0.2, 1])
+    BBOX_STD_DEV = np.array([0.1, 0.1, 0.2, 0.2])
     GRASP_ANCHOR_STRIDE = 1
     MAX_GT_INSTANCES = 50
     TRAIN_ROIS_PER_IMAGE = 200
@@ -696,14 +697,14 @@ class GraspMaskRCNNDataset(Dataset):
         # all_boxes = np.delete(all_boxes, invalid_y, axis=0)
         # probabilities = np.delete(probabilities, invalid_y, axis=0)
 
-        sorting_ix = np.argsort(probabilities[:, 1])[::-1][:20]
+        sorting_ix = np.argsort(probabilities[:, 1])[::-1][:10]
 
         # top_boxes = all_boxes[probabilities[:,1] > config.DETECTION_MIN_CONFIDENCE]
         # top_box_probabilities = probabilities[probabilities[:,1] > config.DETECTION_MIN_CONFIDENCE]
-        top_boxes = all_boxes[probabilities[:,1] > 0.10]
-        top_box_probabilities = probabilities[probabilities[:,1] > 0.10]
-        # top_boxes = all_boxes[sorting_ix]
-        # top_box_probabilities = probabilities[sorting_ix]
+        # top_boxes = all_boxes[probabilities[:,1] > 0.20]
+        # top_box_probabilities = probabilities[probabilities[:,1] > 0.20]
+        top_boxes = all_boxes[sorting_ix]
+        top_box_probabilities = probabilities[sorting_ix]
         top_boxes, top_box_probabilities, pre_nms_boxes, pre_nms_scores = self.orient_box_nms(top_boxes, top_box_probabilities, config)
 
         return top_boxes, pre_nms_boxes
@@ -771,7 +772,7 @@ model.train(training_dataset, validating_dataset,
 
 
 model.train(training_dataset, validating_dataset,
-                learning_rate=config.LEARNING_RATE,
+                learning_rate=config.LEARNING_RATE/10,
                 epochs=300,
                 layers="all",
                 task=mode)
@@ -780,10 +781,10 @@ model_path = os.path.join(MODEL_DIR, "mask_grasp_rcnn.h5")
 model.keras_model.save_weights(model_path)
 
 ##### TESTING #####
-
-# mrcnn_model_path = 'models/Good_models/Training_SAMS_dataset_LR-div-5-div-10-HYBRID-weights/mask_rcnn_object_vs_background_0051.h5'
-# mask_grasp_model_path = 'models/grasp_and_mask20200824T1226/mask_rcnn_grasp_and_mask_0096.h5'
-# mask_grasp_model_path = 'models/colab_result_id#1/mask_rcnn_grasp_and_mask_0200.h5'
+#
+# # mrcnn_model_path = 'models/Good_models/Training_SAMS_dataset_LR-div-5-div-10-HYBRID-weights/mask_rcnn_object_vs_background_0051.h5'
+# # mask_grasp_model_path = 'models/grasp_and_mask20200824T1832/mask_rcnn_grasp_and_mask_0012.h5'
+# mask_grasp_model_path = 'models/colab_result_id#1/mask_rcnn_grasp_and_mask_0300.h5'
 #
 #
 # mask_grasp_model = modellib.MaskRCNN(mode="inference",
@@ -796,7 +797,7 @@ model.keras_model.save_weights(model_path)
 # #                               config=inference_config, task="grasping_points")
 # # grasping_model.load_weights(grasping_model_path, by_name=True)
 #
-# dataset = testing_dataset
+# dataset = validating_dataset
 # image_ids = random.choices(dataset.image_ids, k=30)
 #
 # for image_id in image_ids:
@@ -854,11 +855,7 @@ model.keras_model.save_weights(model_path)
 # import code;
 #
 # code.interact(local=dict(globals(), **locals()))
-
 #
-#
-#
-
 
 
 

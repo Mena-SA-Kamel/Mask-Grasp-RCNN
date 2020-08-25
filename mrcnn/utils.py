@@ -494,6 +494,8 @@ def grasp_box_refinement_graph(box, gt_box, config):
     a_height = box_flattened[:, 3]
     a_theta = box_flattened[:, 4]
 
+
+
     gt_center_x = gt_box_flattened[:, 0]
     gt_center_y = gt_box_flattened[:, 1]
     gt_width = gt_box_flattened[:, 2]
@@ -508,6 +510,7 @@ def grasp_box_refinement_graph(box, gt_box, config):
 
     result = tf.stack([dx, dy, dw, dh, dtheta], axis=1)
     # Replacing refinements of zero boxes with zeros
+
     final_result = tf.tensor_scatter_nd_update(result, invalid_locations, refinements_replace)
     final_result_reshaped = tf.reshape(final_result, tf.shape(gt_box))
     return final_result_reshaped
