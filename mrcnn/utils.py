@@ -417,7 +417,8 @@ def apply_box_deltas(boxes, deltas, mode='', num_angles=0):
         y = center_y + (deltas[:, 1] * height)
         w = width * np.exp(deltas[:, 2])
         h = height * np.exp(deltas[:, 3])
-        angle = theta + (deltas[:, 4] * (180/num_angles))
+        angle = theta + ((deltas[:, 4]) * (180/num_angles))
+        # angle = theta + ((deltas[:, 4]) * (90))
         return np.stack([x, y, w, h, angle], axis=1)
 
     else:
@@ -493,8 +494,6 @@ def grasp_box_refinement_graph(box, gt_box, config):
     a_width = box_flattened[:, 2]
     a_height = box_flattened[:, 3]
     a_theta = box_flattened[:, 4]
-
-
 
     gt_center_x = gt_box_flattened[:, 0]
     gt_center_y = gt_box_flattened[:, 1]

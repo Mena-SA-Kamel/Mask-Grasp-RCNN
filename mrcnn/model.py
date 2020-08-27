@@ -745,7 +745,6 @@ def generate_grasping_targets(grasp_overlaps, grasping_anchors, final_roi_gt_gra
 
     updates = tf.gather_nd(final_roi_gt_grasp_boxes, tf.concat([roi_ix, grasp_box_ix], axis=-1))
 
-
     # gt_grasp_boxes_filtered is a tensor that specifies the gt grasp box that matches with each tensor.
     # Shape is [num of rois, num of anchors, 5]
     gt_grasp_boxes_filtered = tf.tensor_scatter_nd_update(grasp_bbox, tf.concat([roi_ix, anchor_ix], axis=-1), updates)
@@ -808,9 +807,9 @@ def grasping_overlaps_graph(anchors, boxes):
     arIoU = arIoU * tf.expand_dims(tf.cast(non_zero_grasp_boxes, dtype=tf.float32), axis=-1)
     arIoU = tf.expand_dims(tf.reshape(arIoU, tf.shape(grasping_anchors_reshaped)[:2]), axis=-1)
     arIoU = tf.reshape(tf.squeeze(arIoU), [-1, tf.shape(boxes)[1], tf.shape(anchors)[1]])
-    arIoU = tf.Print(arIoU, [arIoU],
-                     message="arIoU=",
-                     summarize=-1)
+    # arIoU = tf.Print(arIoU, [arIoU],
+    #                  message="arIoU=",
+    #                  summarize=-1)
     return arIoU
 
 def generate_grasping_anchors_graph(inputs):
@@ -863,6 +862,7 @@ def process_gt_grasp_boxes(positive_rois, roi_gt_boxes, roi_gt_grasp_boxes, roi_
     and represents the GT grasp boxes in the proposal frame of reference and filters out the grasp boxes that cross the
     proposal boundary
     '''
+
     positive_rois = tf.cast(denorm_boxes_graph(positive_rois, config.IMAGE_SHAPE[:2].astype('float32')), dtype=tf.float32)
 
     proposal_y1 = positive_rois[:, 0]
@@ -916,9 +916,9 @@ def process_gt_grasp_boxes(positive_rois, roi_gt_boxes, roi_gt_grasp_boxes, roi_
     # boxes and their classes to zeros - THIS MIGHT OMIT ALL BOXES FOR CIRCULAR OBJECTS
     final_roi_gt_grasp_boxes = referenced_grasp_boxes * tf.cast(valid_grasp_boxes, dtype='float32')
     final_roi_gt_grasp_class = roi_gt_grasp_class * tf.cast(valid_grasp_boxes, dtype='float32')
-    final_roi_gt_grasp_boxes = tf.Print(final_roi_gt_grasp_boxes, [tf.shape(final_roi_gt_grasp_boxes)],
-                                      message="final_roi_gt_grasp_boxes=",
-                                      summarize=-1)
+    # final_roi_gt_grasp_boxes = tf.Print(final_roi_gt_grasp_boxes, [tf.shape(final_roi_gt_grasp_boxes)],
+    #                                   message="final_roi_gt_grasp_boxes=",
+    #                                   summarize=-1)
 
     return final_roi_gt_grasp_boxes, final_roi_gt_grasp_class
 
@@ -1098,7 +1098,6 @@ def detection_targets_graph(proposals, gt_class_ids, gt_boxes, gt_masks, anchors
                               tf.concat([pooled_feature_stride, positive_rois], axis=1)),
         false_fn=lambda: tf.cast(tf.zeros([0, config.GRASP_ANCHORS_PER_ROI, 5]), tf.float32)
     )
-
 
     # Computing overlaps between the grasping anchors and the final_roi_gt_grasp_boxes
     # grasp_overlaps [NUM_INSTANCES, 196(number of anchors) * number of grasping boxes]
