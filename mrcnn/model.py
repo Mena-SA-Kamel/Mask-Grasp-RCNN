@@ -835,7 +835,7 @@ def generate_grasping_anchors_graph(inputs):
     roi_widths = x2 - x1
 
     # Values hard coded here because map_fn does not allow more than one input to the function
-    GRASP_POOL_SIZE = 7
+    GRASP_POOL_SIZE = 14
     GRASP_ANCHOR_RATIOS = [1]
     GRASP_ANCHOR_ANGLES = [-67.5, -22.5, 22.5, 67.5]
     GRASP_ANCHOR_SIZE = [48]
@@ -4288,7 +4288,7 @@ class MaskRCNN():
             # import code;
             # code.interact(local=dict(globals(), **locals()))
             grasp_class_logits, grasp_probs, grasp_bbox = build_new_grasping_graph(rois, mrcnn_feature_maps, input_image_meta,
-                                     config.POOL_SIZE, config.NUM_CLASSES, anchor_stride=config.GRASP_ANCHOR_STRIDE,
+                                     config.GRASP_POOL_SIZE, config.NUM_CLASSES, anchor_stride=config.GRASP_ANCHOR_STRIDE,
                                      train_bn=True, num_grasp_anchors=config.GRASP_ANCHORS_PER_ROI,
                                      angles=config.GRASP_ANCHOR_ANGLES)
 

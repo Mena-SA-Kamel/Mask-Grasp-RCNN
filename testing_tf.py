@@ -109,7 +109,7 @@ def generate_grasping_anchors_graph(inputs):
     stride_y, stride_x, y1, x1, y2, x2 = tf.split(inputs, num_or_size_splits=6)
 
     # To be replaced with config reference
-    GRASP_POOL_SIZE = 7
+    GRASP_POOL_SIZE = 14
     GRASP_ANCHOR_RATIOS = [1]
     GRASP_ANCHOR_ANGLES = [-67.5, -22.5, 22.5, 67.5]
     GRASP_ANCHOR_SIZE = [48]
@@ -393,7 +393,7 @@ valid_grasp_boxes = tf.logical_and(valid_grasp_boxes, tf.greater(gt_grasp_box_y 
 # valid_grasp_boxes = K.variable(value=valid_grasp_boxes)
 final_roi_gt_grasp_boxes = referenced_grasp_boxes * tf.cast(valid_grasp_boxes, dtype='float32')
 
-GRASP_POOL_SIZE = 7
+GRASP_POOL_SIZE = 14
 pooled_feature_stride = tf.concat([proposal_heights, proposal_widths], axis = -1) /GRASP_POOL_SIZE
 pooled_feature_stride = tf.cast(pooled_feature_stride, tf.float32)
 
@@ -445,9 +445,6 @@ grasp_roi_iou_max = tf.reduce_max(grasp_overlaps_reshaped, axis=-1)
 
 # Specifies the max overlap anchor for each GT box: shape [num of ROIs, num of GT grasp boxes].
 # Unmatched boxes match to anchor #0
-non_zero_grasp_boxes = tf.cast(tf.reduce_sum(tf.abs(grasp_overlaps_reshaped), axis=-1), tf.bool)
-non_zero_grasp_box_indices = tf.where(tf.cast(tf.reduce_sum(tf.abs(grasp_overlaps_reshaped), axis=-1), tf.bool))
-
 grasp_roi_iou_argmax = tf.expand_dims(tf.argmax(grasp_overlaps_reshaped, axis=-1), axis=-1)
 
 # Creating an ROI index variable that specifies the ROI that each GT grasp box belongs to
@@ -458,7 +455,6 @@ grasp_roi_ix = tf.expand_dims(tf.cast(grasp_roi_ix, dtype=tf.int64), axis=-1)
 # Creating a grasp box index variable
 grasp_box_ix = tf.tile(tf.range(tf.shape(grasp_overlaps_reshaped)[1]), [tf.shape(grasp_overlaps_reshaped)[0]])
 grasp_box_ix = tf.cast(tf.reshape(grasp_box_ix, grasp_roi_iou_argmax.shape), dtype=tf.int64)
-grasp_box_ix = tf.gather_nd(grasp_box_ix, non_zero_grasp_box_indices)
 
 # Creating a tensor that specifies the indices of the positive anchors [ROI number, anchor id].
 # Number of indices == number of GT grasp boxes

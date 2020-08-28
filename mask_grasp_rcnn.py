@@ -48,7 +48,7 @@ class GraspMaskRCNNConfig(Config):
     GRASP_ANCHOR_RATIOS = [1]
     GRASP_ANCHOR_ANGLES = [-67.5, -22.5, 22.5, 67.5]
     GRASP_ANCHOR_RATIOS = [1]  # To modify based on image size
-    GRASP_POOL_SIZE = 7
+    GRASP_POOL_SIZE = 14
     GRASP_ANCHOR_SIZE = [48]
     GRASP_ANCHORS_PER_ROI = GRASP_POOL_SIZE * GRASP_POOL_SIZE * len(GRASP_ANCHOR_RATIOS) * len(GRASP_ANCHOR_ANGLES) * len(GRASP_ANCHOR_SIZE)
     GRASP_BBOX_STD_DEV = np.array([0.1, 0.1, 0.2, 0.2, 1])
@@ -700,14 +700,14 @@ class GraspMaskRCNNDataset(Dataset):
         # all_boxes = np.delete(all_boxes, invalid_y, axis=0)
         # probabilities = np.delete(probabilities, invalid_y, axis=0)
 
-        # sorting_ix = np.argsort(probabilities[:, 1])[::-1][:5]
+        sorting_ix = np.argsort(probabilities[:, 1])[::-1][:20]
 
         # top_boxes = all_boxes[probabilities[:,1] > config.DETECTION_MIN_CONFIDENCE]
         # top_box_probabilities = probabilities[probabilities[:,1] > config.DETECTION_MIN_CONFIDENCE]
-        top_boxes = all_boxes[probabilities[:,1] > 0.7]
-        top_box_probabilities = probabilities[probabilities[:,1] > 0.7]
-        # top_boxes = all_boxes[sorting_ix]
-        # top_box_probabilities = probabilities[sorting_ix]
+        # top_boxes = all_boxes[probabilities[:,1] > 0.7]
+        # top_box_probabilities = probabilities[probabilities[:,1] > 0.7]
+        top_boxes = all_boxes[sorting_ix]
+        top_box_probabilities = probabilities[sorting_ix]
         top_boxes, top_box_probabilities, pre_nms_boxes, pre_nms_scores = self.orient_box_nms(top_boxes, top_box_probabilities, config)
 
         return top_boxes, pre_nms_boxes
@@ -788,7 +788,7 @@ model.keras_model.save_weights(model_path)
 # # mrcnn_model_path = 'models/Good_models/Training_SAMS_dataset_LR-div-5-div-10-HYBRID-weights/mask_rcnn_object_vs_background_0051.h5'
 # # mask_grasp_model_path = 'models/grasp_and_mask20200824T1832/mask_rcnn_grasp_and_mask_0012.h5'
 # # mask_grasp_model_path = 'models/mask_grasp_rcnn_attempt#1b/mask_rcnn_grasp_and_mask_0108.h5'
-# mask_grasp_model_path = 'models/colab_result_id#1/mask_rcnn_grasp_and_mask_0188.h5'
+# mask_grasp_model_path = 'models/colab_result_id#1/mask_rcnn_grasp_and_mask_0208.h5'
 #
 #
 # mask_grasp_model = modellib.MaskRCNN(mode="inference",
@@ -864,8 +864,8 @@ model.keras_model.save_weights(model_path)
 # import code;
 #
 # code.interact(local=dict(globals(), **locals()))
-#
-#
+
+
 
 
 
