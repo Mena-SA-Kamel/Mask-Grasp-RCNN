@@ -1595,66 +1595,66 @@ def build_new_grasping_graph(rois, feature_maps, image_meta,
     # Shape: [batch, num_rois, GRASP_POOL_SIZE, GRASP_POOL_SIZE, channels]
 
     # Expanding ROIs to allow network learn the features associated with the background
-    expanded_rois = KL.Lambda(expand_roi_by_percent, name="expand_rois", arguments={'percentage': rois_expand_factor})(rois)
+    # expanded_rois = KL.Lambda(expand_roi_by_percent, name="expand_rois", arguments={'percentage': rois_expand_factor})(rois)
     x = PyramidROIAlign([pool_size, pool_size],
-                        name="roi_align_grasp")([expanded_rois, image_meta] + feature_maps)
+                        name="roi_align_grasp")([rois, image_meta] + feature_maps)
 
     # Conv layers
     x = KL.TimeDistributed(KL.Conv2D(512, (3, 3), padding="same"),
                            name="grasp_conv1")(x)
     x = KL.TimeDistributed(BatchNorm(),
                            name='grasp_bn1')(x, training=train_bn)
-    # x = KL.Activation('relu')(x)
-    #
-    # x = KL.TimeDistributed(KL.Conv2D(512, (3, 3), padding="same"),
-    #                        name="grasp_conv2")(x)
-    # x = KL.TimeDistributed(BatchNorm(),
-    #                        name='grasp_bn2')(x, training=train_bn)
-    # x = KL.Activation('relu')(x)
-    #
-    # x = KL.TimeDistributed(KL.Conv2D(512, (3, 3), padding="same"),
-    #                        name="grasp_conv3")(x)
-    # x = KL.TimeDistributed(BatchNorm(),
-    #                        name='grasp_bn3')(x, training=train_bn)
-    # x = KL.Activation('relu')(x)
-    #
-    # x = KL.TimeDistributed(KL.Conv2D(512, (3, 3), padding="same"),
-    #                        name="grasp_conv4")(x)
-    # x = KL.TimeDistributed(BatchNorm(),
-    #                        name='grasp_bn4')(x, training=train_bn)
+    x = KL.Activation('relu')(x)
+
+    x = KL.TimeDistributed(KL.Conv2D(512, (3, 3), padding="same"),
+                           name="grasp_conv2")(x)
+    x = KL.TimeDistributed(BatchNorm(),
+                           name='grasp_bn2')(x, training=train_bn)
+    x = KL.Activation('relu')(x)
+
+    x = KL.TimeDistributed(KL.Conv2D(512, (3, 3), padding="same"),
+                           name="grasp_conv3")(x)
+    x = KL.TimeDistributed(BatchNorm(),
+                           name='grasp_bn3')(x, training=train_bn)
+    x = KL.Activation('relu')(x)
+
+    x = KL.TimeDistributed(KL.Conv2D(512, (3, 3), padding="same"),
+                           name="grasp_conv4")(x)
+    x = KL.TimeDistributed(BatchNorm(),
+                           name='grasp_bn4')(x, training=train_bn)
 
     shared = KL.Activation('relu')(x)
-
-    classification_1 = KL.TimeDistributed(KL.Conv2D(512, (3, 3), padding="same"),
-                           name="grasp_conv2")(shared)
-    classification_1 = KL.TimeDistributed(BatchNorm(),
-                           name='grasp_bn2')(classification_1, training=train_bn)
-    classification_1 = KL.Activation('relu')(classification_1)
+    #
+    # classification_1 = KL.TimeDistributed(KL.Conv2D(512, (3, 3), padding="same"),
+    #                        name="grasp_conv2")(shared)
+    # classification_1 = KL.TimeDistributed(BatchNorm(),
+    #                        name='grasp_bn2')(classification_1, training=train_bn)
+    # classification_1 = KL.Activation('relu')(classification_1)
 
     anchors_per_location = len(angles)
-    classification_2 = KL.TimeDistributed(KL.Conv2D(2 * anchors_per_location, (1, 1), padding='valid',
-                                 activation='linear'), name='grasp_class_raw')(classification_1)
+    classification = KL.TimeDistributed(KL.Conv2D(2 * anchors_per_location, (1, 1), padding='valid',
+                                 activation='linear'), name='grasp_class_raw')(shared)
 
     # Reshape to [batch, num_rois, anchors, 2]
     grasp_class_logits = KL.TimeDistributed(
-        KL.Lambda(lambda t: tf.reshape(t, [tf.shape(t)[0], num_grasp_anchors,2])))(classification_2)
+        KL.Lambda(lambda t: tf.reshape(t, [tf.shape(t)[0], num_grasp_anchors,2])))(classification)
 
     # Softmax on last dimension of BG/FG.
     grasp_probs = KL.Activation(
         "softmax", name="grasp_class_xxx")(grasp_class_logits)
 
-    regression_1 = KL.TimeDistributed(KL.Conv2D(512, (3, 3), padding="same"),
-                                          name="grasp_conv3")(shared)
-    regression_1 = KL.TimeDistributed(BatchNorm(),
-                                          name='grasp_bn3')(regression_1, training=train_bn)
-    regression_1 = KL.Activation('relu')(regression_1)
+    # regression_1 = KL.TimeDistributed(KL.Conv2D(512, (3, 3), padding="same"),
+    #                                       name="grasp_conv3")(shared)
+    # regression_1 = KL.TimeDistributed(BatchNorm(),
+    #                                       name='grasp_bn3')(regression_1, training=train_bn)
+    # regression_1 = KL.Activation('relu')(regression_1)
 
-    regression_2 = KL.TimeDistributed(KL.Conv2D(anchors_per_location * 5, (1, 1), padding="valid",
-                             activation='linear'), name='grasp_bbox_pred')(regression_1)
+    regression = KL.TimeDistributed(KL.Conv2D(anchors_per_location * 5, (1, 1), padding="valid",
+                             activation='linear'), name='grasp_bbox_pred')(shared)
 
     # Reshape to [batch, anchors, 5]
     grasp_bbox = KL.TimeDistributed(
-        KL.Lambda(lambda t: tf.reshape(t, [tf.shape(t)[0], num_grasp_anchors, 5])))(regression_2)
+        KL.Lambda(lambda t: tf.reshape(t, [tf.shape(t)[0], num_grasp_anchors, 5])))(regression)
 
     return [grasp_class_logits, grasp_probs, grasp_bbox]
 
@@ -4376,7 +4376,7 @@ class MaskRCNN():
             #                                                               fc_layers_size=config.FPN_CLASSIF_FC_LAYERS_SIZE,
             #                                                               num_grasp_anchors=config.GRASP_ANCHORS_PER_ROI)
 
-            grasp_class_logits, grasp_probs, grasp_bbox = build_new_grasping_graph(rois, mrcnn_feature_maps,
+            grasp_class_logits, grasp_probs, grasp_bbox = build_new_grasping_graph(rpn_rois, mrcnn_feature_maps,
                                                                                    input_image_meta,
                                                                                    config.GRASP_POOL_SIZE,
                                                                                    config.NUM_CLASSES,
@@ -4643,13 +4643,12 @@ class MaskRCNN():
         metrics. Then calls the Keras compile() function.
         """
         # Optimizer object
-        # optimizer = keras.optimizers.SGD(
-        #     lr=learning_rate, momentum=momentum,
-        #     clipnorm=self.config.GRADIENT_CLIP_NORM,
-        #     clipvalue=self.config.GRADIENT_CLIP_VALUE)
         optimizer = keras.optimizers.SGD(
             lr=learning_rate, momentum=momentum,
-            clipvalue=self.config.GRADIENT_CLIP_VALUE)
+            clipnorm=self.config.GRADIENT_CLIP_NORM)
+        # optimizer = keras.optimizers.SGD(
+        #     lr=learning_rate, momentum=momentum,
+        #     clipvalue=self.config.GRADIENT_CLIP_VALUE)
         # Add Losses
         # First, clear previously set losses to avoid duplication
         self.keras_model._losses = []
@@ -4860,7 +4859,7 @@ class MaskRCNN():
                                   step_size=self.config.STEPS_PER_EPOCH*4, mode='triangular',
                  gamma=1., scale_fn=None, scale_mode='cycle')
         callbacks = [
-            clr_triangular,
+            # clr_triangular,
             keras.callbacks.TensorBoard(log_dir=self.log_dir,
                                         histogram_freq=0, write_graph=True, write_images=False),
             keras.callbacks.ModelCheckpoint(self.checkpoint_path,

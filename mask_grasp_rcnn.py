@@ -62,11 +62,11 @@ class GraspMaskRCNNConfig(Config):
     ARIOU_NEG_THRESHOLD = 0.01
     ARIOU_POS_THRESHOLD = 0.1
     # LEARNING_RATE = 0.00002
-    LEARNING_RATE = 0.0002 # was 0.00001
+    LEARNING_RATE = 0.002 # was 0.00001
     # WEIGHT_DECAY = 0.000003
     WEIGHT_DECAY = 0.0001
 
-    #GRADIENT_CLIP_NORM = 5.0
+    GRADIENT_CLIP_NORM = 5.0
     LEARNING_MOMENTUM = 0.9
     LOSS_WEIGHTS = {
         "rpn_class_loss": 1.,
@@ -790,9 +790,9 @@ model.keras_model.save_weights(model_path)
 ##### TESTING #####
 #
 # # mrcnn_model_path = 'models/Good_models/Training_SAMS_dataset_LR-div-5-div-10-HYBRID-weights/mask_rcnn_object_vs_background_0051.h5'
-# # mask_grasp_model_path = 'models/grasp_and_mask20200824T1832/mask_rcnn_grasp_and_mask_0012.h5'
+# mask_grasp_model_path = 'models/grasp_and_mask20200831T1526/mask_rcnn_grasp_and_mask_0192.h5'
 # # mask_grasp_model_path = 'models/mask_grasp_rcnn_attempt#1b/mask_rcnn_grasp_and_mask_0108.h5'
-# mask_grasp_model_path = 'models/colab_result_id#1/mask_rcnn_grasp_and_mask_0168.h5'
+# # mask_grasp_model_path = 'models/colab_result_id#1/mask_rcnn_grasp_and_mask_0168.h5'
 #
 #
 # mask_grasp_model = modellib.MaskRCNN(mode="inference",
