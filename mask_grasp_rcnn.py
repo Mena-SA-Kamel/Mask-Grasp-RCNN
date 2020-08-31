@@ -54,8 +54,10 @@ class GraspMaskRCNNConfig(Config):
     GRASP_BBOX_STD_DEV = np.array([0.1, 0.1, 0.2, 0.2, 1])
     BBOX_STD_DEV = np.array([0.1, 0.1, 0.2, 0.2])
     GRASP_ANCHOR_STRIDE = 1
+    GRASP_ROI_EXPAND_FACTOR = 0.2
     MAX_GT_INSTANCES = 50
     TRAIN_ROIS_PER_IMAGE = 200
+    NUM_GRASP_BOXES_PER_INSTANCE = 128
     NUM_GRASP_BOXES_PER_INSTANCE = 128
     ARIOU_NEG_THRESHOLD = 0.01
     ARIOU_POS_THRESHOLD = 0.1
@@ -700,12 +702,12 @@ class GraspMaskRCNNDataset(Dataset):
         # all_boxes = np.delete(all_boxes, invalid_y, axis=0)
         # probabilities = np.delete(probabilities, invalid_y, axis=0)
 
-        sorting_ix = np.argsort(probabilities[:, 1])[::-1][:20]
+        sorting_ix = np.argsort(probabilities[:, 1])[::-1][:10]
 
         # top_boxes = all_boxes[probabilities[:,1] > config.DETECTION_MIN_CONFIDENCE]
         # top_box_probabilities = probabilities[probabilities[:,1] > config.DETECTION_MIN_CONFIDENCE]
-        # top_boxes = all_boxes[probabilities[:,1] > 0.7]
-        # top_box_probabilities = probabilities[probabilities[:,1] > 0.7]
+        # top_boxes = all_boxes[probabilities[:,1] > 0.40]
+        # top_box_probabilities = probabilities[probabilities[:,1] > 0.40]
         top_boxes = all_boxes[sorting_ix]
         top_box_probabilities = probabilities[sorting_ix]
         top_boxes, top_box_probabilities, pre_nms_boxes, pre_nms_scores = self.orient_box_nms(top_boxes, top_box_probabilities, config)
@@ -713,9 +715,9 @@ class GraspMaskRCNNDataset(Dataset):
         return top_boxes, pre_nms_boxes
 
     def generate_random_color(self):
-        r = random.random()
-        b = random.random()
-        g = random.random()
+        r = random.random()#*255
+        b = random.random()#*255
+        g = random.random()#*255
         return (r, g, b)
 
 # SETUP ##
@@ -749,7 +751,9 @@ mode = "mask_grasp_rcnn"
 
 ##### TRAINING #####
 # COCO_MODEL_PATH = os.path.join("models", "mask_rcnn_object_vs_background_100_heads_50_all.h5")
-COCO_MODEL_PATH = os.path.join("models", "mask_rcnn_object_vs_background_HYBRID-50_head_50_all.h5")
+# COCO_MODEL_PATH = os.path.join("models", "mask_rcnn_object_vs_background_HYBRID-50_head_50_all.h5")
+# COCO_MODEL_PATH = 'models/Good_models/Training_SAMS_dataset_LR-same-div-2-HYBRID-weights.h5'
+COCO_MODEL_PATH = os.path.join("models", "Good_models", "Training_SAMS_dataset_LR-same-div-2-HYBRID-weights", "SAMS_DATASET_TRAINING_REFERENCE.h5")
 # COCO_MODEL_PATH = os.path.join("models", "mask_rcnn_coco.h5")
 model = modellib.MaskRCNN(mode="training", config=config,
                              model_dir=MODEL_DIR, task='mask_grasp_rcnn')
@@ -788,7 +792,7 @@ model.keras_model.save_weights(model_path)
 # # mrcnn_model_path = 'models/Good_models/Training_SAMS_dataset_LR-div-5-div-10-HYBRID-weights/mask_rcnn_object_vs_background_0051.h5'
 # # mask_grasp_model_path = 'models/grasp_and_mask20200824T1832/mask_rcnn_grasp_and_mask_0012.h5'
 # # mask_grasp_model_path = 'models/mask_grasp_rcnn_attempt#1b/mask_rcnn_grasp_and_mask_0108.h5'
-# mask_grasp_model_path = 'models/colab_result_id#1/mask_rcnn_grasp_and_mask_0208.h5'
+# mask_grasp_model_path = 'models/colab_result_id#1/mask_rcnn_grasp_and_mask_0168.h5'
 #
 #
 # mask_grasp_model = modellib.MaskRCNN(mode="inference",

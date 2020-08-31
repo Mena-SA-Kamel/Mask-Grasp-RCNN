@@ -937,6 +937,18 @@ def process_gt_grasp_boxes(positive_rois, roi_gt_boxes, roi_gt_grasp_boxes, roi_
 
     return final_roi_gt_grasp_boxes, final_roi_gt_grasp_class
 
+def expand_roi_by_percent(rois, percentage=0.2):
+    rois_flattened = tf.reshape(rois, [-1, 4])
+    y1, x1, y2, x2 = tf.split(rois_flattened, num_or_size_splits=4, axis=-1)
+    w = tf.abs(x2 - x1)
+    h = tf.abs(y2 - y1)
+    x1_expand = K.maximum(x1 - (percentage*(w/2)), 0)
+    x2_expand = K.minimum(x2 + (percentage*(w/2)), 1)
+    y1_expand = K.maximum(y1 - (percentage*(h/2)), 0)
+    y2_expand = K.minimum(y2 + (percentage*(h/2)), 1)
+    expanded_rois = tf.concat([y1_expand, x1_expand, y2_expand, x2_expand], axis=-1)
+    expanded_rois = tf.reshape(expanded_rois, tf.shape(rois))
+    return expanded_rois
 
 def detection_targets_graph(proposals, gt_class_ids, gt_boxes, gt_masks, anchors, gt_grasp_class, gt_grasp_boxes, config):
     """Generates detection targets for one image. Subsamples proposals and
@@ -1576,57 +1588,73 @@ def rpn_graph(feature_map, anchors_per_location, anchor_stride):
     return [rpn_class_logits, rpn_probs, rpn_bbox]
 
 def build_new_grasping_graph(rois, feature_maps, image_meta,
-                         pool_size, num_classes, anchor_stride=1,
+                         pool_size, num_classes, rois_expand_factor, anchor_stride=1,
                          train_bn=True, num_grasp_anchors=196,
                              angles=[]):
     # ROI Pooling
-    # Shape: [batch, num_rois, MASK_POOL_SIZE, MASK_POOL_SIZE, channels]
+    # Shape: [batch, num_rois, GRASP_POOL_SIZE, GRASP_POOL_SIZE, channels]
+
+    # Expanding ROIs to allow network learn the features associated with the background
+    expanded_rois = KL.Lambda(expand_roi_by_percent, name="expand_rois", arguments={'percentage': rois_expand_factor})(rois)
     x = PyramidROIAlign([pool_size, pool_size],
-                        name="roi_align_grasp")([rois, image_meta] + feature_maps)
+                        name="roi_align_grasp")([expanded_rois, image_meta] + feature_maps)
 
     # Conv layers
     x = KL.TimeDistributed(KL.Conv2D(512, (3, 3), padding="same"),
                            name="grasp_conv1")(x)
     x = KL.TimeDistributed(BatchNorm(),
                            name='grasp_bn1')(x, training=train_bn)
-    x = KL.Activation('relu')(x)
+    # x = KL.Activation('relu')(x)
+    #
+    # x = KL.TimeDistributed(KL.Conv2D(512, (3, 3), padding="same"),
+    #                        name="grasp_conv2")(x)
+    # x = KL.TimeDistributed(BatchNorm(),
+    #                        name='grasp_bn2')(x, training=train_bn)
+    # x = KL.Activation('relu')(x)
+    #
+    # x = KL.TimeDistributed(KL.Conv2D(512, (3, 3), padding="same"),
+    #                        name="grasp_conv3")(x)
+    # x = KL.TimeDistributed(BatchNorm(),
+    #                        name='grasp_bn3')(x, training=train_bn)
+    # x = KL.Activation('relu')(x)
+    #
+    # x = KL.TimeDistributed(KL.Conv2D(512, (3, 3), padding="same"),
+    #                        name="grasp_conv4")(x)
+    # x = KL.TimeDistributed(BatchNorm(),
+    #                        name='grasp_bn4')(x, training=train_bn)
 
-    x = KL.TimeDistributed(KL.Conv2D(512, (3, 3), padding="same"),
-                           name="grasp_conv2")(x)
-    x = KL.TimeDistributed(BatchNorm(),
-                           name='grasp_bn2')(x, training=train_bn)
-    x = KL.Activation('relu')(x)
-
-    x = KL.TimeDistributed(KL.Conv2D(512, (3, 3), padding="same"),
-                           name="grasp_conv3")(x)
-    x = KL.TimeDistributed(BatchNorm(),
-                           name='grasp_bn3')(x, training=train_bn)
-    x = KL.Activation('relu')(x)
-
-    x = KL.TimeDistributed(KL.Conv2D(512, (3, 3), padding="same"),
-                           name="grasp_conv4")(x)
-    x = KL.TimeDistributed(BatchNorm(),
-                           name='grasp_bn4')(x, training=train_bn)
     shared = KL.Activation('relu')(x)
 
+    classification_1 = KL.TimeDistributed(KL.Conv2D(512, (3, 3), padding="same"),
+                           name="grasp_conv2")(shared)
+    classification_1 = KL.TimeDistributed(BatchNorm(),
+                           name='grasp_bn2')(classification_1, training=train_bn)
+    classification_1 = KL.Activation('relu')(classification_1)
+
     anchors_per_location = len(angles)
-    classification = KL.TimeDistributed(KL.Conv2D(2 * anchors_per_location, (1, 1), padding='valid',
-                                 activation='linear'), name='grasp_class_raw')(shared)
+    classification_2 = KL.TimeDistributed(KL.Conv2D(2 * anchors_per_location, (1, 1), padding='valid',
+                                 activation='linear'), name='grasp_class_raw')(classification_1)
 
     # Reshape to [batch, num_rois, anchors, 2]
     grasp_class_logits = KL.TimeDistributed(
-        KL.Lambda(lambda t: tf.reshape(t, [tf.shape(t)[0], num_grasp_anchors,2])))(classification)
+        KL.Lambda(lambda t: tf.reshape(t, [tf.shape(t)[0], num_grasp_anchors,2])))(classification_2)
 
     # Softmax on last dimension of BG/FG.
     grasp_probs = KL.Activation(
         "softmax", name="grasp_class_xxx")(grasp_class_logits)
 
-    regression = KL.TimeDistributed(KL.Conv2D(anchors_per_location * 5, (1, 1), padding="valid",
-                             activation='linear'), name='grasp_bbox_pred')(shared)
+    regression_1 = KL.TimeDistributed(KL.Conv2D(512, (3, 3), padding="same"),
+                                          name="grasp_conv3")(shared)
+    regression_1 = KL.TimeDistributed(BatchNorm(),
+                                          name='grasp_bn3')(regression_1, training=train_bn)
+    regression_1 = KL.Activation('relu')(regression_1)
+
+    regression_2 = KL.TimeDistributed(KL.Conv2D(anchors_per_location * 5, (1, 1), padding="valid",
+                             activation='linear'), name='grasp_bbox_pred')(regression_1)
 
     # Reshape to [batch, anchors, 5]
     grasp_bbox = KL.TimeDistributed(
-        KL.Lambda(lambda t: tf.reshape(t, [tf.shape(t)[0], num_grasp_anchors, 5])))(regression)
+        KL.Lambda(lambda t: tf.reshape(t, [tf.shape(t)[0], num_grasp_anchors, 5])))(regression_2)
 
     return [grasp_class_logits, grasp_probs, grasp_bbox]
 
@@ -2133,11 +2161,12 @@ def grasp_loss_graph(config, target_bbox, target_class, bbox, class_logits, roi_
         num_positive_samples = tf.cast(K.sum(N), tf.float32)
 
         # Combined Loss
-        combined_loss = (classification_loss + (beta * total_regression_loss)) / (4 * num_positive_samples)
+        combined_loss = (((1/beta)*classification_loss) + total_regression_loss) / (4 * num_positive_samples)
         total_grasp_loss = tf.add(total_grasp_loss, combined_loss)
 
     # return total_grasp_loss
-    return total_grasp_loss/ config.BATCH_SIZE
+    total_grasp_loss /= config.BATCH_SIZE
+    return total_grasp_loss
 
 def rpn_combined_loss_graph_zhang_paper(config, target_bbox, target_class, rpn_bbox, rpn_class_logits, positive_roi_mask):
     # Filtering anchors that cross the image boundary
@@ -4284,19 +4313,14 @@ class MaskRCNN():
                                      fc_layers_size=config.FPN_CLASSIF_FC_LAYERS_SIZE, task='mask_grasp_rcnn',
                                      num_grasp_anchors=config.GRASP_ANCHORS_PER_ROI,
                                      angles=config.GRASP_ANCHOR_ANGLES)
-            #
-            # import code;
-            # code.interact(local=dict(globals(), **locals()))
-            grasp_class_logits, grasp_probs, grasp_bbox = build_new_grasping_graph(rois, mrcnn_feature_maps, input_image_meta,
-                                     config.GRASP_POOL_SIZE, config.NUM_CLASSES, anchor_stride=config.GRASP_ANCHOR_STRIDE,
-                                     train_bn=True, num_grasp_anchors=config.GRASP_ANCHORS_PER_ROI,
-                                     angles=config.GRASP_ANCHOR_ANGLES)
 
-            # grasp_class_logits, grasp_probs, grasp_bbox = fpn_grasp_graph(rois, mrcnn_feature_maps, input_image_meta,
-            #                          config.POOL_SIZE, config.NUM_CLASSES,
-            #                          train_bn= True,
-            #                          fc_layers_size=config.FPN_CLASSIF_FC_LAYERS_SIZE,
-            #                          num_grasp_anchors=config.GRASP_ANCHORS_PER_ROI)
+
+            grasp_class_logits, grasp_probs, grasp_bbox = build_new_grasping_graph(rois, mrcnn_feature_maps, input_image_meta,
+                                                                                   config.GRASP_POOL_SIZE, config.NUM_CLASSES,
+                                                                                   rois_expand_factor=config.GRASP_ROI_EXPAND_FACTOR,
+                                                                                   anchor_stride=config.GRASP_ANCHOR_STRIDE,
+                                                                                   train_bn=True, num_grasp_anchors=config.GRASP_ANCHORS_PER_ROI,
+                                                                                   angles=config.GRASP_ANCHOR_ANGLES)
 
             mrcnn_mask = build_fpn_mask_graph(rois, mrcnn_feature_maps,
                                               input_image_meta,
@@ -4352,13 +4376,16 @@ class MaskRCNN():
             #                                                               fc_layers_size=config.FPN_CLASSIF_FC_LAYERS_SIZE,
             #                                                               num_grasp_anchors=config.GRASP_ANCHORS_PER_ROI)
 
-            grasp_class_logits, grasp_probs, grasp_bbox = build_new_grasping_graph(rpn_rois, mrcnn_feature_maps,
+            grasp_class_logits, grasp_probs, grasp_bbox = build_new_grasping_graph(rois, mrcnn_feature_maps,
                                                                                    input_image_meta,
-                                                                                   config.POOL_SIZE, config.NUM_CLASSES,
+                                                                                   config.GRASP_POOL_SIZE,
+                                                                                   config.NUM_CLASSES,
+                                                                                   rois_expand_factor=config.GRASP_ROI_EXPAND_FACTOR,
                                                                                    anchor_stride=config.GRASP_ANCHOR_STRIDE,
                                                                                    train_bn=True,
                                                                                    num_grasp_anchors=config.GRASP_ANCHORS_PER_ROI,
                                                                                    angles=config.GRASP_ANCHOR_ANGLES)
+
             # Detections
             # output is [batch, num_detections, (y1, x1, y2, x2, class_id, score)] in
             # normalized coordinates

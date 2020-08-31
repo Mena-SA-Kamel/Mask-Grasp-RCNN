@@ -102,7 +102,18 @@ tf.enable_eager_execution()
 # code.interact(local=dict(globals(), **locals()))
 # total_positive_loss = K.sum(tf.gather_nd(classification_loss, positive_indices))
 
-
+def expand_roi_by_percent(rois, percentage=0.2):
+    rois_flattened = tf.reshape(rois, [-1, 4])
+    y1, x1, y2, x2 = tf.split(rois_flattened, num_or_size_splits=4, axis=-1)
+    w = tf.abs(x2 - x1)
+    h = tf.abs(y2 - y1)
+    x1_expand = K.maximum(x1 - (percentage*(w/2)), 0)
+    x2_expand = K.minimum(x2 + (percentage*(w/2)), 1)
+    y1_expand = K.maximum(y1 - (percentage*(h/2)), 0)
+    y2_expand = K.minimum(y2 + (percentage*(h/2)), 1)
+    expanded_rois = tf.concat([y1_expand, x1_expand, y2_expand, x2_expand], axis=-1)
+    expanded_rois = tf.reshape(expanded_rois, tf.shape(rois))
+    return expanded_rois
 
 def generate_grasping_anchors_graph(inputs):
     # Main goal - Get bbox in the form {x, y, w, h, thetas
@@ -431,7 +442,7 @@ grasp_overlaps = grasping_overlaps_graph_new(grasping_anchors_reshaped, grasping
 grasp_overlaps_reshaped = tf.reshape(tf.squeeze(grasp_overlaps), [grasp_overlaps.shape[0], boxes2.shape[1], boxes1.shape[1]])
 
 ARIOU_NEG_THRESHOLD = 0.01
-ARIOU_POS_THRESHOLD = 0.1
+ARIOU_POS_THRESHOLD = 0.3
 
 # grasp_anchor_match - this is 1 for positive anchors, -1 for negative anchors
 # grasp_box_match - this specifies the id of the grasp box for each positive anchor, -1 for negative anchors
@@ -501,7 +512,7 @@ gt_grasp_boxes_filtered = tf.tensor_scatter_nd_update(grasp_bbox, tf.concat([roi
 
 grasp_deltas = grasp_box_refinement_graph(grasping_anchors, gt_grasp_boxes_filtered)
 
-import code; code.interact(local=dict(globals(), **locals()))
+
 
 GRASP_BBOX_STD_DEV = np.array([0.1, 0.1, 0.2, 0.2, 1])
 grasp_deltas /= GRASP_BBOX_STD_DEV
@@ -564,11 +575,14 @@ for i in range(gt_boxes_np.shape[0]):
 
 
 
-plt.show(block=False)
-import code;
+# plt.show(block=False)
 
 
-code.interact(local=dict(globals(), **locals()))
+rois = np.random.rand(3, 10, 4)
+zero_rois_ix = np.random.choice(np.arange(10), 3)
+rois [:, zero_rois_ix] = rois [:, zero_rois_ix]*0
+expand_roi_by_percent(rois, 0.2)
+# zero_rois_ix = np.random.choice(np.arange(10), 3)
 
 # updates = np.ones((4,1))
 # positive_indices = np.array([2, 5, 7, 6])
