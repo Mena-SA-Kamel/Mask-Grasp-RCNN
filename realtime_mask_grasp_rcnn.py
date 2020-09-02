@@ -58,7 +58,8 @@ mode = "mask_grasp_rcnn"
 
 inference_config = GraspMaskRCNNInferenceConfig()
 MODEL_DIR = "models"
-mask_grasp_model_path = 'models/colab_result_id#1/mask_rcnn_grasp_and_mask_0152.h5'
+# mask_grasp_model_path = 'models/colab_result_id#1/mask_rcnn_grasp_and_mask_0152.h5'
+mask_grasp_model_path = 'models/colab_result_id#1/mask_rcnn_grasp_and_mask_0064.h5'
 
 
 mask_grasp_model = modellib.MaskRCNN(mode="inference",
@@ -136,7 +137,7 @@ try:
 
             post_nms_predictions, pre_nms_predictions = dataset_object.refine_results(probabilities=grasping_probs[j], deltas=grasping_deltas[j],anchors=grasping_anchors, config=inference_config)
 
-            for i, rect in enumerate(post_nms_predictions):
+            for i, rect in enumerate(pre_nms_predictions):
                 rect = dataset_object.bbox_convert_to_four_vertices([rect])
                 grasp_rectangles_image = cv2.drawContours(color_image_to_display, np.int0(rect), 0, color, 2)
 

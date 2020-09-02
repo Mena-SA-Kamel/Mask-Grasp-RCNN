@@ -835,7 +835,7 @@ def generate_grasping_anchors_graph(inputs):
     roi_widths = x2 - x1
 
     # Values hard coded here because map_fn does not allow more than one input to the function
-    GRASP_POOL_SIZE = 14
+    GRASP_POOL_SIZE = 7
     GRASP_ANCHOR_RATIOS = [1]
     GRASP_ANCHOR_ANGLES = [-67.5, -22.5, 22.5, 67.5]
     GRASP_ANCHOR_SIZE = [48]
@@ -2161,7 +2161,7 @@ def grasp_loss_graph(config, target_bbox, target_class, bbox, class_logits, roi_
         num_positive_samples = tf.cast(K.sum(N), tf.float32)
 
         # Combined Loss
-        combined_loss = (((1/beta)*classification_loss) + total_regression_loss) / (4 * num_positive_samples)
+        combined_loss = (classification_loss + (beta*total_regression_loss)) / (4 * num_positive_samples)
         total_grasp_loss = tf.add(total_grasp_loss, combined_loss)
 
     # return total_grasp_loss
@@ -4643,12 +4643,12 @@ class MaskRCNN():
         metrics. Then calls the Keras compile() function.
         """
         # Optimizer object
-        optimizer = keras.optimizers.SGD(
-            lr=learning_rate, momentum=momentum,
-            clipnorm=self.config.GRADIENT_CLIP_NORM)
         # optimizer = keras.optimizers.SGD(
         #     lr=learning_rate, momentum=momentum,
-        #     clipvalue=self.config.GRADIENT_CLIP_VALUE)
+        #     clipnorm=self.config.GRADIENT_CLIP_NORM)
+        optimizer = keras.optimizers.SGD(
+            lr=learning_rate, momentum=momentum,
+            clipvalue=self.config.GRADIENT_CLIP_VALUE)
         # Add Losses
         # First, clear previously set losses to avoid duplication
         self.keras_model._losses = []
@@ -4847,7 +4847,7 @@ class MaskRCNN():
                                              augmentation=augmentation,
                                              batch_size=self.config.BATCH_SIZE,
                                              no_augmentation_sources=no_augmentation_sources)
-            val_generator = data_generator(val_dataset, self.config, shuffle=True,
+            val_generator = data_generator(val_dataset, self.coGRASP_POOL_SIZEnfig, shuffle=True,
                                            batch_size=self.config.BATCH_SIZE)
 
         # Create log_dir if it does not exist
@@ -4859,7 +4859,7 @@ class MaskRCNN():
                                   step_size=self.config.STEPS_PER_EPOCH*4, mode='triangular',
                  gamma=1., scale_fn=None, scale_mode='cycle')
         callbacks = [
-            # clr_triangular,
+            clr_triangular,
             keras.callbacks.TensorBoard(log_dir=self.log_dir,
                                         histogram_freq=0, write_graph=True, write_images=False),
             keras.callbacks.ModelCheckpoint(self.checkpoint_path,

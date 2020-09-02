@@ -120,7 +120,7 @@ def generate_grasping_anchors_graph(inputs):
     stride_y, stride_x, y1, x1, y2, x2 = tf.split(inputs, num_or_size_splits=6)
 
     # To be replaced with config reference
-    GRASP_POOL_SIZE = 14
+    GRASP_POOL_SIZE = 7
     GRASP_ANCHOR_RATIOS = [1]
     GRASP_ANCHOR_ANGLES = [-67.5, -22.5, 22.5, 67.5]
     GRASP_ANCHOR_SIZE = [48]
@@ -404,7 +404,7 @@ valid_grasp_boxes = tf.logical_and(valid_grasp_boxes, tf.greater(gt_grasp_box_y 
 # valid_grasp_boxes = K.variable(value=valid_grasp_boxes)
 final_roi_gt_grasp_boxes = referenced_grasp_boxes * tf.cast(valid_grasp_boxes, dtype='float32')
 
-GRASP_POOL_SIZE = 14
+GRASP_POOL_SIZE = 7
 pooled_feature_stride = tf.concat([proposal_heights, proposal_widths], axis = -1) /GRASP_POOL_SIZE
 pooled_feature_stride = tf.cast(pooled_feature_stride, tf.float32)
 
