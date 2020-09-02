@@ -1105,10 +1105,15 @@ def detection_targets_graph(proposals, gt_class_ids, gt_boxes, gt_masks, anchors
                                                                                 config)
     final_roi_gt_grasp_boxes = norm_grasp_boxes_graph(final_roi_gt_grasp_boxes, config.IMAGE_SHAPE[:2])
 
-    proposal_y1 = positive_rois[:, 0]
-    proposal_x1 = positive_rois[:, 1]
-    proposal_y2 = positive_rois[:, 2]
-    proposal_x2 = positive_rois[:, 3]
+    if config.USE_EXPANDED_ROIS:
+        rois_to_use = expand_roi_by_percent(positive_rois, percentage=config.GRASP_ROI_EXPAND_FACTOR)
+    else:
+        rois_to_use = positive_rois
+
+    proposal_y1 = rois_to_use[:, 0]
+    proposal_x1 = rois_to_use[:, 1]
+    proposal_y2 = rois_to_use[:, 2]
+    proposal_x2 = rois_to_use[:, 3]
     proposal_widths = tf.expand_dims(proposal_x2 - proposal_x1, axis=-1)
     proposal_heights = tf.expand_dims(proposal_y2 - proposal_y1, axis=-1)
 
@@ -1588,16 +1593,19 @@ def rpn_graph(feature_map, anchors_per_location, anchor_stride):
     return [rpn_class_logits, rpn_probs, rpn_bbox]
 
 def build_new_grasping_graph(rois, feature_maps, image_meta,
-                         pool_size, num_classes, rois_expand_factor, anchor_stride=1,
+                         pool_size, num_classes, use_expanded_rois, rois_expand_factor, anchor_stride=1,
                          train_bn=True, num_grasp_anchors=196,
                              angles=[]):
     # ROI Pooling
     # Shape: [batch, num_rois, GRASP_POOL_SIZE, GRASP_POOL_SIZE, channels]
 
     # Expanding ROIs to allow network learn the features associated with the background
-    # expanded_rois = KL.Lambda(expand_roi_by_percent, name="expand_rois", arguments={'percentage': rois_expand_factor})(rois)
+    if use_expanded_rois:
+        rois_to_use = KL.Lambda(expand_roi_by_percent, name="expand_rois", arguments={'percentage': rois_expand_factor})(rois)
+    else:
+        rois_to_use = rois
     x = PyramidROIAlign([pool_size, pool_size],
-                        name="roi_align_grasp")([rois, image_meta] + feature_maps)
+                        name="roi_align_grasp")([rois_to_use, image_meta] + feature_maps)
 
     # Conv layers
     x = KL.TimeDistributed(KL.Conv2D(512, (3, 3), padding="same"),
@@ -2161,7 +2169,7 @@ def grasp_loss_graph(config, target_bbox, target_class, bbox, class_logits, roi_
         num_positive_samples = tf.cast(K.sum(N), tf.float32)
 
         # Combined Loss
-        combined_loss = (classification_loss + (beta*total_regression_loss)) / (4 * num_positive_samples)
+        combined_loss = (((1/beta)*classification_loss) + total_regression_loss) / (4 * num_positive_samples)
         total_grasp_loss = tf.add(total_grasp_loss, combined_loss)
 
     # return total_grasp_loss
@@ -4317,6 +4325,7 @@ class MaskRCNN():
 
             grasp_class_logits, grasp_probs, grasp_bbox = build_new_grasping_graph(rois, mrcnn_feature_maps, input_image_meta,
                                                                                    config.GRASP_POOL_SIZE, config.NUM_CLASSES,
+                                                                                   use_expanded_rois=config.USE_EXPANDED_ROIS,
                                                                                    rois_expand_factor=config.GRASP_ROI_EXPAND_FACTOR,
                                                                                    anchor_stride=config.GRASP_ANCHOR_STRIDE,
                                                                                    train_bn=True, num_grasp_anchors=config.GRASP_ANCHORS_PER_ROI,
@@ -4376,6 +4385,8 @@ class MaskRCNN():
             #                                                               fc_layers_size=config.FPN_CLASSIF_FC_LAYERS_SIZE,
             #                                                               num_grasp_anchors=config.GRASP_ANCHORS_PER_ROI)
 
+            expanded_rois = KL.Lambda(expand_roi_by_percent, name="expand_rois",
+                                      arguments={'percentage': config.GRASP_ROI_EXPAND_FACTOR})(rpn_rois)
             grasp_class_logits, grasp_probs, grasp_bbox = build_new_grasping_graph(rpn_rois, mrcnn_feature_maps,
                                                                                    input_image_meta,
                                                                                    config.GRASP_POOL_SIZE,

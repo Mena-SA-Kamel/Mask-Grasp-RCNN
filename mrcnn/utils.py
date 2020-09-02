@@ -399,6 +399,19 @@ def non_max_suppression(boxes, scores, threshold):
         ixs = np.delete(ixs, 0)
     return np.array(pick, dtype=np.int32)
 
+def expand_roi_by_percent(rois, percentage=0.2, image_shape=[1, 1]):
+    rois_flattened = np.reshape(rois, [-1, 4])
+    y1, x1, y2, x2 = np.split(rois_flattened, indices_or_sections=4, axis=-1)
+    w = np.abs(x2 - x1)
+    h = np.abs(y2 - y1)
+    x1_expand = np.maximum(x1 - (percentage * (w / 2)), 0)
+    x2_expand = np.minimum(x2 + (percentage * (w / 2)), image_shape[1])
+    y1_expand = np.maximum(y1 - (percentage * (h / 2)), 0)
+    y2_expand = np.minimum(y2 + (percentage * (h / 2)), image_shape[0])
+    expanded_rois = np.concatenate([y1_expand, x1_expand, y2_expand, x2_expand], axis=-1)
+    expanded_rois = np.reshape(expanded_rois, rois.shape)
+    return expanded_rois
+
 
 def apply_box_deltas(boxes, deltas, mode='', num_angles=0):
     """Applies the given deltas to the given boxes.
