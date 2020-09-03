@@ -1122,9 +1122,9 @@ def detection_targets_graph(proposals, gt_class_ids, gt_boxes, gt_masks, anchors
     pooled_feature_stride = tf.cast(pooled_feature_stride, tf.float32)
 
     grasping_anchors = tf.cond(
-        tf.greater(tf.shape(positive_rois)[0], 0),
+        tf.greater(tf.shape(rois_to_use)[0], 0),
         true_fn=lambda: tf.map_fn(generate_grasping_anchors_graph,
-                              tf.concat([pooled_feature_stride, positive_rois], axis=1)),
+                              tf.concat([pooled_feature_stride, rois_to_use], axis=1)),
         false_fn=lambda: tf.cast(tf.zeros([0, config.GRASP_ANCHORS_PER_ROI, 5]), tf.float32)
     )
 
@@ -4384,13 +4384,11 @@ class MaskRCNN():
             #                                                               train_bn=True,
             #                                                               fc_layers_size=config.FPN_CLASSIF_FC_LAYERS_SIZE,
             #                                                               num_grasp_anchors=config.GRASP_ANCHORS_PER_ROI)
-
-            expanded_rois = KL.Lambda(expand_roi_by_percent, name="expand_rois",
-                                      arguments={'percentage': config.GRASP_ROI_EXPAND_FACTOR})(rpn_rois)
             grasp_class_logits, grasp_probs, grasp_bbox = build_new_grasping_graph(rpn_rois, mrcnn_feature_maps,
                                                                                    input_image_meta,
                                                                                    config.GRASP_POOL_SIZE,
                                                                                    config.NUM_CLASSES,
+                                                                                   use_expanded_rois=config.USE_EXPANDED_ROIS,
                                                                                    rois_expand_factor=config.GRASP_ROI_EXPAND_FACTOR,
                                                                                    anchor_stride=config.GRASP_ANCHOR_STRIDE,
                                                                                    train_bn=True,

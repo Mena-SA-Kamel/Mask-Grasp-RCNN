@@ -430,8 +430,8 @@ def apply_box_deltas(boxes, deltas, mode='', num_angles=0):
         y = center_y + (deltas[:, 1] * height)
         w = width * np.exp(deltas[:, 2])
         h = height * np.exp(deltas[:, 3])
-        angle = theta + ((deltas[:, 4]) * (180/num_angles))
-        # angle = theta + ((deltas[:, 4]) * (90))
+
+        angle = (theta + ((deltas[:, 4]) * (180/num_angles)))
         return np.stack([x, y, w, h, angle], axis=1)
 
     else:
@@ -1055,7 +1055,7 @@ def generate_grasping_anchors(scales, ratios, shape, feature_stride, anchor_stri
         final_boxes[boxes[:, 2] == i, 2:4] = box_sizes[j]
         j += 1
     final_boxes[:,0:2] = boxes[:,0:2]
-    final_boxes[:,-1] = boxes[:,-1]
+    final_boxes[:,-1] = boxes[:,-1] /90.0
     return final_boxes
 
 

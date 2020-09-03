@@ -678,9 +678,17 @@ class GraspMaskRCNNDataset(Dataset):
         # code.interact(local=dict(globals(), **locals()))
         deltas = deltas * config.GRASP_BBOX_STD_DEV
         mode = 'mask_grasp_rcnn'
-        deltas[:, -1] = deltas[:, -1] *90
+
+        deltas[:, -1] = deltas[:, -1]# *90
         all_boxes = utils.apply_box_deltas(anchors, deltas, mode,
                                            len(config.GRASP_ANCHOR_ANGLES))
+        all_boxes = utils.denorm_boxes(all_boxes, config.IMAGE_SHAPE[:2], mode='grasping_points')
+        # import code;
+        #
+        # code.interact(local=dict(globals(), **locals()))
+
+        # all_boxes[:, -1] = (all_boxes[:, -1] * 90)
+
         # Filter out boxes with center coordinates out of the image
         # radius = ((0.5 * all_boxes[:, 2]) ** 2 + (0.5 * all_boxes[:, 3]) ** 2) ** 0.5
         #
@@ -789,11 +797,11 @@ model_path = os.path.join(MODEL_DIR, "mask_grasp_rcnn.h5")
 model.keras_model.save_weights(model_path)
 
 ##### TESTING #####
-#
+
 # # mrcnn_model_path = 'models/Good_models/Training_SAMS_dataset_LR-div-5-div-10-HYBRID-weights/mask_rcnn_object_vs_background_0051.h5'
 # # mask_grasp_model_path = 'models/mask_grasp_rcnn_attempt#1b/mask_rcnn_grasp_and_mask_0200.h5'
 # # mask_grasp_model_path = 'models/mask_grasp_rcnn_attempt#1b/mask_rcnn_grasp_and_mask_0108.h5'
-# mask_grasp_model_path = 'models/colab_result_id#1/test_weights_epoch_300.h5'
+# mask_grasp_model_path = 'models/colab_result_id#1/mask_rcnn_grasp_and_mask_0500.h5'
 #
 #
 # mask_grasp_model = modellib.MaskRCNN(mode="inference",
@@ -823,8 +831,11 @@ model.keras_model.save_weights(model_path)
 #          grasping_deltas = r['grasp_boxes']
 #          grasping_probs = r['grasp_probs']
 #
-#          fig, (ax1, ax2, ax3) = plt.subplots(1, 3, figsize=(15, 5))
+#          fig, (ax1, ax2, ax3, ax4) = plt.subplots(1, 4, figsize=(15, 5))
 #          ax1.imshow(mask_image)
+#          ax2.imshow(original_image)
+#          ax3.imshow(original_image)
+#          ax4.imshow(original_image)
 #          bboxes = r['rois']
 #          for bbox in bboxes:
 #              expanded_rect = utils.expand_roi_by_percent(bbox, percentage=config.GRASP_ROI_EXPAND_FACTOR,
@@ -832,24 +843,26 @@ model.keras_model.save_weights(model_path)
 #              y1, x1, y2, x2 = expanded_rect
 #              p = patches.Rectangle((x1, y1), (x2-x1), (y2-y1), angle=0, edgecolor=dataset.generate_random_color(), linewidth=1, facecolor='none')
 #              ax1.add_patch(p)
-#          ax2.imshow(original_image)
-#          ax3.imshow(original_image)
+#
 #
 #          for j, rect in enumerate(r['rois']):
-#              expanded_rect =  utils.expand_roi_by_percent(rect, percentage=config.GRASP_ROI_EXPAND_FACTOR,
+#              expanded_rect = utils.expand_roi_by_percent(rect, percentage=config.GRASP_ROI_EXPAND_FACTOR,
 #                                                           image_shape=config.IMAGE_SHAPE[:2])
-#              y1, x1, y2, x2 = expanded_rect
+#              expanded_rect_normalized = utils.norm_boxes(expanded_rect, config.IMAGE_SHAPE[:2])
+#
+#              y1, x1, y2, x2 = expanded_rect_normalized
 #              w = abs(x2 - x1)
 #              h = abs(y2 - y1)
 #              ROI_shape = np.array([h, w])
-#              pooled_feature_stride = np.array(ROI_shape/config.GRASP_POOL_SIZE).astype('uint8')
+#              pooled_feature_stride = np.array(ROI_shape/config.GRASP_POOL_SIZE)#.astype('uint8')
 #              grasping_anchors = utils.generate_grasping_anchors(config.GRASP_ANCHOR_SIZE,
 #                                                        config.GRASP_ANCHOR_RATIOS,
 #                                                        [config.GRASP_POOL_SIZE, config.GRASP_POOL_SIZE],
 #                                                        pooled_feature_stride,
 #                                                        1,
 #                                                        config.GRASP_ANCHOR_ANGLES,
-#                                                        rect)
+#                                                        expanded_rect_normalized)
+#
 #
 #              post_nms_predictions, pre_nms_predictions = dataset.refine_results(grasping_probs[j], grasping_deltas[j],
 #                                                                                 grasping_anchors, config)
@@ -865,6 +878,12 @@ model.keras_model.save_weights(model_path)
 #                  p2 = patches.Polygon(rect2[0], linewidth=1,edgecolor=dataset.generate_random_color(),facecolor='none')
 #                  ax3.add_patch(p2)
 #                  ax3.set_title('Boxes post non-maximum supression')
+#              for i, rect3 in enumerate(utils.denorm_boxes(grasping_anchors, config.IMAGE_SHAPE[:2], 'grasping_points')):
+#                  rect3 = dataset.bbox_convert_to_four_vertices([rect3])
+#                  p3 = patches.Polygon(rect3[0], linewidth=1, edgecolor=dataset.generate_random_color(),
+#                                       facecolor='none')
+#                  ax4.add_patch(p3)
+#                  ax4.set_title('Anchors')
 #          fig.suptitle('Image path : ' + dataset.image_info[image_id]['path'] +
 #                                        '\nAugmentations : [\'angle\', \'dx\', \'dy\', \'flip\'] => ' +
 #                                        str(dataset.image_info[image_id]['augmentation']))
@@ -875,7 +894,7 @@ model.keras_model.save_weights(model_path)
 # code.interact(local=dict(globals(), **locals()))
 #
 #
-
+#
 
 
 
