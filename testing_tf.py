@@ -575,13 +575,13 @@ for i in range(gt_boxes_np.shape[0]):
 
 
 
-# plt.show(block=False)
+plt.show()
 
-
-rois = np.random.rand(3, 10, 4)
-zero_rois_ix = np.random.choice(np.arange(10), 3)
-rois [:, zero_rois_ix] = rois [:, zero_rois_ix]*0
-expand_roi_by_percent(rois, 0.2)
+#
+# rois = np.random.rand(3, 10, 4)
+# zero_rois_ix = np.random.choice(np.arange(10), 3)
+# rois [:, zero_rois_ix] = rois [:, zero_rois_ix]*0
+# expand_roi_by_percent(rois, 0.2)
 # zero_rois_ix = np.random.choice(np.arange(10), 3)
 
 # updates = np.ones((4,1))

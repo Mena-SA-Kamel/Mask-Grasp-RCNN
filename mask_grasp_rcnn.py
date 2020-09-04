@@ -679,7 +679,6 @@ class GraspMaskRCNNDataset(Dataset):
         # code.interact(local=dict(globals(), **locals()))
         deltas = deltas * config.GRASP_BBOX_STD_DEV
         mode = 'mask_grasp_rcnn'
-
         all_boxes = utils.apply_box_deltas(anchors, deltas, mode,
                                            len(config.GRASP_ANCHOR_ANGLES))
 

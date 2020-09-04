@@ -1045,7 +1045,7 @@ def detection_targets_graph(proposals, gt_class_ids, gt_boxes, gt_masks, anchors
     negative_indices = tf.random.shuffle(negative_indices)[:negative_count]
     # Gather selected ROIs
     # positive_rois + negative_rois = 200
-    positive_roisimpo = tf.gather(proposals, positive_indices)
+    positive_rois = tf.gather(proposals, positive_indices)
     negative_rois = tf.gather(proposals, negative_indices)
 
     # Assign positive ROIs to GT boxes.
@@ -4379,8 +4379,22 @@ class MaskRCNN():
                                      angles=config.GRASP_ANCHOR_ANGLES
                                      )
 
+            # Detections
+            # output is [batch, num_detections, (y1, x1, y2, x2, class_id, score)] in
+            # normalized coordinates
 
-            grasp_class_logits, grasp_probs, grasp_bbox = build_new_grasping_graph(rpn_rois, mrcnn_feature_maps,
+            detections = DetectionLayer(config, name="mrcnn_detection")(
+                [rpn_rois, mrcnn_class, mrcnn_bbox, input_image_meta])
+
+            # Create masks for detections
+            detection_boxes = KL.Lambda(lambda x: x[..., :4])(detections)
+            mrcnn_mask = build_fpn_mask_graph(detection_boxes, mrcnn_feature_maps,
+                                              input_image_meta,
+                                              config.MASK_POOL_SIZE,
+                                              config.NUM_CLASSES,
+                                              train_bn=config.TRAIN_BN)
+
+            grasp_class_logits, grasp_probs, grasp_bbox = build_new_grasping_graph(detection_boxes, mrcnn_feature_maps,
                                                                                    input_image_meta,
                                                                                    config.GRASP_POOL_SIZE,
                                                                                    config.NUM_CLASSES,
@@ -4391,24 +4405,9 @@ class MaskRCNN():
                                                                                    num_grasp_anchors=config.GRASP_ANCHORS_PER_ROI,
                                                                                    angles=config.GRASP_ANCHOR_ANGLES)
 
-            # Detections
-            # output is [batch, num_detections, (y1, x1, y2, x2, class_id, score)] in
-            # normalized coordinates
-
-            detections = GraspDetectionLayer(config, name="mrcnn_detection")(
-                [rpn_rois, mrcnn_class, mrcnn_bbox, input_image_meta, grasp_probs, grasp_bbox])
-
-            # Create masks for detections
-            detection_boxes = KL.Lambda(lambda x: x[:,:,1][..., :4])(detections)
-            mrcnn_mask = build_fpn_mask_graph(detection_boxes, mrcnn_feature_maps,
-                                              input_image_meta,
-                                              config.MASK_POOL_SIZE,
-                                              config.NUM_CLASSES,
-                                              train_bn=config.TRAIN_BN)
-
             model = KM.Model([input_image, input_image_meta, input_anchors],
                              [detections, mrcnn_class, mrcnn_bbox,
-                                 mrcnn_mask, rpn_rois, rpn_class, rpn_bbox],
+                                 mrcnn_mask, rpn_rois, rpn_class, rpn_bbox, grasp_class_logits, grasp_probs, grasp_bbox],
                              name='mask_grasp_rcnn')
 
         # Add multi-GPU support.
@@ -4977,7 +4976,7 @@ class MaskRCNN():
         return boxes, rpn_class, rpn_bbox
 
     def unmold_mask_grasp_detections(self, detections, mrcnn_mask, original_image_shape,
-                          image_shape, window, rpn_rois):
+                          image_shape, window, grasp_probs, grasp_bbox):
         """Reformats the detections of one image from the format of the neural
         network output to a format suitable for use in the rest of the
         application.
@@ -4998,9 +4997,6 @@ class MaskRCNN():
         # How many detections do we have?
         # Detections array is padded with zeros. Find the first class_id == 0.
 
-
-        original_detections = detections.copy()
-        detections = detections[:, 1]
         zero_ix = np.where(detections[:, :4] == 0)[0]
         N = zero_ix[0] if zero_ix.shape[0] > 0 else detections.shape[0]
 
@@ -5009,8 +5005,8 @@ class MaskRCNN():
         class_ids = detections[:N, 4].astype(np.int32)
         scores = detections[:N, 5]
         masks = mrcnn_mask[np.arange(N), :, :, class_ids]
-        grasp_boxes = original_detections[:N, :, 6:11]
-        grasp_probs = original_detections[:N, :, 11:]
+        grasp_probs = grasp_probs[:N]
+        grasp_boxes = grasp_bbox[:N]
 
         # Translate normalized coordinates in the resized image to pixel
         # coordinates in the original image before resizing
@@ -5167,22 +5163,23 @@ class MaskRCNN():
                     "refinements": rpn_bbox,
                 })
         elif task == 'mask_grasp_rcnn':
-            detections, _, _, mrcnn_mask, rpn_rois, _, _ = \
+            detections, _, _, mrcnn_mask, _, _, _ , grasp_class_logits, grasp_probs, grasp_bbox= \
                 self.keras_model.predict([molded_images, image_metas, anchors], verbose=0)
 
             results = []
             for i, image in enumerate(images):
-                final_rois, final_class_ids, final_scores, final_masks, grasp_boxes, grasp_probs= \
+
+                final_rois, final_class_ids, final_scores, final_masks, final_grasp_bbox, final_grasp_probs= \
                     self.unmold_mask_grasp_detections(detections[i], mrcnn_mask[i],
                                            image.shape, molded_images[i].shape,
-                                           windows[i], rpn_rois)
+                                           windows[i], grasp_probs[i], grasp_bbox[i])
                 results.append({
                     "rois": final_rois,
                     "class_ids": final_class_ids,
                     "scores": final_scores,
                     "masks": final_masks,
-                    "grasp_boxes": grasp_boxes,
-                    "grasp_probs": grasp_probs,
+                    "grasp_boxes": final_grasp_bbox,
+                    "grasp_probs": final_grasp_probs,
                 })
         else:
             detections, _, _, mrcnn_mask, _, _, _ =\

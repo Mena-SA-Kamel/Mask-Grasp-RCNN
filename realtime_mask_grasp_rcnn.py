@@ -27,7 +27,7 @@ def resize_frame(image):
 
     diff = (max_dimension - min_dimension)//2
     square_image = image[:, diff:max_dimension-diff, :]
-    square_image_resized = cv2.resize(square_image, dsize=(320, 320))
+    square_image_resized = cv2.resize(square_image, dsize=(384, 384))
     return square_image_resized
 
 # Create a pipeline
@@ -57,9 +57,10 @@ frame_count = 0
 mode = "mask_grasp_rcnn"
 
 inference_config = GraspMaskRCNNInferenceConfig()
+
 MODEL_DIR = "models"
 # mask_grasp_model_path = 'models/colab_result_id#1/mask_rcnn_grasp_and_mask_0152.h5'
-mask_grasp_model_path = 'models/colab_result_id#1/mask_rcnn_grasp_and_mask_0064.h5'
+mask_grasp_model_path = 'models/colab_result_id#1/mask_rcnn_grasp_and_mask_0500.h5'
 
 
 mask_grasp_model = modellib.MaskRCNN(mode="inference",
@@ -122,18 +123,22 @@ try:
             plot_boxes=True
         for j, rect in enumerate(r['rois']):
             color = generate_random_color()
-            y1, x1, y2, x2 = rect
+            expanded_rect = utils.expand_roi_by_percent(rect, percentage=inference_config.GRASP_ROI_EXPAND_FACTOR,
+                                                        image_shape=inference_config.IMAGE_SHAPE[:2])
+
+            expanded_rect_normalized = utils.norm_boxes(expanded_rect, inference_config.IMAGE_SHAPE[:2])
+            y1, x1, y2, x2 = expanded_rect_normalized
             w = abs(x2 - x1)
             h = abs(y2 - y1)
             ROI_shape = np.array([h, w])
-            pooled_feature_stride = np.array(ROI_shape/inference_config.GRASP_POOL_SIZE).astype('uint8')
+            pooled_feature_stride = np.array(ROI_shape/inference_config.GRASP_POOL_SIZE)#.astype('uint8')
             grasping_anchors = utils.generate_grasping_anchors(inference_config.GRASP_ANCHOR_SIZE,
                                                                inference_config.GRASP_ANCHOR_RATIOS,
                                                                [inference_config.GRASP_POOL_SIZE, inference_config.GRASP_POOL_SIZE],
                                                                pooled_feature_stride,
                                                                1,
                                                                inference_config.GRASP_ANCHOR_ANGLES,
-                                                               rect)
+                                                               expanded_rect_normalized)
 
             post_nms_predictions, pre_nms_predictions = dataset_object.refine_results(probabilities=grasping_probs[j], deltas=grasping_deltas[j],anchors=grasping_anchors, config=inference_config)
 
