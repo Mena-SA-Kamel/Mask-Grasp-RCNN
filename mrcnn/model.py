@@ -1045,7 +1045,7 @@ def detection_targets_graph(proposals, gt_class_ids, gt_boxes, gt_masks, anchors
     negative_indices = tf.random.shuffle(negative_indices)[:negative_count]
     # Gather selected ROIs
     # positive_rois + negative_rois = 200
-    positive_rois = tf.gather(proposals, positive_indices)
+    positive_roisimpo = tf.gather(proposals, positive_indices)
     negative_rois = tf.gather(proposals, negative_indices)
 
     # Assign positive ROIs to GT boxes.
@@ -4379,11 +4379,7 @@ class MaskRCNN():
                                      angles=config.GRASP_ANCHOR_ANGLES
                                      )
 
-            # grasp_class_logits, grasp_probs, grasp_bbox = fpn_grasp_graph(rpn_rois, mrcnn_feature_maps, input_image_meta,
-            #                                                               config.POOL_SIZE, config.NUM_CLASSES,
-            #                                                               train_bn=True,
-            #                                                               fc_layers_size=config.FPN_CLASSIF_FC_LAYERS_SIZE,
-            #                                                               num_grasp_anchors=config.GRASP_ANCHORS_PER_ROI)
+
             grasp_class_logits, grasp_probs, grasp_bbox = build_new_grasping_graph(rpn_rois, mrcnn_feature_maps,
                                                                                    input_image_meta,
                                                                                    config.GRASP_POOL_SIZE,
@@ -4981,7 +4977,7 @@ class MaskRCNN():
         return boxes, rpn_class, rpn_bbox
 
     def unmold_mask_grasp_detections(self, detections, mrcnn_mask, original_image_shape,
-                          image_shape, window):
+                          image_shape, window, rpn_rois):
         """Reformats the detections of one image from the format of the neural
         network output to a format suitable for use in the rest of the
         application.
@@ -5015,7 +5011,6 @@ class MaskRCNN():
         masks = mrcnn_mask[np.arange(N), :, :, class_ids]
         grasp_boxes = original_detections[:N, :, 6:11]
         grasp_probs = original_detections[:N, :, 11:]
-
 
         # Translate normalized coordinates in the resized image to pixel
         # coordinates in the original image before resizing
@@ -5172,8 +5167,7 @@ class MaskRCNN():
                     "refinements": rpn_bbox,
                 })
         elif task == 'mask_grasp_rcnn':
-
-            detections, _, _, mrcnn_mask, _, _, _  = \
+            detections, _, _, mrcnn_mask, rpn_rois, _, _ = \
                 self.keras_model.predict([molded_images, image_metas, anchors], verbose=0)
 
             results = []
@@ -5181,7 +5175,7 @@ class MaskRCNN():
                 final_rois, final_class_ids, final_scores, final_masks, grasp_boxes, grasp_probs= \
                     self.unmold_mask_grasp_detections(detections[i], mrcnn_mask[i],
                                            image.shape, molded_images[i].shape,
-                                           windows[i])
+                                           windows[i], rpn_rois)
                 results.append({
                     "rois": final_rois,
                     "class_ids": final_class_ids,

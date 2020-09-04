@@ -1011,6 +1011,7 @@ def generate_anchors(scales, ratios, shape, feature_stride, anchor_stride, mode=
     return boxes
 
 
+
 def generate_grasping_anchors(scales, ratios, shape, feature_stride, anchor_stride, thetas, roi_boundaries):
     """
     scales: 1D array of anchor sizes in pixels. Example: [32, 64, 128]
@@ -1042,8 +1043,8 @@ def generate_grasping_anchors(scales, ratios, shape, feature_stride, anchor_stri
     anchor_height = np.array([roi_heights / shape[0]])*overlap_factor
 
     # Enumerate shifts in feature space
-    shifts_y = (np.arange(0, shape[0], anchor_stride) * feature_stride[0]) + feature_stride[0]//2 + y1
-    shifts_x = (np.arange(0, shape[1], anchor_stride) * feature_stride[1]) + feature_stride[1]//2 + x1
+    shifts_y = (np.arange(0, shape[0], anchor_stride) * feature_stride[0]) + feature_stride[0]/2 + y1
+    shifts_x = (np.arange(0, shape[1], anchor_stride) * feature_stride[1]) + feature_stride[1]/2 + x1
 
     # box_sizes = np.stack([heights, widths], axis = 1)
     box_sizes = np.stack([anchor_height, anchor_width], axis = 1)
