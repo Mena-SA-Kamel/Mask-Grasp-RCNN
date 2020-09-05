@@ -66,7 +66,7 @@ class GraspMaskRCNNConfig(Config):
     # LEARNING_RATE = 0.00002
     LEARNING_RATE = 0.0002 # was 0.00001
     # WEIGHT_DECAY = 0.000003
-    WEIGHT_DECAY = 0.00001
+    WEIGHT_DECAY = 0.0001
 
     GRADIENT_CLIP_NORM = 5.0
     LEARNING_MOMENTUM = 0.9
@@ -80,8 +80,6 @@ class GraspMaskRCNNConfig(Config):
     }
     GRASP_LOSS_BETA = 10
     GRADIENT_CLIP_VALUE = 0.5 # was 0.1
-    CYCLIC_LR = True
-    MODEL_SAVE_PERIOD = 8
     # TRAIN_BN=True
 
 
@@ -757,270 +755,107 @@ MODEL_DIR = "models"
 mode = "mask_grasp_rcnn"
 
 #### TRAINING #####
-# COCO_MODEL_PATH = os.path.join("models", "mask_rcnn_object_vs_background_100_heads_50_all.h5")
-# COCO_MODEL_PATH = os.path.join("models", "mask_rcnn_object_vs_background_HYBRID-50_head_50_all.h5")
-# COCO_MODEL_PATH = 'models/Good_models/Training_SAMS_dataset_LR-same-div-2-HYBRID-weights.h5'
-COCO_MODEL_PATH = os.path.join("models", "Good_models", "Training_SAMS_dataset_LR-same-div-2-HYBRID-weights", "SAMS_DATASET_TRAINING_REFERENCE.h5")
-# COCO_MODEL_PATH = os.path.join("models", "mask_rcnn_coco.h5")
-model = modellib.MaskRCNN(mode="training", config=config,
-                             model_dir=MODEL_DIR, task='mask_grasp_rcnn')
-
-
-
-# model.load_weights(COCO_MODEL_PATH, by_name=True,
-#                       exclude=["conv1", "mrcnn_class_logits", "mrcnn_bbox_fc",
-#                                "mrcnn_bbox", "mrcnn_mask"])
-model.load_weights(COCO_MODEL_PATH, by_name=True)
-
+# # COCO_MODEL_PATH = os.path.join("models", "mask_rcnn_object_vs_background_100_heads_50_all.h5")
+# # COCO_MODEL_PATH = os.path.join("models", "mask_rcnn_object_vs_background_HYBRID-50_head_50_all.h5")
+# # COCO_MODEL_PATH = 'models/Good_models/Training_SAMS_dataset_LR-same-div-2-HYBRID-weights.h5'
+# COCO_MODEL_PATH = os.path.join("models", "Good_models", "Training_SAMS_dataset_LR-same-div-2-HYBRID-weights", "SAMS_DATASET_TRAINING_REFERENCE.h5")
+# # COCO_MODEL_PATH = os.path.join("models", "mask_rcnn_coco.h5")
+# model = modellib.MaskRCNN(mode="training", config=config,
+#                              model_dir=MODEL_DIR, task='mask_grasp_rcnn')
+#
+#
+#
+# # model.load_weights(COCO_MODEL_PATH, by_name=True,
+# #                       exclude=["conv1", "mrcnn_class_logits", "mrcnn_bbox_fc",
+# #                                "mrcnn_bbox", "mrcnn_mask"])
+# model.load_weights(COCO_MODEL_PATH, by_name=True)
+#
+# # model.train(training_dataset, validating_dataset,
+# #                learning_rate=config.LEARNING_RATE,
+# #                epochs=200,
+# #                layers=r"(conv1)|(mrcnn\_.*)|(rpn\_.*)|(fpn\_.*)|(grasp\_.*)",
+# #                task=mode)
+#
 # model.train(training_dataset, validating_dataset,
 #                learning_rate=config.LEARNING_RATE,
-#                epochs=200,
-#                layers=r"(conv1)|(mrcnn\_.*)|(rpn\_.*)|(fpn\_.*)|(grasp\_.*)",
+#                epochs=400,
+#                layers=r"(grasp\_.*)",
 #                task=mode)
-
-model.train(training_dataset, validating_dataset,
-               learning_rate=config.LEARNING_RATE,
-               epochs=400,
-               layers=r"(grasp\_.*)",
-               task=mode)
-
-
-# model.train(training_dataset, validating_dataset,
-#                 learning_rate=config.LEARNING_RATE/10,
-#                 epochs=300,
-#                 layers="all",
-#                 task=mode)
-
-model_path = os.path.join(MODEL_DIR, "mask_grasp_rcnn.h5")
-model.keras_model.save_weights(model_path)
+#
+#
+# # model.train(training_dataset, validating_dataset,
+# #                 learning_rate=config.LEARNING_RATE/10,
+# #                 epochs=300,
+# #                 layers="all",
+# #                 task=mode)
+#
+# model_path = os.path.join(MODEL_DIR, "mask_grasp_rcnn.h5")
+# model.keras_model.save_weights(model_path)
 
 ##### TESTING #####
 
-# # mrcnn_model_path = 'models/Good_models/Training_SAMS_dataset_LR-div-5-div-10-HYBRID-weights/mask_rcnn_object_vs_background_0051.h5'
-# # mask_grasp_model_path = 'models/mask_grasp_rcnn_attempt#1b/mask_rcnn_grasp_and_mask_0200.h5'
-# # mask_grasp_model_path = 'models/mask_grasp_rcnn_attempt#1b/mask_rcnn_grasp_and_mask_0108.h5'
-# mask_grasp_model_path = 'models/colab_result_id#1/mask_rcnn_grasp_and_mask_0228.h5'
-#
-#
-# mask_grasp_model = modellib.MaskRCNN(mode="inference",
-#                            config=inference_config,
-#                            model_dir=MODEL_DIR, task=mode)
-# mask_grasp_model.load_weights(mask_grasp_model_path, by_name=True)
-#
-# # grasping_model_path = os.path.join(MODEL_DIR, 'colab_result_id#1',"train_#12.h5")
-# # grasping_model = modellib.MaskRCNN(mode="inference", model_dir=MODEL_DIR,
-# #                               config=inference_config, task="grasping_points")
-# # grasping_model.load_weights(grasping_model_path, by_name=True)
-#
-# dataset = validating_dataset
-# image_ids = random.choices(dataset.image_ids, k=30)
-#
-# for image_id in image_ids:
-#      original_image, image_meta, gt_class_id, gt_bbox, gt_mask, gt_grasp_boxes, gt_grasp_id =\
-#          modellib.load_image_gt(dataset, inference_config,
-#                                 image_id, use_mini_mask=True, image_type='rgbd', mode='mask_grasp_rcnn')
-#
-#      results = mask_grasp_model.detect([original_image], verbose=1, task=mode)
-#      r = results[0]
-#      if r['rois'].shape[0] > 0:
-#          # visualize.display_instances(original_image, r['rois'], r['masks'], r['class_ids'],
-#          #                            dataset.class_names, r['scores'], show_bbox=True, thresh = 0)
-#          mask_image = testing_dataset.get_mask_overlay(original_image[:, :, 0:3], r['masks'], r['scores'], 0)
-#          grasping_deltas = r['grasp_boxes']
-#          grasping_probs = r['grasp_probs']
-#
-#          fig, (ax1, ax2, ax3, ax4) = plt.subplots(1, 4, figsize=(15, 5))
-#          ax1.imshow(mask_image)
-#          ax2.imshow(original_image)
-#          ax3.imshow(original_image)
-#          ax4.imshow(original_image)
-#          bboxes = r['rois']
-#
-#          for bbox in bboxes:
-#              expanded_rect = utils.expand_roi_by_percent(bbox, percentage=config.GRASP_ROI_EXPAND_FACTOR,
-#                                                          image_shape=config.IMAGE_SHAPE[:2])
-#              y1, x1, y2, x2 = expanded_rect
-#              p = patches.Rectangle((x1, y1), (x2-x1), (y2-y1), angle=0, edgecolor=dataset.generate_random_color(), linewidth=2, facecolor='none')
-#              ax1.add_patch(p)
-#
-#
-#          for j, rect in enumerate(r['rois']):
-#              color = dataset.generate_random_color()
-#              expanded_rect = utils.expand_roi_by_percent(rect, percentage=config.GRASP_ROI_EXPAND_FACTOR,
-#                                                           image_shape=config.IMAGE_SHAPE[:2])
-#              expanded_rect_normalized = utils.norm_boxes(expanded_rect, config.IMAGE_SHAPE[:2])
-#
-#              y1, x1, y2, x2 = expanded_rect_normalized
-#              w = abs(x2 - x1)
-#              h = abs(y2 - y1)
-#              ROI_shape = np.array([h, w])
-#              pooled_feature_stride = np.array(ROI_shape/config.GRASP_POOL_SIZE)#.astype('uint8')
-#
-#
-#              grasping_anchors = utils.generate_grasping_anchors(config.GRASP_ANCHOR_SIZE,
-#                                                        config.GRASP_ANCHOR_RATIOS,
-#                                                        [config.GRASP_POOL_SIZE, config.GRASP_POOL_SIZE],
-#                                                        pooled_feature_stride,
-#                                                        1,
-#                                                        config.GRASP_ANCHOR_ANGLES,
-#                                                        expanded_rect_normalized)
-#
-#
-#              post_nms_predictions, pre_nms_predictions = dataset.refine_results(grasping_probs[j], grasping_deltas[j],
-#                                                                                 grasping_anchors, config)
-#
-#              ax1.set_title('Original Image')
-#              for i, rect in enumerate(pre_nms_predictions):
-#                  rect = dataset.bbox_convert_to_four_vertices([rect])
-#                  p = patches.Polygon(rect[0], linewidth=1,edgecolor=color,facecolor='none')
-#                  ax2.add_patch(p)
-#                  ax2.set_title('Grasp RPN output - Boxes with confidence > '+ str(config.DETECTION_MIN_CONFIDENCE))
-#              for i, rect2 in enumerate(post_nms_predictions):
-#                  rect2 = dataset.bbox_convert_to_four_vertices([rect2])
-#                  p2 = patches.Polygon(rect2[0], linewidth=1,edgecolor=color,facecolor='none')
-#                  ax3.add_patch(p2)
-#                  ax3.set_title('Boxes post non-maximum supression')
-#              for i, rect3 in enumerate(utils.denorm_boxes(grasping_anchors, config.IMAGE_SHAPE[:2], 'grasping_points')):
-#                  rect3 = dataset.bbox_convert_to_four_vertices([rect3])
-#                  p3 = patches.Polygon(rect3[0], linewidth=1, edgecolor=color,
-#                                       facecolor='none')
-#                  ax4.add_patch(p3)
-#          fig.suptitle('Image path : ' + dataset.image_info[image_id]['path'] +
-#                                        '\nAugmentations : [\'angle\', \'dx\', \'dy\', \'flip\'] => ' +
-#                                        str(dataset.image_info[image_id]['augmentation']))
-#          plt.show(block=False)
-#
-# import code;
-#
-# code.interact(local=dict(globals(), **locals()))
-#
-
-
-
+# mrcnn_model_path = 'models/Good_models/Training_SAMS_dataset_LR-div-5-div-10-HYBRID-weights/mask_rcnn_object_vs_background_0051.h5'
+# mask_grasp_model_path = 'models/mask_grasp_rcnn_attempt#1b/mask_rcnn_grasp_and_mask_0200.h5'
+# mask_grasp_model_path = 'models/mask_grasp_rcnn_attempt#1b/mask_rcnn_grasp_and_mask_0108.h5'
+mask_grasp_model_path = 'models/colab_result_id#1/mask_rcnn_grasp_and_mask_0500.h5'
 
 
+mask_grasp_model = modellib.MaskRCNN(mode="inference",
+                           config=inference_config,
+                           model_dir=MODEL_DIR, task=mode)
+mask_grasp_model.load_weights(mask_grasp_model_path, by_name=True)
 
+# grasping_model_path = os.path.join(MODEL_DIR, 'colab_result_id#1',"train_#12.h5")
+# grasping_model = modellib.MaskRCNN(mode="inference", model_dir=MODEL_DIR,
+#                               config=inference_config, task="grasping_points")
+# grasping_model.load_weights(grasping_model_path, by_name=True)
 
+dataset = validating_dataset
+image_ids = random.choices(dataset.image_ids, k=15)
 
+for image_id in image_ids:
+     original_image, image_meta, gt_class_id, gt_bbox, gt_mask, gt_grasp_boxes, gt_grasp_id =\
+         modellib.load_image_gt(dataset, inference_config,
+                                image_id, use_mini_mask=True, image_type='rgbd', mode='mask_grasp_rcnn')
 
+     results = mask_grasp_model.detect([original_image], verbose=1, task=mode)
+     r = results[0]
+     if r['rois'].shape[0] > 0:
+         # visualize.display_instances(original_image, r['rois'], r['masks'], r['class_ids'],
+         #                            dataset.class_names, r['scores'], show_bbox=True, thresh = 0)
+         mask_image = testing_dataset.get_mask_overlay(original_image[:, :, 0:3], r['masks'], r['scores'], 0)
+         grasping_deltas = r['grasp_boxes']
+         grasping_probs = r['grasp_probs']
 
+         fig, (ax1, ax2, ax3, ax4) = plt.subplots(1, 4, figsize=(15, 5))
+         ax1.imshow(mask_image)
 
+         bboxes = r['rois']
 
+         for bbox in bboxes:
+             expanded_rect = utils.expand_roi_by_percent(bbox, percentage=config.GRASP_ROI_EXPAND_FACTOR,
+                                                         image_shape=config.IMAGE_SHAPE[:2])
+             y1, x1, y2, x2 = expanded_rect
+             p = patches.Rectangle((x1, y1), (x2-x1), (y2-y1), angle=0, edgecolor=dataset.generate_random_color(), linewidth=2, facecolor='none')
+             ax1.add_patch(p)
+             break
 
 
 
+         activations = mask_grasp_model.run_graph([original_image], [
+             ("grasp_conv2", mask_grasp_model.keras_model.get_layer("grasp_conv2").output),  # for resnet100
+             ("grasp_conv3", mask_grasp_model.keras_model.get_layer("grasp_conv3").output),
+             ("grasp_conv4", mask_grasp_model.keras_model.get_layer("grasp_conv4").output),
+             ("roi_align_grasp", mask_grasp_model.keras_model.get_layer("roi_align_grasp").output),
+         ])
 
+         ax2.imshow(activations["roi_align_grasp"][0][0][:, :, 0]);
 
+         plt.show(block=False)
 
+import code;
 
-     #
-     #
-     #
-     #
-     #     image = testing_dataset.get_mask_overlay(original_image[:, :, 0:3], r['masks'], r['scores'], 0)
-     #     plt.imshow(image);plt.show()
-     #
-     #
-     # Things to note:
-     # gt_bbox - array with the ROIs in the image
-     # gt_grasp_boxes - array with the grasps associated with the ROIs
-     #
-     # We want gt_bbox to have (y1, x1, y2, x2) values for the N boxes in the image: shape [N, 4]
-     # We also want gt_grasp_boex to specify the X number of boxes in the N ROIs in the image in the form
-     # (x,y,w,h,theta): shape [N, X, 4]
-     # gt_grasp_boxes are specified relative to the resized image size. We want the coordinates to be specified
-     # relative to the ROI's coordinates in order to represent them in terms of anchors over the ROI pooled feature space
-     #
-     # fig, (ax1, ax2, ax3, ax4, ax5, ax6) = plt.subplots(1, 6)
-     # ax1.imshow(original_image)
-     # ax2.imshow(original_image)
-     # ax3.imshow(original_image)
-     # ax4.imshow(original_image)
-     # ax5.imshow(original_image)
-     # ax6.imshow(original_image)
-     # for i, rect in enumerate(gt_bbox):
-     #     y1, x1, y2, x2 = rect
-     #     w = abs(x2 - x1)
-     #     h = abs(y2 - y1)
-     #     grasping_points = gt_grasp_boxes[i]
-     #     ROI_shape = np.array([h, w])
-     #     pooled_feature_stride = np.array(ROI_shape/config.GRASP_POOL_SIZE).astype('uint8')
-     #     anchors = utils.generate_grasping_anchors(config.GRASP_ANCHOR_SIZE,
-     #                                               config.GRASP_ANCHOR_RATIOS,
-     #                                               [config.GRASP_POOL_SIZE, config.GRASP_POOL_SIZE],
-     #                                               pooled_feature_stride,
-     #                                               1,
-     #                                               config.GRASP_ANCHOR_ANGLES,
-     #                                               rect)
-     #
-     #
-     #     # x_val = np.unique(anchors[:,1])[2]
-     #     # y_val = np.unique(anchors[:,0])[2]
-     #
-     #     # anchors_to_plot = anchors[np.logical_and((anchors[:, 0] == y_val), (anchors[:, 1] == x_val))]
-     #
-     #     target_rpn_match, target_rpn_bbox = modellib.build_grasping_targets(
-     #        anchors, gt_grasp_id[i], gt_grasp_boxes[i], config)
-     #
-     #
-     #     # shift anchors to be over the RoI
-     #
-     #     for j, anchor in enumerate(anchors):
-     #         anchor = utils.bbox_convert_to_four_vertices([anchor])
-     #         p = patches.Polygon(anchor[0], linewidth=1, edgecolor='r', facecolor='none')
-     #         ax2.add_patch(p)
-     #
-     #     p = patches.Rectangle((x1, y1), w, h, facecolor=None, fill=False, color='b')
-     #     ax1.add_patch(p)
-     #
-     #     positive_anchor_ix = np.where(target_rpn_match[:] == 1)[0]
-     #     negative_anchor_ix = np.where(target_rpn_match[:] == -1)[0]
-     #     neutral_anchor_ix = np.where(target_rpn_match[:] == 0)[0]
-     #     positive_anchors = anchors[positive_anchor_ix]
-     #     negative_anchors = anchors[negative_anchor_ix]
-     #     neutral_anchors = anchors[neutral_anchor_ix]
-     #     image_final_anchors = np.where(np.logical_not(target_rpn_match[:] == 0))[0]
-     #     positive_anchors_mask = np.in1d(image_final_anchors, positive_anchor_ix)
-     #     deltas = target_rpn_bbox[positive_anchors_mask] * config.GRASP_BBOX_STD_DEV
-     #     refined_anchors = utils.apply_box_deltas(positive_anchors, deltas, 'mask_grasp_rcnn', len(config.GRASP_ANCHOR_ANGLES))
-     #
-     #     for j, rect in enumerate(gt_grasp_boxes[i]):
-     #         rect = validating_dataset.bbox_convert_to_four_vertices([rect])
-     #         p = patches.Polygon(rect[0], linewidth=1,edgecolor='g',facecolor='none')
-     #         ax3.add_patch(p)
-     #     ax3.set_title(validating_dataset.image_info[image_id]['path'])
-     #
-     #     print (len(positive_anchor_ix), len(negative_anchor_ix), len(neutral_anchor_ix))
-     #
-     #
-     #     for j, rect2 in enumerate(negative_anchors):
-     #         rect2 = validating_dataset.bbox_convert_to_four_vertices([rect2])
-     #         p = patches.Polygon(rect2[0], linewidth=1,edgecolor='r',facecolor='none')
-     #         ax4.add_patch(p)
-     #
-     #     for j, rect3 in enumerate(anchors[positive_anchor_ix]):
-     #         rect3= validating_dataset.bbox_convert_to_four_vertices([rect3])
-     #         q = patches.Polygon(rect3[0], linewidth=1, edgecolor='b', facecolor='none')
-     #         ax5.add_patch(q)
-     #
-     #     for j, rect4 in enumerate(refined_anchors):
-     #         rect4 = validating_dataset.bbox_convert_to_four_vertices([rect4])
-     #         r = patches.Polygon(rect4[0], linewidth=1, edgecolor='b', facecolor='none')
-     #         ax6.add_patch(r)
-     #
-     # ax1.set_title('ROI')
-     # ax2.set_title('Anchors')
-     # ax3.set_title('GT grasp boxes')
-     # ax4.set_title('Negative Anchors')
-     # ax5.set_title('Positive Anchors')
-     # ax6.set_title('Refined Anchors')
-     # plt.show(block=False)
-     #
-     #
-     #
-     #
-     #
-     #
+code.interact(local=dict(globals(), **locals()))
 
 
 
@@ -1037,116 +872,3 @@ model.keras_model.save_weights(model_path)
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-     # grasp_boxes_subset = random.choices(gt_grasp_boxes, k=5)
-     # for i, rect in enumerate(grasp_boxes_subset):
-     #     rect = validating_dataset.bbox_convert_to_four_vertices([rect])
-     #     p = patches.Polygon(rect[0], linewidth=1,edigecolor='g',facecolor='none')
-     #     ax1.add_patch(p)
-     # ax1.set_title(validating_dataset.image_info[image_id]['path'])
-     #
-     # mask_image = testing_dataset.get_mask_overlay(original_image[:,:,0:3], gt_mask, [1], 0.96)
-     # ax2.imshow(mask_image)
-     # plt.show()
-     #
-     # results = mrcnn_model.detect([original_image], verbose=1)
-     # r = results[0]
-     # mask_image = testing_dataset.get_mask_overlay(original_image[:, :, 0:3], r['masks'], r['scores'], 0.96)
-     # bounding_boxes = r['rois']
-     #
-     # plt.imshow(mask_image);plt.show()
-     #
-     #
-     # regions_to_analyze = []
-     # for box in bounding_boxes:
-     #     y1, x1, y2, x2 = box
-     #     center_x = (x1 + x2) // 2
-     #     center_y = (y1 + y2) // 2
-     #     width = abs(x2 - x1) * 1.3
-     #     height = abs(y2 - y1) * 1.3
-     #
-     #     x1 = int(center_x - (width//2))
-     #     y1 = int(center_y - (height//2))
-     #     x2 = int(center_x + (width//2))
-     #     y2 = int(center_y + (height//2))
-     #     # p = patches.Rectangle((x1, y1), width, height, linewidth=2,
-     #     #                       alpha=0.7, linestyle="dashed",
-     #     #                       edgecolor='b', facecolor='none')
-     #     # ax.add_patch(p)
-     #     # regions_to_analyze.append([y1, x1, y2, x2])
-     #     image_crop = original_image[y1:y2, x1:x2, :]
-     #
-     #     input_image = np.zeros([image_crop.shape[0], image_crop.shape[1], 3])
-     #     input_image[:, :, 0:2] = image_crop[:,:,0:2]
-     #     input_image[:, :, 2] = image_crop[:,:,3]
-     #     input_image = input_image.astype('uint8')
-     #     #
-     #     # ax.imshow(input_image)
-     #     # plt.show(block=False)
-     #     #
-     #
-     #     grasping_results = grasping_model.detect([input_image], verbose=1, task='grasping_points')
-     #     r = grasping_results[0]
-     #     post_nms_predictions, pre_nms_predictions = testing_dataset.refine_results(r, grasping_model.anchors, config)
-     #
-     #     fig, ax = plt.subplots()
-     #     ax.imshow(input_image)
-     #     for i, rect2 in enumerate(pre_nms_predictions):
-     #         rect2 = testing_dataset.bbox_convert_to_four_vertices([rect2])
-     #         p2 = patches.Polygon(rect2[0], linewidth=2, edgecolor=testing_dataset.generate_random_color(),
-     #                              facecolor='none')
-     #         ax.add_patch(p2)
-     #         ax.set_title('Boxes post non-maximum supression')
-     #     plt.show()

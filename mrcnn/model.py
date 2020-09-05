@@ -1610,38 +1610,38 @@ def build_new_grasping_graph(rois, feature_maps, image_meta,
     # Conv layers
     x = KL.TimeDistributed(KL.Conv2D(512, (3, 3), padding="same"),
                            name="grasp_conv1")(x)
-    x = KL.TimeDistributed(BatchNorm(),
-                           name='grasp_bn1')(x, training=train_bn)
+    # x = KL.TimeDistributed(BatchNorm(),
+    #                        name='grasp_bn1')(x, training=train_bn)
     x = KL.Activation('relu')(x)
 
     x = KL.TimeDistributed(KL.Conv2D(512, (3, 3), padding="same"),
                            name="grasp_conv2")(x)
-    x = KL.TimeDistributed(BatchNorm(),
-                           name='grasp_bn2')(x, training=train_bn)
+    # x = KL.TimeDistributed(BatchNorm(),
+    #                        name='grasp_bn2')(x, training=train_bn)
     x = KL.Activation('relu')(x)
 
     x = KL.TimeDistributed(KL.Conv2D(512, (3, 3), padding="same"),
                            name="grasp_conv3")(x)
-    x = KL.TimeDistributed(BatchNorm(),
-                           name='grasp_bn3')(x, training=train_bn)
+    # x = KL.TimeDistributed(BatchNorm(),
+    #                        name='grasp_bn3')(x, training=train_bn)
     x = KL.Activation('relu')(x)
 
     x = KL.TimeDistributed(KL.Conv2D(512, (3, 3), padding="same"),
                            name="grasp_conv4")(x)
-    x = KL.TimeDistributed(BatchNorm(),
-                           name='grasp_bn4')(x, training=train_bn)
+    # x = KL.TimeDistributed(BatchNorm(),
+    #                        name='grasp_bn4')(x, training=train_bn)
 
     shared = KL.Activation('relu')(x)
-    #
-    # classification_1 = KL.TimeDistributed(KL.Conv2D(512, (3, 3), padding="same"),
-    #                        name="grasp_conv2")(shared)
+
+    classification_1 = KL.TimeDistributed(KL.Conv2D(1024, (3, 3), padding="same"),
+                           name="grasp_class_conv")(shared)
     # classification_1 = KL.TimeDistributed(BatchNorm(),
     #                        name='grasp_bn2')(classification_1, training=train_bn)
-    # classification_1 = KL.Activation('relu')(classification_1)
+    classification_1 = KL.Activation('relu')(classification_1)
 
     anchors_per_location = len(angles)
     classification = KL.TimeDistributed(KL.Conv2D(2 * anchors_per_location, (1, 1), padding='valid',
-                                 activation='linear'), name='grasp_class_raw')(shared)
+                                 activation='linear'), name='grasp_class_raw')(classification_1)
 
     # Reshape to [batch, num_rois, anchors, 2]
     grasp_class_logits = KL.TimeDistributed(
@@ -1651,14 +1651,14 @@ def build_new_grasping_graph(rois, feature_maps, image_meta,
     grasp_probs = KL.Activation(
         "softmax", name="grasp_class_xxx")(grasp_class_logits)
 
-    # regression_1 = KL.TimeDistributed(KL.Conv2D(512, (3, 3), padding="same"),
-    #                                       name="grasp_conv3")(shared)
+    regression_1 = KL.TimeDistributed(KL.Conv2D(1024, (3, 3), padding="same"),
+                                          name="grasp_reg_conv")(shared)
     # regression_1 = KL.TimeDistributed(BatchNorm(),
     #                                       name='grasp_bn3')(regression_1, training=train_bn)
-    # regression_1 = KL.Activation('relu')(regression_1)
+    regression_1 = KL.Activation('relu')(regression_1)
 
     regression = KL.TimeDistributed(KL.Conv2D(anchors_per_location * 5, (1, 1), padding="valid",
-                             activation='linear'), name='grasp_bbox_pred')(shared)
+                             activation='linear'), name='grasp_bbox_pred')(regression_1)
 
     # Reshape to [batch, anchors, 5]
     grasp_bbox = KL.TimeDistributed(
@@ -4858,17 +4858,25 @@ class MaskRCNN():
         if not os.path.exists(self.log_dir):
             os.makedirs(self.log_dir)
 
-        # Callbacks
-        clr_triangular = CyclicLR(base_lr=self.config.LEARNING_RATE/15, max_lr=self.config.LEARNING_RATE,
-                                  step_size=self.config.STEPS_PER_EPOCH*4, mode='triangular',
-                 gamma=1., scale_fn=None, scale_mode='cycle')
-        callbacks = [
-            clr_triangular,
-            keras.callbacks.TensorBoard(log_dir=self.log_dir,
-                                        histogram_freq=0, write_graph=True, write_images=False),
-            keras.callbacks.ModelCheckpoint(self.checkpoint_path,
-                                            verbose=0, save_weights_only=True, period = 4),
-        ]
+        if self.config.CYCLIC_LR:
+            #Callbacks
+            clr_triangular = CyclicLR(base_lr=self.config.LEARNING_RATE / 15, max_lr=self.config.LEARNING_RATE,
+                                      step_size=self.config.STEPS_PER_EPOCH * 4, mode='triangular',
+                                      gamma=1., scale_fn=None, scale_mode='cycle')
+            callbacks = [
+                clr_triangular,
+                keras.callbacks.TensorBoard(log_dir=self.log_dir,
+                                            histogram_freq=0, write_graph=True, write_images=False),
+                keras.callbacks.ModelCheckpoint(self.checkpoint_path,
+                                                verbose=0, save_weights_only=True, period=self.config.MODEL_SAVE_PERIOD),
+            ]
+        else:
+            callbacks = [
+                keras.callbacks.TensorBoard(log_dir=self.log_dir,
+                                            histogram_freq=0, write_graph=True, write_images=False),
+                keras.callbacks.ModelCheckpoint(self.checkpoint_path,
+                                                verbose=0, save_weights_only=True, period=self.config.MODEL_SAVE_PERIOD),
+            ]
 
         # Add custom callbacks to the list
         if custom_callbacks:
