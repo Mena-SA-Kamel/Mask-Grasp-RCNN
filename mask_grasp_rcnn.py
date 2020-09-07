@@ -76,11 +76,11 @@ class GraspMaskRCNNConfig(Config):
         "mrcnn_class_loss": 1.,
         "mrcnn_bbox_loss": 1.,
         "mrcnn_mask_loss": 1.,
-        "grasp_loss": 1.,
+        "grasp_loss": 0.2,
     }
     GRASP_LOSS_BETA = 10
     GRADIENT_CLIP_VALUE = 0.5 # was 0.1
-    CYCLIC_LR = True
+    CYCLIC_LR = False
     MODEL_SAVE_PERIOD = 8
     # TRAIN_BN=True
 
@@ -760,17 +760,17 @@ mode = "mask_grasp_rcnn"
 # COCO_MODEL_PATH = os.path.join("models", "mask_rcnn_object_vs_background_100_heads_50_all.h5")
 # COCO_MODEL_PATH = os.path.join("models", "mask_rcnn_object_vs_background_HYBRID-50_head_50_all.h5")
 # COCO_MODEL_PATH = 'models/Good_models/Training_SAMS_dataset_LR-same-div-2-HYBRID-weights.h5'
-COCO_MODEL_PATH = os.path.join("models", "Good_models", "Training_SAMS_dataset_LR-same-div-2-HYBRID-weights", "SAMS_DATASET_TRAINING_REFERENCE.h5")
-# COCO_MODEL_PATH = os.path.join("models", "mask_rcnn_coco.h5")
+# COCO_MODEL_PATH = os.path.join("models", "Good_models", "Training_SAMS_dataset_LR-same-div-2-HYBRID-weights", "SAMS_DATASET_TRAINING_REFERENCE.h5")
+COCO_MODEL_PATH = os.path.join("models", "mask_rcnn_coco.h5")
 model = modellib.MaskRCNN(mode="training", config=config,
                              model_dir=MODEL_DIR, task='mask_grasp_rcnn')
 
 
 
-# model.load_weights(COCO_MODEL_PATH, by_name=True,
-#                       exclude=["conv1", "mrcnn_class_logits", "mrcnn_bbox_fc",
-#                                "mrcnn_bbox", "mrcnn_mask"])
-model.load_weights(COCO_MODEL_PATH, by_name=True)
+model.load_weights(COCO_MODEL_PATH, by_name=True,
+                      exclude=["conv1", "mrcnn_class_logits", "mrcnn_bbox_fc",
+                               "mrcnn_bbox", "mrcnn_mask"])
+# model.load_weights(COCO_MODEL_PATH, by_name=True)
 
 # model.train(training_dataset, validating_dataset,
 #                learning_rate=config.LEARNING_RATE,
@@ -781,7 +781,7 @@ model.load_weights(COCO_MODEL_PATH, by_name=True)
 model.train(training_dataset, validating_dataset,
                learning_rate=config.LEARNING_RATE,
                epochs=400,
-               layers=r"(grasp\_.*)",
+               layers=r"(conv1)|(mrcnn\_.*)|(rpn\_.*)|(fpn\_.*)|(grasp\_.*)",
                task=mode)
 
 
