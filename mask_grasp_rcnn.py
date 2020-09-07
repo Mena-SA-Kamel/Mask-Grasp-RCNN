@@ -780,16 +780,16 @@ model.load_weights(COCO_MODEL_PATH, by_name=True,
 
 model.train(training_dataset, validating_dataset,
                learning_rate=config.LEARNING_RATE,
-               epochs=400,
+               epochs=200,
                layers=r"(conv1)|(mrcnn\_.*)|(rpn\_.*)|(fpn\_.*)|(grasp\_.*)",
                task=mode)
 
 
-# model.train(training_dataset, validating_dataset,
-#                 learning_rate=config.LEARNING_RATE/10,
-#                 epochs=300,
-#                 layers="all",
-#                 task=mode)
+model.train(training_dataset, validating_dataset,
+                learning_rate=config.LEARNING_RATE/10,
+                epochs=400,
+                layers="all",
+                task=mode)
 
 model_path = os.path.join(MODEL_DIR, "mask_grasp_rcnn.h5")
 model.keras_model.save_weights(model_path)
