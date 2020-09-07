@@ -73,14 +73,14 @@ class GraspMaskRCNNConfig(Config):
     LOSS_WEIGHTS = {
         "rpn_class_loss": 1.,
         "rpn_bbox_loss": 1.,
-        "mrcnn_class_loss": 1.,
-        "mrcnn_bbox_loss": 1.,
-        "mrcnn_mask_loss": 1.,
+        "mrcnn_class_loss": 0.5,
+        "mrcnn_bbox_loss": 0.5,
+        "mrcnn_mask_loss": 0.5,
         "grasp_loss": 0.2,
     }
     GRASP_LOSS_BETA = 10
-    GRADIENT_CLIP_VALUE = 0.5 # was 0.1
-    CYCLIC_LR = False
+    GRADIENT_CLIP_VALUE = 0.1 # was 0.1
+    CYCLIC_LR = True
     MODEL_SAVE_PERIOD = 8
     # TRAIN_BN=True
 
@@ -713,10 +713,10 @@ class GraspMaskRCNNDataset(Dataset):
 
         # top_boxes = all_boxes[probabilities[:,1] > config.DETECTION_MIN_CONFIDENCE]
         # top_box_probabilities = probabilities[probabilities[:,1] > config.DETECTION_MIN_CONFIDENCE]
-        top_boxes = all_boxes[probabilities[:,1] > 0.80]
-        top_box_probabilities = probabilities[probabilities[:,1] > 0.80]
-        # top_boxes = all_boxes[sorting_ix]
-        # top_box_probabilities = probabilities[sorting_ix]
+        # top_boxes = all_boxes[probabilities[:,1] > 0.80]
+        # top_box_probabilities = probabilities[probabilities[:,1] > 0.80]
+        top_boxes = all_boxes[sorting_ix]
+        top_box_probabilities = probabilities[sorting_ix]
         top_boxes, top_box_probabilities, pre_nms_boxes, pre_nms_scores = self.orient_box_nms(top_boxes, top_box_probabilities, config)
 
         return top_boxes, pre_nms_boxes
@@ -756,7 +756,7 @@ inference_config = GraspMaskRCNNInferenceConfig()
 MODEL_DIR = "models"
 mode = "mask_grasp_rcnn"
 
-#### TRAINING #####
+# #### TRAINING #####
 # COCO_MODEL_PATH = os.path.join("models", "mask_rcnn_object_vs_background_100_heads_50_all.h5")
 # COCO_MODEL_PATH = os.path.join("models", "mask_rcnn_object_vs_background_HYBRID-50_head_50_all.h5")
 # COCO_MODEL_PATH = 'models/Good_models/Training_SAMS_dataset_LR-same-div-2-HYBRID-weights.h5'
@@ -795,11 +795,11 @@ model_path = os.path.join(MODEL_DIR, "mask_grasp_rcnn.h5")
 model.keras_model.save_weights(model_path)
 
 ##### TESTING #####
-
+#
 # # mrcnn_model_path = 'models/Good_models/Training_SAMS_dataset_LR-div-5-div-10-HYBRID-weights/mask_rcnn_object_vs_background_0051.h5'
-# # mask_grasp_model_path = 'models/mask_grasp_rcnn_attempt#1b/mask_rcnn_grasp_and_mask_0200.h5'
+# mask_grasp_model_path = 'models/grasp_and_mask20200907T1127/mask_rcnn_grasp_and_mask_0132.h5'
 # # mask_grasp_model_path = 'models/mask_grasp_rcnn_attempt#1b/mask_rcnn_grasp_and_mask_0108.h5'
-# mask_grasp_model_path = 'models/colab_result_id#1/mask_rcnn_grasp_and_mask_0228.h5'
+# # mask_grasp_model_path = 'models/colab_result_id#1/mask_rcnn_grasp_and_mask_0228.h5'
 #
 #
 # mask_grasp_model = modellib.MaskRCNN(mode="inference",
@@ -893,7 +893,7 @@ model.keras_model.save_weights(model_path)
 # import code;
 #
 # code.interact(local=dict(globals(), **locals()))
-#
+
 
 
 
