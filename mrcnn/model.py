@@ -2666,7 +2666,7 @@ def load_image_gt(dataset, config, image_id, augment=False, augmentation=None, o
     elif mode == 'mask_grasp_rcnn':
         image = dataset.load_image(image_id, augmentation=augmentations, image_type=image_type)
         original_shape = image.shape
-        grasp_bbox_vertices, grasp_bbox_5_dimensional, grasp_class_ids = dataset.load_bounding_boxes(image_id, augmentations, config.NUM_GRASP_BOXES_PER_INSTANCE)
+        grasp_bbox_5_dimensional, grasp_class_ids = dataset.load_bounding_boxes(image_id, augmentations, config.NUM_GRASP_BOXES_PER_INSTANCE)
         mask, class_ids = dataset.load_mask(image_id)
         image, window, scale, padding, crop = utils.resize_image(
             image,
@@ -2675,8 +2675,8 @@ def load_image_gt(dataset, config, image_id, augment=False, augmentation=None, o
             max_dim=config.IMAGE_MAX_DIM,
             mode=config.IMAGE_RESIZE_MODE)
         mask = utils.resize_mask(mask, scale, padding, crop)
-        bbox_resized = utils.resize_bbox(window, grasp_bbox_vertices, original_shape)
-        bbox_resize_5_dimensional = dataset.bbox_convert_to_five_dimension(bbox_resized, image_id)
+        bbox_resize_5_dimensional = utils.resize_grasp_box(window, grasp_bbox_5_dimensional, original_shape)
+        # bbox_resize_5_dimensional = dataset.bbox_convert_to_five_dimension(bbox_resized, image_id)
 
     else:
         image = dataset.load_image(image_id, image_type=image_type)

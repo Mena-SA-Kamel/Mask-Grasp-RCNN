@@ -187,12 +187,6 @@ for dataset in os.listdir(target_path):
         #
         # for grasp_box in bbox_resized:
         #     x, y, w, h, theta = grasp_box
-        #
-        #     # import code;
-        #     #
-        #     # code.interact(local=dict(globals(), **locals()))
-        #     w_new = np.minimum(w, h)
-        #     h_new = np.maximum(w, h)
         #     x1 = x - w/2
         #     y1 = y - h/2
         #     theta %=360
