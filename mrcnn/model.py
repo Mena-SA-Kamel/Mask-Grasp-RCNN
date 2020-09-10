@@ -818,13 +818,17 @@ def grasping_overlaps_graph(anchors, boxes):
     iou = intersection / union
 
     # Compute delta theta between boxes1 and boxes2 to get the ARIoU
+
+
+    b1_theta *= 360
+    b2_theta *= 360
     angle_differences = tf.cos(tf_deg2rad(b1_theta) - tf_deg2rad(b2_theta))
+
     angle_differences = tf.maximum(angle_differences, 0)
     arIoU = iou * angle_differences
     arIoU = arIoU * tf.expand_dims(tf.cast(non_zero_grasp_boxes, dtype=tf.float32), axis=-1)
     arIoU = tf.expand_dims(tf.reshape(arIoU, tf.shape(grasping_anchors_reshaped)[:2]), axis=-1)
     arIoU = tf.reshape(tf.squeeze(arIoU), [-1, tf.shape(boxes)[1], tf.shape(anchors)[1]])
-
     return arIoU
 
 def generate_grasping_anchors_graph(inputs):
@@ -866,7 +870,8 @@ def generate_grasping_anchors_graph(inputs):
     box_sizes = tf.expand_dims(box_sizes, axis=-1)
     anchor_heights, anchor_widths = tf.split(K.repeat(box_sizes, n=GRASP_ANCHORS_PER_ROI), num_or_size_splits=2, axis=0)
     anchor_x, anchor_y, anchor_thetas = tf.split(boxes, num_or_size_splits=3, axis=-1)
-    anchor_thetas = anchor_thetas / 90.0 #normalization
+    anchor_thetas %= 360
+    anchor_thetas /= 360
     anchors = tf.concat([anchor_x, anchor_y, anchor_widths[0], anchor_heights[0], anchor_thetas], axis=-1)
 
     return anchors
@@ -1103,6 +1108,7 @@ def detection_targets_graph(proposals, gt_class_ids, gt_boxes, gt_masks, anchors
     final_roi_gt_grasp_boxes, final_roi_gt_grasp_class = process_gt_grasp_boxes(positive_rois, roi_gt_boxes,
                                                                                 roi_gt_grasp_boxes, roi_gt_grasp_class,
                                                                                 config)
+
     final_roi_gt_grasp_boxes = norm_grasp_boxes_graph(final_roi_gt_grasp_boxes, config.IMAGE_SHAPE[:2])
 
     if config.USE_EXPANDED_ROIS:
@@ -5585,13 +5591,13 @@ def norm_boxes_graph(boxes, shape):
 def norm_grasp_boxes_graph(boxes, shape):
     h, w = tf.split(tf.cast(shape, tf.float32), 2)
     # normalize angles relative to 90 degrees
-    scale = tf.concat([w - 1, h - 1, w - 1, h - 1, [90]], axis=-1)
+    scale = tf.concat([w - 1, h - 1, w - 1, h - 1, [360]], axis=-1)
     return tf.divide(boxes, scale)
 
 def denorm_grasp_boxes_graph(boxes, shape):
     h, w = tf.split(tf.cast(shape, tf.float32), 2)
     # normalize angles relative to 90 degrees
-    scale = tf.concat([w - 1, h - 1, w - 1, h - 1, [90]], axis=-1)
+    scale = tf.concat([w - 1, h - 1, w - 1, h - 1, [360]], axis=-1)
     return tf.round(tf.multiply(boxes, scale))
 
 

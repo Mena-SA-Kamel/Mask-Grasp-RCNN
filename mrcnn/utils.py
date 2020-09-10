@@ -518,6 +518,8 @@ def grasp_box_refinement_graph(box, gt_box, config):
     dy = (gt_center_y - a_center_y) / a_height
     dw = tf.math.log(gt_width / a_width)
     dh = tf.math.log(gt_height / a_height)
+
+
     dtheta = (gt_theta - a_theta) / (180 / len(config.GRASP_ANCHOR_ANGLES))
 
     result = tf.stack([dx, dy, dw, dh, dtheta], axis=1)
@@ -1076,7 +1078,8 @@ def generate_grasping_anchors(scales, ratios, shape, feature_stride, anchor_stri
         final_boxes[boxes[:, 2] == i, 2:4] = box_sizes[j]
         j += 1
     final_boxes[:,0:2] = boxes[:,0:2]
-    final_boxes[:,-1] = boxes[:,-1] /90.0
+    final_boxes[:,-1] = boxes[:,-1]%360
+    final_boxes[:,-1] = boxes[:,-1]/360
     return final_boxes
 
 
@@ -1355,7 +1358,7 @@ def norm_boxes(boxes, shape, mode=''):
     h, w = shape
     if mode == 'grasping_points':
         # normalize angles relative to 90 degrees
-        scale = np.array([w - 1, h - 1, w - 1, h - 1, 90])
+        scale = np.array([w - 1, h - 1, w - 1, h - 1, 360])
         return np.divide(boxes, scale).astype(np.float32)
     else:
         scale = np.array([h - 1, w - 1, h - 1, w - 1])
@@ -1376,7 +1379,7 @@ def denorm_boxes(boxes, shape, mode=''):
     """
     h, w = shape
     if mode == 'grasping_points':
-        scale = np.array([w - 1, h - 1, w - 1, h - 1, 90])
+        scale = np.array([w - 1, h - 1, w - 1, h - 1, 360])
         # return np.around(np.multiply(boxes, scale)).astype(np.float32)
         return (np.multiply(boxes, scale)).astype(np.float32)
     else:
