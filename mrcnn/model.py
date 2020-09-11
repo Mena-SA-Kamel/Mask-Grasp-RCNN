@@ -867,7 +867,7 @@ def generate_grasping_anchors_graph(inputs):
 
     # Creating anchors
     boxes = tf.reshape(tf.transpose(tf.meshgrid(shifts_x, shifts_y, GRASP_ANCHOR_ANGLES)), (-1, 3))
-    box_sizes = tf.concat([anchor_height, anchor_width / 2], axis=-1)
+    box_sizes = tf.concat([anchor_height, anchor_width], axis=-1)
 
     box_sizes = tf.expand_dims(box_sizes, axis=-1)
     anchor_heights, anchor_widths = tf.split(K.repeat(box_sizes, n=GRASP_ANCHORS_PER_ROI), num_or_size_splits=2, axis=0)
@@ -2139,10 +2139,6 @@ def grasp_loss_graph(config, target_bbox, target_class, bbox, class_logits, roi_
         N = tf.count_nonzero(positive_anchor_mask, axis=-1)
         N = K.cast(N, tf.int32)
         N = tf.expand_dims(N, axis=-1)
-
-        # N = tf.Print(N, [N],
-        #              message="N=",
-        #              summarize=-1)
 
         # Gather the negative anchor losses
         negative_indices = tf.where(K.equal(negative_anchor_mask, 1))
@@ -5057,8 +5053,8 @@ class MaskRCNN():
             class_ids = np.delete(class_ids, exclude_ix, axis=0)
             scores = np.delete(scores, exclude_ix, axis=0)
             masks = np.delete(masks, exclude_ix, axis=0)
-            grasp_boxes = np.delete(grasp_boxes, axis=0)
-            grasp_probs = np.delete(grasp_probs, axis=0)
+            grasp_boxes = np.delete(grasp_boxes, exclude_ix, axis=0)
+            grasp_probs = np.delete(grasp_probs, exclude_ix, axis=0)
             N = class_ids.shape[0]
 
         # Resize masks to original image size and set boundary threshold.

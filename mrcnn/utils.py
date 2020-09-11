@@ -1068,20 +1068,19 @@ def generate_grasping_anchors(scales, ratios, shape, feature_stride, anchor_stri
     shifts_y = (np.arange(0, shape[0], anchor_stride) * feature_stride[0]) + feature_stride[0]/2 + y1
     shifts_x = (np.arange(0, shape[1], anchor_stride) * feature_stride[1]) + feature_stride[1]/2 + x1
 
-    # box_sizes = np.stack([heights, widths], axis = 1)
-    box_sizes = np.stack([anchor_height, anchor_width], axis = 1)
-    num_anchor_sizes = np.arange(len(box_sizes))
-    boxes = np.array(np.meshgrid(shifts_x, shifts_y, num_anchor_sizes, thetas)).T.reshape(-1, 4)
-    final_boxes = np.zeros((boxes.shape[0], 5))
-    j = 0
-    for i in num_anchor_sizes:
-        final_boxes[boxes[:, 2] == i, 2:4] = box_sizes[j]
-        j += 1
-    final_boxes[:,0:2] = boxes[:,0:2]
-    final_boxes[:,-1] = boxes[:,-1]%360
-    final_boxes[:,-1] = final_boxes[:,-1]/360
+    boxes = np.reshape(np.transpose(np.meshgrid(shifts_x, shifts_y, thetas)), [-1, 3])
 
-    return final_boxes
+    box_sizes = np.stack([anchor_height, anchor_width], axis = -1)
+
+    anchor_heights, anchor_widths = np.split(np.repeat(box_sizes, boxes.shape[0], axis=0),2, axis=-1)
+
+    anchor_x, anchor_y, anchor_thetas = np.split(boxes, 3, axis=-1)
+    anchor_thetas %= 360
+    anchor_thetas /= 360
+    anchors = np.stack([anchor_x, anchor_y, anchor_widths, anchor_heights, anchor_thetas], axis=-1)
+    anchors = np.reshape(anchors, [-1, 5])
+
+    return anchors
 
 
 def generate_pyramid_anchors(scales, ratios, feature_shapes, feature_strides,
