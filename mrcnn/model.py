@@ -771,6 +771,8 @@ def generate_grasping_targets(grasp_overlaps, grasping_anchors, final_roi_gt_gra
     # grasp_deltas = tf.map_fn(fn=utils.grasp_box_refinement_graph,
     #                          elems=tf.concat([grasping_anchors, gt_grasp_boxes_filtered], axis=-1))
     grasp_deltas = utils.grasp_box_refinement_graph(grasping_anchors, gt_grasp_boxes_filtered, config)
+
+
     grasp_deltas /= config.GRASP_BBOX_STD_DEV
     grasp_anchor_match = tf.expand_dims(grasp_anchor_match, axis=-1)
     return grasping_anchors, grasp_anchor_match, grasp_deltas
@@ -858,10 +860,10 @@ def generate_grasping_anchors_graph(inputs):
 
     # Enumerate shifts in feature space
     shifts_y = tf.cast(tf.range(0, feature_map_shape[0], delta=GRASP_ANCHOR_STRIDE), dtype=tf.float32)
-    shifts_y = (shifts_y*stride_y) + stride_y/2 #+ y1
+    shifts_y = (shifts_y*stride_y) + stride_y/2 + y1
 
     shifts_x = tf.cast(tf.range(0, feature_map_shape[1], delta=GRASP_ANCHOR_STRIDE), dtype=tf.float32)
-    shifts_x = (shifts_x*stride_x) + stride_x / 2 #+ x1
+    shifts_x = (shifts_x*stride_x) + stride_x / 2 + x1
 
     # Creating anchors
     boxes = tf.reshape(tf.transpose(tf.meshgrid(shifts_x, shifts_y, GRASP_ANCHOR_ANGLES)), (-1, 3))
@@ -885,6 +887,7 @@ def process_gt_grasp_boxes(positive_rois, roi_gt_boxes, roi_gt_grasp_boxes, roi_
 
     positive_rois = tf.cast(denorm_boxes_graph(positive_rois, config.IMAGE_SHAPE[:2].astype('float32')), dtype=tf.float32)
 
+
     proposal_y1 = positive_rois[:, 0]
     proposal_x1 = positive_rois[:, 1]
     proposal_y2 = positive_rois[:, 2]
@@ -897,27 +900,30 @@ def process_gt_grasp_boxes(positive_rois, roi_gt_boxes, roi_gt_grasp_boxes, roi_
     #
     # dx_s = tf.expand_dims(roi_gt_boxes[:, 1] - proposal_center_x, axis=-1)
     # dy_s = tf.expand_dims(roi_gt_boxes[:, 0] - proposal_center_y, axis=-1)
-    dx_s = tf.expand_dims(proposal_x1, axis=-1)
-    dy_s = tf.expand_dims(proposal_y1, axis=-1)
-    dx_s = tf.tile(dx_s, [1, tf.shape(roi_gt_grasp_boxes[:, :, 0])[1]])
-    dy_s = tf.tile(dy_s, [1, tf.shape(roi_gt_grasp_boxes[:, :, 1])[1]])
 
-    gt_grasp_box_x = tf.expand_dims(tf.subtract(roi_gt_grasp_boxes[:, :, 0], dx_s), axis=-1)
-    gt_grasp_box_y = tf.expand_dims(tf.subtract(roi_gt_grasp_boxes[:, :, 1], dy_s), axis=-1)
+    # dx_s = tf.expand_dims(proposal_x1, axis=-1)
+    # dy_s = tf.expand_dims(proposal_y1, axis=-1)
+    # dx_s = tf.tile(dx_s, [1, tf.shape(roi_gt_grasp_boxes[:, :, 0])[1]])
+    # dy_s = tf.tile(dy_s, [1, tf.shape(roi_gt_grasp_boxes[:, :, 1])[1]])
+
+    # gt_grasp_box_x = tf.expand_dims(tf.subtract(roi_gt_grasp_boxes[:, :, 0], dx_s), axis=-1)
+    # gt_grasp_box_y = tf.expand_dims(tf.subtract(roi_gt_grasp_boxes[:, :, 1], dy_s), axis=-1)
+    gt_grasp_box_x = tf.expand_dims(roi_gt_grasp_boxes[:, :, 0], axis=-1)
+    gt_grasp_box_y = tf.expand_dims(roi_gt_grasp_boxes[:, :, 1], axis=-1)
     gt_grasp_box_w = tf.expand_dims(roi_gt_grasp_boxes[:, :, 2], axis=-1)
     gt_grasp_box_h = tf.expand_dims(roi_gt_grasp_boxes[:, :, 3], axis=-1)
     gt_grasp_box_theta = tf.expand_dims(roi_gt_grasp_boxes[:, :, 4], axis=-1)
-
-    # Gt grasp boxes specified in the reference frame of each proposal
-    referenced_grasp_boxes = tf.concat([gt_grasp_box_x, gt_grasp_box_y, gt_grasp_box_w, gt_grasp_box_h,
-                                        gt_grasp_box_theta], axis=-1)
+    #
+    # # Gt grasp boxes specified in the reference frame of each proposal
+    # referenced_grasp_boxes = tf.concat([gt_grasp_box_x, gt_grasp_box_y, gt_grasp_box_w, gt_grasp_box_h,
+    #                                     gt_grasp_box_theta], axis=-1)
 
     # Next we need to remove the GT grasp boxes that cross the proposal boundary
     # Then, represent the GT grasp boxes relative to the adaptive size proposal anchors
 
     # Multiplying the radius by a sensitivity factor - Large sensitivity = removes more boxes
     # sensitivity = 0.7  # 0 means just checks if the gt_grasp_box center <x,y> is in the RoI
-    sensitivity = 0  # 0 means just checks if the gt_grasp_box center <x,y> is in the RoI
+    sensitivity = config.ROI_BOX_SENSITIVITY  # 0 means just checks if the gt_grasp_box center <x,y> is in the RoI
     radius = (((gt_grasp_box_w / 2) ** 2 + (gt_grasp_box_h / 2) ** 2) ** 0.5) * sensitivity
     proposal_y1_reshaped = K.repeat(tf.expand_dims(proposal_y1, axis=-1), n=radius.shape[1])
     proposal_x1_reshaped = K.repeat(tf.expand_dims(proposal_x1, axis=-1), n=radius.shape[1])
@@ -927,18 +933,20 @@ def process_gt_grasp_boxes(positive_rois, roi_gt_boxes, roi_gt_grasp_boxes, roi_
 
     # valid_grasp_boxes is a mask for the boxes that lie within the boundary of the proposals, True for valid boxes,
     # false otherwise
-    valid_grasp_boxes = tf.less(gt_grasp_box_x + radius, tf.abs(proposal_x2_reshaped - proposal_x1_reshaped))
-    valid_grasp_boxes = tf.logical_and(valid_grasp_boxes, tf.greater(gt_grasp_box_x - radius, 0.0))
-    valid_grasp_boxes = tf.logical_and(valid_grasp_boxes, tf.less(gt_grasp_box_y + radius, tf.abs(proposal_y2_reshaped - proposal_y1_reshaped)))
-    valid_grasp_boxes = tf.logical_and(valid_grasp_boxes, tf.greater(gt_grasp_box_y - radius, 0.0))
+    # valid_grasp_boxes = tf.less(gt_grasp_box_x + radius, tf.abs(proposal_x2_reshaped - proposal_x1_reshaped))
+    # valid_grasp_boxes = tf.logical_and(valid_grasp_boxes, tf.greater(gt_grasp_box_x - radius, 0.0))
+    # valid_grasp_boxes = tf.logical_and(valid_grasp_boxes, tf.less(gt_grasp_box_y + radius, tf.abs(proposal_y2_reshaped - proposal_y1_reshaped)))
+    # valid_grasp_boxes = tf.logical_and(valid_grasp_boxes, tf.greater(gt_grasp_box_y - radius, 0.0))
+
+    valid_grasp_boxes = tf.less(gt_grasp_box_x + radius, proposal_x2_reshaped)
+    valid_grasp_boxes = tf.logical_and(valid_grasp_boxes, tf.greater(gt_grasp_box_x - radius, proposal_x1_reshaped))
+    valid_grasp_boxes = tf.logical_and(valid_grasp_boxes, tf.less(gt_grasp_box_y + radius, proposal_y2_reshaped))
+    valid_grasp_boxes = tf.logical_and(valid_grasp_boxes, tf.greater(gt_grasp_box_y - radius, proposal_y1_reshaped))
 
     # Multiply the referenced_grasp_boxes and roi_gt_grasp_class with valid_grasp_boxes mask to convert the invalid
     # boxes and their classes to zeros - THIS MIGHT OMIT ALL BOXES FOR CIRCULAR OBJECTS
-    final_roi_gt_grasp_boxes = referenced_grasp_boxes * tf.cast(valid_grasp_boxes, dtype='float32')
+    final_roi_gt_grasp_boxes = roi_gt_grasp_boxes * tf.cast(valid_grasp_boxes, dtype='float32')
     final_roi_gt_grasp_class = roi_gt_grasp_class * tf.cast(valid_grasp_boxes, dtype='float32')
-    # final_roi_gt_grasp_boxes = tf.Print(final_roi_gt_grasp_boxes, [tf.shape(final_roi_gt_grasp_boxes)],
-    #                                   message="final_roi_gt_grasp_boxes=",
-    #                                   summarize=-1)
 
     return final_roi_gt_grasp_boxes, final_roi_gt_grasp_class
 
@@ -1098,8 +1106,11 @@ def detection_targets_graph(proposals, gt_class_ids, gt_boxes, gt_masks, anchors
     masks = tf.round(masks)
 
     # Picking the right grasping gt boxes for each ROI
+    # SHAPE: [num of ROIS, config.NUM_GRASP_BOXES_PER_INSTANCE, 5]
     roi_gt_grasp_boxes = tf.cast(tf.gather(gt_grasp_boxes, roi_gt_box_assignment), dtype=tf.float32)
+    # SHAPE: [num of ROIS, config.NUM_GRASP_BOXES_PER_INSTANCE, 1]
     roi_gt_grasp_class = tf.cast(tf.gather(gt_grasp_class, roi_gt_box_assignment), dtype=tf.float32)
+
 
     # At this point roi_gt_grasp_boxes are the GT grasping boxes for each positive ROI specified by positive_rois
     # Need to specify the GT grasping boxes in the proposal frame of reference
@@ -1150,6 +1161,7 @@ def detection_targets_graph(proposals, gt_class_ids, gt_boxes, gt_masks, anchors
                                                     final_roi_gt_grasp_boxes, config),
         false_fn=lambda: generate_zero_targets(grasping_anchors, config)
     )
+
 
     # grasping_anchors, grasp_anchor_match, grasp_deltas = generate_grasping_targets(grasp_overlaps, grasping_anchors,
     #                                                                                final_roi_gt_grasp_boxes, config)

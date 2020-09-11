@@ -1079,7 +1079,8 @@ def generate_grasping_anchors(scales, ratios, shape, feature_stride, anchor_stri
         j += 1
     final_boxes[:,0:2] = boxes[:,0:2]
     final_boxes[:,-1] = boxes[:,-1]%360
-    final_boxes[:,-1] = boxes[:,-1]/360
+    final_boxes[:,-1] = final_boxes[:,-1]/360
+
     return final_boxes
 
 
