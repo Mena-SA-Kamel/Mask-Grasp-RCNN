@@ -84,6 +84,7 @@ class GraspMaskRCNNConfig(Config):
     CYCLIC_LR = True
     MODEL_SAVE_PERIOD = 8
     TRAIN_BN = False
+    TRAIN_GRASP_BN = False
 
 
 class GraspMaskRCNNInferenceConfig(GraspMaskRCNNConfig):
@@ -714,8 +715,8 @@ class GraspMaskRCNNDataset(Dataset):
 
         # top_boxes = all_boxes[probabilities[:,1] > config.DETECTION_MIN_CONFIDENCE]
         # top_box_probabilities = probabilities[probabilities[:,1] > config.DETECTION_MIN_CONFIDENCE]
-        top_boxes = all_boxes[probabilities[:,1] > 0.85]
-        top_box_probabilities = probabilities[probabilities[:,1] > 0.85]
+        top_boxes = all_boxes[probabilities[:,1] > 0.90]
+        top_box_probabilities = probabilities[probabilities[:,1] > 0.90]
         # top_boxes = all_boxes[sorting_ix]
         # top_box_probabilities = probabilities[sorting_ix]
         top_boxes, top_box_probabilities, pre_nms_boxes, pre_nms_scores = self.orient_box_nms(top_boxes, top_box_probabilities, config)
@@ -798,7 +799,7 @@ mode = "mask_grasp_rcnn"
 # mrcnn_model_path = 'models/Good_models/Training_SAMS_dataset_LR-div-5-div-10-HYBRID-weights/mask_rcnn_object_vs_background_0051.h5'
 # mask_grasp_model_path = 'models/grasp_and_mask20200905T1322/mask_rcnn_grasp_and_mask_0400.h5'
 # mask_grasp_model_path = 'models/mask_grasp_rcnn_attempt#1b/mask_rcnn_grasp_and_mask_0108.h5'
-mask_grasp_model_path = 'models/colab_result_id#1/mask_rcnn_grasp_and_mask_0144.h5'
+mask_grasp_model_path = 'models/colab_result_id#1/mask_rcnn_grasp_and_mask_0120.h5'
 
 
 mask_grasp_model = modellib.MaskRCNN(mode="inference",
@@ -828,12 +829,20 @@ for image_id in image_ids:
          grasping_deltas = r['grasp_boxes']
          grasping_probs = r['grasp_probs']
 
-         fig, (ax1, ax2, ax3, ax4, ax5) = plt.subplots(1, 5, figsize=(15, 5))
-         ax1.imshow(mask_image)
-         ax2.imshow(original_image)
-         ax3.imshow(original_image)
-         ax4.imshow(original_image)
-         ax5.imshow(original_image)
+         fig, axs = plt.subplots(2, 3)#figsize=(25, 5))
+         axs[0, 0].imshow(original_image)
+         axs[0, 1].imshow(mask_image)
+         axs[0, 2].imshow(original_image)
+         axs[1, 0].imshow(original_image)
+         axs[1, 1].imshow(original_image)
+         axs[1, 2].imshow(original_image)
+
+         axs[0, 0].set_title('Original Image')
+         axs[0, 1].set_title('Masks and ROIs')
+         axs[0, 2].set_title('Grasping anchors')
+         axs[1, 0].set_title('GT grasp boxes')
+         axs[1, 1].set_title('Boxes pre non-maximum supression')
+         axs[1, 2].set_title('Boxes post non-maximum supression')
          bboxes = r['rois']
 
          for bbox in bboxes:
@@ -841,7 +850,7 @@ for image_id in image_ids:
                                                          image_shape=config.IMAGE_SHAPE[:2])
              y1, x1, y2, x2 = expanded_rect
              p = patches.Rectangle((x1, y1), (x2-x1), (y2-y1), angle=0, edgecolor=dataset.generate_random_color(), linewidth=2, facecolor='none')
-             ax1.add_patch(p)
+             axs[0, 0].add_patch(p)
 
 
          for j, rect in enumerate(r['rois']):
@@ -869,40 +878,40 @@ for image_id in image_ids:
              post_nms_predictions, pre_nms_predictions = dataset.refine_results(grasping_probs[j], grasping_deltas[j],
                                                                                 grasping_anchors, config)
 
-             ax1.set_title('Original Image')
+
              for i, rect in enumerate(pre_nms_predictions):
                  x, y, w, h, theta = rect
                  x1 = x - w / 2
                  y1 = y - h / 2
                  theta %= 360
-                 p = patches.Rectangle((x1, y1), w, h, angle=0, edgecolor=dataset.generate_random_color(),
-                                       linewidth=0.5, facecolor='none')
-                 t2 = mpl.transforms.Affine2D().rotate_deg_around(x, y, theta) + ax2.transData
+                 p = patches.Rectangle((x1, y1), w, h, angle=0, edgecolor=color,
+                                       linewidth=1, facecolor='none')
+                 t2 = mpl.transforms.Affine2D().rotate_deg_around(x, y, theta) + axs[1, 1].transData
                  p.set_transform(t2)
-                 ax2.add_patch(p)
-                 ax2.set_title('Grasp RPN output ')
+                 axs[1, 1].add_patch(p)
+
              for i, rect2 in enumerate(post_nms_predictions):
                  x, y, w, h, theta = rect2
                  x1 = x - w / 2
                  y1 = y - h / 2
                  theta %= 360
-                 p2 = patches.Rectangle((x1, y1), w, h, angle=0, edgecolor=dataset.generate_random_color(),
-                                       linewidth=0.5, facecolor='none')
-                 t2 = mpl.transforms.Affine2D().rotate_deg_around(x, y, theta) + ax3.transData
+                 p2 = patches.Rectangle((x1, y1), w, h, angle=0, edgecolor=color,
+                                       linewidth=1, facecolor='none')
+                 t2 = mpl.transforms.Affine2D().rotate_deg_around(x, y, theta) + axs[1, 2].transData
                  p2.set_transform(t2)
-                 ax3.add_patch(p2)
-                 ax3.set_title('Boxes post non-maximum supression')
+                 axs[1, 2].add_patch(p2)
+
              for i, rect3 in enumerate(utils.denorm_boxes(grasping_anchors, config.IMAGE_SHAPE[:2], 'grasping_points')):
                  x, y, w, h, theta = rect3
                  x1 = x - w / 2
                  y1 = y - h / 2
                  theta %= 360
-                 p3 = patches.Rectangle((x1, y1), w, h, angle=0, edgecolor=dataset.generate_random_color(),
+                 p3 = patches.Rectangle((x1, y1), w, h, angle=0, edgecolor=color,
                                         linewidth=0.5, facecolor='none')
-                 t2 = mpl.transforms.Affine2D().rotate_deg_around(x, y, theta) + ax4.transData
+                 t2 = mpl.transforms.Affine2D().rotate_deg_around(x, y, theta) + axs[0, 2].transData
                  p3.set_transform(t2)
-                 ax4.add_patch(p3)
-                 ax4.set_title('Grasping anchors')
+                 axs[0, 2].add_patch(p3)
+
          for roi_instance in gt_grasp_boxes:
             for i, rect4 in enumerate(roi_instance):
                 if np.sum(rect4) == 0:
@@ -911,12 +920,12 @@ for image_id in image_ids:
                 x1 = x - w / 2
                 y1 = y - h / 2
                 theta %= 360
-                p4 = patches.Rectangle((x1, y1), w, h, angle=0, edgecolor=dataset.generate_random_color(),
+                p4 = patches.Rectangle((x1, y1), w, h, angle=0, edgecolor=color,
                                        linewidth=0.5, facecolor='none')
-                t2 = mpl.transforms.Affine2D().rotate_deg_around(x, y, theta) + ax5.transData
+                t2 = mpl.transforms.Affine2D().rotate_deg_around(x, y, theta) + axs[1, 0].transData
                 p4.set_transform(t2)
-                ax5.add_patch(p4)
-                ax5.set_title('GT grasp boxes')
+                axs[1, 0].add_patch(p4)
+
          fig.suptitle('Image path : ' + dataset.image_info[image_id]['path'] +
                                        '\nAugmentations : [\'angle\', \'dx\', \'dy\', \'flip\'] => ' +
                                        str(dataset.image_info[image_id]['augmentation']))

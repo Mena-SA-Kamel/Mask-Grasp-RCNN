@@ -4343,7 +4343,8 @@ class MaskRCNN():
                                                                                    use_expanded_rois=config.USE_EXPANDED_ROIS,
                                                                                    rois_expand_factor=config.GRASP_ROI_EXPAND_FACTOR,
                                                                                    anchor_stride=config.GRASP_ANCHOR_STRIDE,
-                                                                                   train_bn=True, num_grasp_anchors=config.GRASP_ANCHORS_PER_ROI,
+                                                                                   train_bn=config.TRAIN_GRASP_BN,
+                                                                                   num_grasp_anchors=config.GRASP_ANCHORS_PER_ROI,
                                                                                    angles=config.GRASP_ANCHOR_ANGLES)
 
             mrcnn_mask = build_fpn_mask_graph(rois, mrcnn_feature_maps,
@@ -4416,7 +4417,7 @@ class MaskRCNN():
                                                                                    use_expanded_rois=config.USE_EXPANDED_ROIS,
                                                                                    rois_expand_factor=config.GRASP_ROI_EXPAND_FACTOR,
                                                                                    anchor_stride=config.GRASP_ANCHOR_STRIDE,
-                                                                                   train_bn=True,
+                                                                                   train_bn=config.TRAIN_GRASP_BN,
                                                                                    num_grasp_anchors=config.GRASP_ANCHORS_PER_ROI,
                                                                                    angles=config.GRASP_ANCHOR_ANGLES)
 
