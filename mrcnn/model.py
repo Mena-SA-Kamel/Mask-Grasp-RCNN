@@ -772,7 +772,6 @@ def generate_grasping_targets(grasp_overlaps, grasping_anchors, final_roi_gt_gra
     #                          elems=tf.concat([grasping_anchors, gt_grasp_boxes_filtered], axis=-1))
     grasp_deltas = utils.grasp_box_refinement_graph(grasping_anchors, gt_grasp_boxes_filtered, config)
 
-
     grasp_deltas /= config.GRASP_BBOX_STD_DEV
     grasp_anchor_match = tf.expand_dims(grasp_anchor_match, axis=-1)
     return grasping_anchors, grasp_anchor_match, grasp_deltas
@@ -824,10 +823,15 @@ def grasping_overlaps_graph(anchors, boxes):
 
     b1_theta *= 360
     b2_theta *= 360
-    angle_differences = tf.cos(tf_deg2rad(b1_theta) - tf_deg2rad(b2_theta))
 
-    angle_differences = tf.maximum(angle_differences, 0)
-    arIoU = iou * angle_differences
+    x_minus_y = tf_deg2rad(b1_theta) - tf_deg2rad(b2_theta)
+    angle_difference = tf.atan2(tf.sin(x_minus_y), tf.cos(x_minus_y))
+    angle_scalar = tf.cos(angle_difference)
+
+    # angle_differences = tf.cos(tf_deg2rad(b1_theta) - tf_deg2rad(b2_theta))
+
+    angle_scalar = tf.maximum(angle_scalar, 0)
+    arIoU = iou * angle_scalar
     arIoU = arIoU * tf.expand_dims(tf.cast(non_zero_grasp_boxes, dtype=tf.float32), axis=-1)
     arIoU = tf.expand_dims(tf.reshape(arIoU, tf.shape(grasping_anchors_reshaped)[:2]), axis=-1)
     arIoU = tf.reshape(tf.squeeze(arIoU), [-1, tf.shape(boxes)[1], tf.shape(anchors)[1]])
@@ -2139,6 +2143,10 @@ def grasp_loss_graph(config, target_bbox, target_class, bbox, class_logits, roi_
         N = tf.count_nonzero(positive_anchor_mask, axis=-1)
         N = K.cast(N, tf.int32)
         N = tf.expand_dims(N, axis=-1)
+        #
+        # N = tf.Print(N, [N],
+        #                             message="N=",
+        #                             summarize=-1)
 
         # Gather the negative anchor losses
         negative_indices = tf.where(K.equal(negative_anchor_mask, 1))

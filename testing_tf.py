@@ -1,11 +1,12 @@
 from math import pi
 
 import keras.backend as K
+import matplotlib.patches as patches
+import matplotlib.pyplot as plt
 import numpy as np
 import tensorflow as tf
-import matplotlib.pyplot as plt
+
 import mrcnn.utils as utils
-import matplotlib.patches as patches
 
 tf.enable_eager_execution()
 # loss = np.arange(60)
@@ -573,9 +574,12 @@ for i in range(gt_boxes_np.shape[0]):
         p = patches.Polygon(rect, linewidth=0.5,edgecolor='2',facecolor='none')
         fig.axes[i].add_patch(p)
 
-
-
-plt.show()
+#
+# import code; code.interact(local=dict(globals(), **locals()))
+# x_minus_y = tf_deg2rad(30) - tf_deg2rad(60)
+# angle_difference = tf.atan2(tf.sin(x_minus_y), tf.cos(x_minus_y))
+# angle_scalar = tf.cos(angle_difference)
+# plt.show()
 
 #
 # rois = np.random.rand(3, 10, 4)

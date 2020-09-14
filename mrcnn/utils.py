@@ -27,6 +27,7 @@ from distutils.version import LooseVersion
 from matplotlib.path import Path
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
+from math import pi
 
 # URL from which to download the latest COCO trained weights
 COCO_MODEL_URL = "https://github.com/matterport/Mask_RCNN/releases/download/v2.0/mask_rcnn_coco.h5"
@@ -492,6 +493,14 @@ def grasp_box_refinement_graph_old(inputs):
     final_result = tf.tensor_scatter_nd_update(result, invalid_locations, refinements_replace)
     return final_result
 
+def tf_deg2rad(angle):
+    pi_over_180 = pi /180
+    return angle * pi_over_180
+
+def tf_rad2deg(angle):
+    pi_over_180 = pi /180
+    return angle / pi_over_180
+
 def grasp_box_refinement_graph(box, gt_box, config):
     # Need to create a mask to keep valid refinements, ie: where the grasp box is not all zeros
     box_flattened = tf.reshape(box, [-1, 5])
@@ -519,14 +528,21 @@ def grasp_box_refinement_graph(box, gt_box, config):
     dw = tf.math.log(gt_width / a_width)
     dh = tf.math.log(gt_height / a_height)
 
+    gt_theta *= 360
+    a_theta *= 360
 
-    dtheta = (gt_theta - a_theta) / (180 / len(config.GRASP_ANCHOR_ANGLES))
+    x_minus_y = tf_deg2rad(gt_theta) - tf_deg2rad(a_theta)
+    angle_difference = tf.atan2(tf.sin(x_minus_y), tf.cos(x_minus_y))
+    angle_difference = tf_rad2deg(angle_difference)
+
+    dtheta = (angle_difference) / (180 / len(config.GRASP_ANCHOR_ANGLES))
 
     result = tf.stack([dx, dy, dw, dh, dtheta], axis=1)
     # Replacing refinements of zero boxes with zeros
 
     final_result = tf.tensor_scatter_nd_update(result, invalid_locations, refinements_replace)
     final_result_reshaped = tf.reshape(final_result, tf.shape(gt_box))
+
     return final_result_reshaped
 
 def box_refinement_graph(box, gt_box):
