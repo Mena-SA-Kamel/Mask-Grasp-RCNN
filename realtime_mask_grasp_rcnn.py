@@ -16,9 +16,9 @@ import random
 
 
 def generate_random_color():
-    r = random.random()*255
-    b = random.random()*255
-    g = random.random()*255
+    r = int(random.random()*255)
+    b = int(random.random()*255)
+    g = int(random.random()*255)
     return (r, g, b)
 
 def resize_frame(image):
@@ -60,7 +60,7 @@ inference_config = GraspMaskRCNNInferenceConfig()
 
 MODEL_DIR = "models"
 # mask_grasp_model_path = 'models/colab_result_id#1/mask_rcnn_grasp_and_mask_0152.h5'
-mask_grasp_model_path = 'models/colab_result_id#1/mask_rcnn_grasp_and_mask_0500.h5'
+mask_grasp_model_path = 'models/colab_result_id#1/mask_rcnn_grasp_and_mask_0208.h5'
 
 
 mask_grasp_model = modellib.MaskRCNN(mode="inference",
@@ -143,8 +143,9 @@ try:
             post_nms_predictions, pre_nms_predictions = dataset_object.refine_results(probabilities=grasping_probs[j], deltas=grasping_deltas[j],anchors=grasping_anchors, config=inference_config)
 
             for i, rect in enumerate(pre_nms_predictions):
-                rect = dataset_object.bbox_convert_to_four_vertices([rect])
-                grasp_rectangles_image = cv2.drawContours(color_image_to_display, np.int0(rect), 0, color, 2)
+                # rect = dataset_object.bbox_convert_to_four_vertices([rect])
+                rect = cv2.boxPoints(((rect[0], rect[1]), (rect[2], rect[3]), rect[4]))
+                grasp_rectangles_image = cv2.drawContours(color_image_to_display, [np.int0(rect)], 0, color, 2)
 
         depth_3_channel = cv2.cvtColor(rgbd_image_resized[:, :, 3].astype('uint8'), cv2.COLOR_GRAY2BGR)
         if plot_boxes:

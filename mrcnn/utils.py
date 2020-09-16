@@ -431,7 +431,7 @@ def apply_box_deltas(boxes, deltas, mode='', num_angles=0):
         y = center_y + (deltas[:, 1] * height)
         w = width * np.exp(deltas[:, 2])
         h = height * np.exp(deltas[:, 3])
-
+        theta *= 360
         angle = theta + (deltas[:, 4] * (180/num_angles))
         return np.stack([x, y, w, h, angle], axis=1)
 
