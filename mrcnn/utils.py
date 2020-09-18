@@ -896,27 +896,27 @@ def resize_grasp_box(window, grasp_box, original_shape):
     resized_boxes = np.concatenate([x_new, y_new, w_new, h_new, theta], axis=-1)
     return resized_boxes
 
-# def resize_bbox(window, bbox_vertices, original_shape):
-#     """ Resizes the bounding_boxes specified by bbox_vertices using the affine transformation
-#     window: (y1, x1, y2, x2).
-#     """
-#     width = original_shape[1]
-#     height = original_shape[0]
-#     original_points = np.float32([[0,0], [0, height - 1], [width - 1, 0] ])
-#
-#     # window
-#     y1, x1, y2, x2 = window
-#     # final_points = np.float32([[y1, x1], [y2-1, x1], [y1, x2-1]])
-#     final_points = np.float32([[x1, y1], [x1, y2-1], [x2-1, y1]])
-#     transformation_matrix = cv2.getAffineTransform(original_points, final_points)
-#     resized_bbox_vertices = []
-#     for object_instance in bbox_vertices:
-#         instance_bbox_vertices = []
-#         for box in object_instance:
-#             box = np.array([np.float32(box)])
-#             instance_bbox_vertices.extend(cv2.transform(box, transformation_matrix).astype(int))
-#         resized_bbox_vertices.append(np.array(instance_bbox_vertices))
-#     return np.array(resized_bbox_vertices)
+def resize_bbox(window, bbox_vertices, original_shape):
+    """ Resizes the bounding_boxes specified by bbox_vertices using the affine transformation
+    window: (y1, x1, y2, x2).
+    """
+    width = original_shape[1]
+    height = original_shape[0]
+    original_points = np.float32([[0,0], [0, height - 1], [width - 1, 0] ])
+
+    # window
+    y1, x1, y2, x2 = window
+    # final_points = np.float32([[y1, x1], [y2-1, x1], [y1, x2-1]])
+    final_points = np.float32([[x1, y1], [x1, y2-1], [x2-1, y1]])
+    transformation_matrix = cv2.getAffineTransform(original_points, final_points)
+    resized_bbox_vertices = []
+    for object_instance in bbox_vertices:
+        instance_bbox_vertices = []
+        for box in object_instance:
+            box = np.array([np.float32(box)])
+            instance_bbox_vertices.extend(cv2.transform(box, transformation_matrix).astype(int))
+        resized_bbox_vertices.append(np.array(instance_bbox_vertices))
+    return np.array(resized_bbox_vertices)
 
 
 def resize_mask(mask, scale, padding, crop=None):

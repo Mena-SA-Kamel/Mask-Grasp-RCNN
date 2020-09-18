@@ -4,6 +4,7 @@ import matplotlib.image as mpimg
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 import random
+from math import pi
 
 def validate_box(bbox, image_shape):
     # checks if the bbox_vertices are all contained in the image boundaries
@@ -15,6 +16,10 @@ def validate_box(bbox, image_shape):
 
     return not(len(invalid_x) + len(invalid_y) > 0)
 
+def deg2rad(angle):
+    pi_over_180 = pi /180
+    return angle * pi_over_180
+
 def rotate_bboxes(bboxes, rotation_angle, image_shape, class_ids, scale=1):
     bbox_new = []
     invalid_indices = []
@@ -22,12 +27,18 @@ def rotate_bboxes(bboxes, rotation_angle, image_shape, class_ids, scale=1):
     rotational_matrix = cv2.getRotationMatrix2D((img_center_x, img_center_y), rotation_angle, scale)
 
     for i in range(bboxes.shape[0]):
+        # import code;
+        # code.interact(local=dict(globals(), **locals()))
         x, y, w, h, theta = bboxes[i]
         center_location = bboxes[i,:2]
         center_location = np.append(center_location, 1)
         new_x, new_y = np.dot(center_location , rotational_matrix.T)
-        new_theta = theta + rotation_angle
-        transformed_bbox = [new_x, new_y, w, h, theta + new_theta]
+
+        # new_theta = deg2rad(theta) + deg2rad(1*rotation_angle)
+        # angle = np.arctan2(np.sin(new_theta), np.cos(new_theta))
+        # angle /= (pi /180)
+
+        transformed_bbox = [new_x, new_y, w, h, theta + rotation_angle]
 
         if validate_box(transformed_bbox, image_shape):
             bbox_new.append(transformed_bbox)

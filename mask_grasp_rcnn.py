@@ -21,6 +21,8 @@ from PIL import Image
 import image_augmentation
 import cv2
 import math
+from random import randrange
+from PIL import Image, ImageEnhance
 
 
 # from grasping_points import GraspingInferenceConfig, GraspingPointsDataset
@@ -85,6 +87,8 @@ class GraspMaskRCNNConfig(Config):
     MODEL_SAVE_PERIOD = 8
     TRAIN_BN = False
     TRAIN_GRASP_BN = False
+    NUM_AUGMENTATIONS = 0
+    CENTER_CROP_IMAGE = False
 
 
 class GraspMaskRCNNInferenceConfig(GraspMaskRCNNConfig):
@@ -108,6 +112,15 @@ class GraspMaskRCNNDataset(Dataset):
                 self.add_image("grasp_and_mask", image_id=id, path=rgb_path,
                                 depth_path=depth_path, label_path=label_path, positive_points=positive_grasp_points, augmentation = [])
                 ## To do: Enable augmentation
+                if augmentation:
+                    # Augmentation will create hypothetical paths that load_image_gt() uses to construct the different
+                    # image variants
+                    # image_name = image.split('\\')[-1].strip('_RGB.png')
+                    for i in range(GraspMaskRCNNConfig().NUM_AUGMENTATIONS):
+                        self.add_image("grasp_and_mask", image_id=id, path=rgb_path,
+                                       depth_path=depth_path, label_path=label_path, positive_points=positive_grasp_points,
+                                       augmentation = self.generate_augmentations())
+                        id = id + 1
             else:
                 rgb_path = image
                 depth_path = image.replace('rgb', 'depth').replace('table_', '').replace('floor_', '')
@@ -115,6 +128,38 @@ class GraspMaskRCNNDataset(Dataset):
                 self.add_image("grasp_and_mask", image_id = id, path = rgb_path,
                                label_path = label_path, depth_path = depth_path)
             id = id + 1
+
+    def generate_augmentations(self):
+        augmentation_types = ['angle', 'dx', 'dy', 'flip', 'contrast', 'noise']
+        augmentations = random.sample(list(augmentation_types), 3)
+        augmentations_list = np.zeros(6)
+        augmentations_list[3] = 2
+
+        if 'angle' in augmentations:
+            angle = randrange(0, 30)
+            augmentations_list[0] = 0
+
+        if 'dx' in augmentations:
+            dx = randrange(-50, 50)
+            augmentations_list[1] = dx
+
+        if 'dy' in augmentations:
+            dy = randrange(-50, 50)
+            augmentations_list[2] = dy
+
+        if 'flip' in augmentations:
+            flip = randrange(0, 3) # 0 -> vertical flip, 1 -> horizontal flip, 2 -> no flip
+            augmentations_list[3] = flip
+
+        if 'contrast' in augmentations:
+            contrast = random.uniform(0.5, 3)
+            augmentations_list[4] = contrast
+
+        if 'noise' in augmentations: # Gaussian noise std
+            noise = randrange(5, 15)
+            augmentations_list[5] = noise
+
+        return augmentations_list
 
     def load_mask(self, image_id):
         mask_path = self.image_info[image_id]['label_path']
@@ -149,8 +194,31 @@ class GraspMaskRCNNDataset(Dataset):
             rgbd_image[:, :, 0:3] = image[:, :, 0:3]
             rgbd_image[:, :, 3] = depth
         rgbd_image = np.array(rgbd_image).astype('uint8')
+
         if len(augmentation) != 0:
             rgbd_image = self.apply_augmentation_to_image(rgbd_image, augmentation)
+        return rgbd_image
+
+    def apply_augmentation_to_image(self, image, augmentation):
+        # ['angle', 'dx', 'dy', 'flip', 'contrast', 'noise']
+        angle, dx, dy, flip_code, contrast, noise = augmentation
+        rgbd_image = image_augmentation.rotate_image(image, angle, scale=1)
+        rgbd_image = image_augmentation.translate_image(rgbd_image, dx, dy)
+        if flip_code != 2:
+            rgbd_image = image_augmentation.flip_image(rgbd_image, int(flip_code))
+
+        # Contrast augmentation
+        if contrast != 0:
+            pillow_image = Image.fromarray(image)
+            enhancer = ImageEnhance.Contrast(pillow_image)
+            rgbd_image = np.array(enhancer.enhance(contrast))
+
+        # Additive Gaussian noise
+        if noise != 0:
+            mean = 0.0
+            std = noise
+            rgbd_image = rgbd_image + np.random.normal(mean, std, rgbd_image.shape)
+            rgbd_image = np.clip(rgbd_image, 0, 255)
         return rgbd_image
 
     def rescale_depth_image(self, depth_image):
@@ -464,7 +532,7 @@ class GraspMaskRCNNDataset(Dataset):
 
     def apply_augmentation_to_box(self, boxes, class_ids, image_id, augmentation):
         # ['angle', 'dx', 'dy', 'flip']
-        angle, dx, dy, flip_code = augmentation
+        angle, dx, dy, flip_code, _, _ = augmentation
         image_shape = plt.imread(self.image_info[image_id]['path']).shape[:2]
         transformed_boxes, class_ids = image_augmentation.rotate_bboxes(boxes, angle, image_shape, class_ids)
         transformed_boxes, class_ids = image_augmentation.translate_bbox(transformed_boxes, dx, dy, image_shape, class_ids)
@@ -826,7 +894,8 @@ for image_id in image_ids:
 
      results = mask_grasp_model.detect([original_image], verbose=1, task=mode)
      r = results[0]
-     if r['rois'].shape[0] > 0:
+     # if r['rois'].shape[0] > 0:
+     if True:
          # visualize.display_instances(original_image, r['rois'], r['masks'], r['class_ids'],
          #                            dataset.class_names, r['scores'], show_bbox=True, thresh = 0)
          mask_image = testing_dataset.get_mask_overlay(original_image[:, :, 0:3], r['masks'], r['scores'], 0)
@@ -834,12 +903,12 @@ for image_id in image_ids:
          grasping_probs = r['grasp_probs']
 
          fig, axs = plt.subplots(2, 3)#figsize=(25, 5))
-         axs[0, 0].imshow(original_image)
-         axs[0, 1].imshow(mask_image)
-         axs[0, 2].imshow(original_image)
-         axs[1, 0].imshow(original_image[:, :, :3])
-         axs[1, 1].imshow(original_image[:, :, :3])
-         axs[1, 2].imshow(original_image[:, :, :3])
+         axs[0, 0].imshow(original_image.astype(np.uint8))
+         axs[0, 1].imshow(mask_image.astype(np.uint8))
+         axs[0, 2].imshow(original_image.astype(np.uint8))
+         axs[1, 0].imshow(original_image[:, :, :3].astype(np.uint8))
+         axs[1, 1].imshow(original_image[:, :, :3].astype(np.uint8))
+         axs[1, 2].imshow(original_image[:, :, :3].astype(np.uint8))
 
          axs[0, 0].set_title('Original Image')
          axs[0, 1].set_title('Masks and ROIs')
@@ -924,14 +993,14 @@ for image_id in image_ids:
                 x1 = x - w / 2
                 y1 = y - h / 2
                 theta %= 360
-                p4 = patches.Rectangle((x1, y1), w, h, angle=0, edgecolor=color,
+                p4 = patches.Rectangle((x1, y1), w, h, angle=0, edgecolor=(0, 1, 0),
                                        linewidth=0.5, facecolor='none')
                 t2 = mpl.transforms.Affine2D().rotate_deg_around(x, y, theta) + axs[1, 0].transData
                 p4.set_transform(t2)
                 axs[1, 0].add_patch(p4)
 
          fig.suptitle('Image path : ' + dataset.image_info[image_id]['path'] +
-                                       '\nAugmentations : [\'angle\', \'dx\', \'dy\', \'flip\'] => ' +
+                                       '\nAugmentations : [\'angle\', \'dx\', \'dy\', \'flip\', \'contrast\', \'Gaussian STD\'] => ' +
                                        str(dataset.image_info[image_id]['augmentation']))
          plt.show(block=False)
 

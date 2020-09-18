@@ -1624,6 +1624,7 @@ def build_new_grasping_graph(rois, feature_maps, image_meta,
     # Expanding ROIs to allow network learn the features associated with the background
     if use_expanded_rois:
         rois_to_use = KL.Lambda(expand_roi_by_percent, name="expand_rois", arguments={'percentage': rois_expand_factor})(rois)
+        rois_to_use = KL.Lambda(expand_roi_by_percent, name="expand_rois", arguments={'percentage': rois_expand_factor})(rois)
     else:
         rois_to_use = rois
     x = PyramidROIAlign([pool_size, pool_size],
@@ -2690,15 +2691,69 @@ def load_image_gt(dataset, config, image_id, augment=False, augmentation=None, o
         original_shape = image.shape
         grasp_bbox_5_dimensional, grasp_class_ids = dataset.load_bounding_boxes(image_id, augmentations, config.NUM_GRASP_BOXES_PER_INSTANCE)
         mask, class_ids = dataset.load_mask(image_id)
-        image, window, scale, padding, crop = utils.resize_image(
-            image,
-            min_dim=config.IMAGE_MIN_DIM,
-            min_scale=config.IMAGE_MIN_SCALE,
-            max_dim=config.IMAGE_MAX_DIM,
-            mode=config.IMAGE_RESIZE_MODE)
-        mask = utils.resize_mask(mask, scale, padding, crop)
-        bbox_resize_5_dimensional = utils.resize_grasp_box(window, grasp_bbox_5_dimensional, original_shape)
-        # bbox_resize_5_dimensional = dataset.bbox_convert_to_five_dimension(bbox_resized, image_id)
+
+        if config.CENTER_CROP_IMAGE:
+            x_dim_crop = config.IMAGE_SHAPE[1]
+            y_dim_crop = config.IMAGE_SHAPE[0]
+            y_dim, x_dim = image.shape[:2]
+            x_diff = x_dim - x_dim_crop
+            y_diff = y_dim - y_dim_crop
+            image = image[int(y_diff / 2): y_dim - int(y_diff / 2), int(x_diff / 2): x_dim - int(x_diff / 2)]
+            mask = mask[int(y_diff / 2): y_dim - int(y_diff / 2), int(x_diff / 2): x_dim - int(x_diff / 2)]
+
+            non_zero_row = np.logical_not(np.sum(grasp_bbox_5_dimensional, axis=-1) == 0)
+            grasp_bbox_5_dimensional[:, :, 0] -= int(x_diff / 2)
+            grasp_bbox_5_dimensional[:, :, 1] -= int(y_diff / 2)
+            grasp_bbox_5_dimensional[:, :, 0] *= non_zero_row
+            grasp_bbox_5_dimensional[:, :, 1] *= non_zero_row
+
+            # Replacing boxes that lie outside image boundary with zeros
+            # Filter out boxes with center coordinates out of the image
+            radius = ((0.5 * grasp_bbox_5_dimensional[:, :, 2]) ** 2 + (0.5 * grasp_bbox_5_dimensional[:, :, 3]) ** 2) ** 0.5
+
+            invalid_grasp_boxes = grasp_bbox_5_dimensional[:, :, 0] + radius > config.IMAGE_SHAPE[1]
+            invalid_grasp_boxes = np.logical_or(invalid_grasp_boxes, grasp_bbox_5_dimensional[:, :, 0] - radius < 0)
+            invalid_grasp_boxes = np.logical_or(invalid_grasp_boxes, grasp_bbox_5_dimensional[:, :, 1] + radius > config.IMAGE_SHAPE[1])
+            invalid_grasp_boxes = np.logical_or(invalid_grasp_boxes, grasp_bbox_5_dimensional[:, :, 1] - radius < 0)
+            invalid_grasp_boxes = np.tile(np.expand_dims(invalid_grasp_boxes, axis=-1), 5)
+
+            grasp_bbox_5_dimensional *= np.logical_not(invalid_grasp_boxes)
+
+            bbox_resize_5_dimensional = grasp_bbox_5_dimensional
+            window = [0, 0, image.shape[0], image.shape[1]]
+            scale = 1
+
+        else:
+            image, window, scale, padding, crop = utils.resize_image(
+                image,
+                min_dim=config.IMAGE_MIN_DIM,
+                min_scale=config.IMAGE_MIN_SCALE,
+                max_dim=config.IMAGE_MAX_DIM,
+                mode=config.IMAGE_RESIZE_MODE)
+            mask = utils.resize_mask(mask, scale, padding, crop)
+            bbox_resize_5_dimensional = utils.resize_grasp_box(window, grasp_bbox_5_dimensional, original_shape)
+
+
+        # import matplotlib.patches as patches
+        # import matplotlib as mpl
+        # fig, axs = plt.subplots()  # figsize=(25, 5))
+        # axs.imshow(image)
+        # for i, rect in enumerate(grasp_bbox_5_dimensional):
+        #     for box in rect:
+        #         x, y, w, h, theta = box
+        #         x1 = x - w / 2
+        #         y1 = y - h / 2
+        #         theta %= 360
+        #         p = patches.Rectangle((x1, y1), w, h, angle=0, edgecolor=(0,1,1),
+        #                               linewidth=1, facecolor='none')
+        #         t2 = mpl.transforms.Affine2D().rotate_deg_around(x, y, theta) + axs.transData
+        #         p.set_transform(t2)
+        #         axs.add_patch(p)
+        # plt.show(block=False)
+        # import code;
+        # code.interact(local=dict(globals(), **locals()))
+
+
 
     else:
         image = dataset.load_image(image_id, image_type=image_type)
@@ -3353,7 +3408,7 @@ def generate_random_rois(image_shape, count, gt_class_ids, gt_boxes):
 
 def mask_grasp_data_generator(dataset, config, shuffle=True, augment=False, augmentation=None,
                    random_rois=0, batch_size=1, detection_targets=False,
-                   no_augmentation_sources=None):
+                   no_augmentation_sources=None, pre_augment=False):
     """A generator that returns images and corresponding target class ids,
     bounding box deltas, and masks.
 
@@ -3444,6 +3499,7 @@ def mask_grasp_data_generator(dataset, config, shuffle=True, augment=False, augm
                 image, image_meta, gt_class_ids, gt_boxes, gt_masks, gt_grasp_boxes, gt_grasp_id = \
                     load_image_gt(dataset, config, image_id, augment=augment,
                                   augmentation=augmentation,
+                                  pre_augment=pre_augment,
                                   use_mini_mask=config.USE_MINI_MASK,
                                   image_type='rgbd',
                                   mode=mode)
@@ -4866,10 +4922,12 @@ class MaskRCNN():
         elif task == 'mask_grasp_rcnn':
             train_generator = mask_grasp_data_generator(train_dataset, self.config, shuffle=True,
                                              augmentation=augmentation,
+                                             pre_augment=True,
                                              batch_size=self.config.BATCH_SIZE,
                                              no_augmentation_sources=no_augmentation_sources)
             val_generator = mask_grasp_data_generator(val_dataset, self.config, shuffle=True,
-                                           batch_size=self.config.BATCH_SIZE)
+                                                      batch_size=self.config.BATCH_SIZE,
+                                                      pre_augment=True)
         else:
             train_generator = data_generator(train_dataset, self.config, shuffle=True,
                                              augmentation=augmentation,
