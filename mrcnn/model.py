@@ -2687,12 +2687,18 @@ def load_image_gt(dataset, config, image_id, augment=False, augmentation=None, o
         bbox_resize_5_dimensional = dataset.bbox_convert_to_five_dimension(bbox_resized, image_id)
 
     elif mode == 'mask_grasp_rcnn':
+        crop_image = bool(random.getrandbits(1))
+        if augmentations != []:
+            angle, dx, dy, flip, contrast, noise = augmentations
+            # Randomly take center crops of the image to enable the grasp branch to train on different object scales
+            if dx != 0 or dy != 0:
+                crop_image = True
         image = dataset.load_image(image_id, augmentation=augmentations, image_type=image_type)
         original_shape = image.shape
         grasp_bbox_5_dimensional, grasp_class_ids = dataset.load_bounding_boxes(image_id, augmentations, config.NUM_GRASP_BOXES_PER_INSTANCE)
         mask, class_ids = dataset.load_mask(image_id)
 
-        if config.CENTER_CROP_IMAGE:
+        if crop_image:
             x_dim_crop = config.IMAGE_SHAPE[1]
             y_dim_crop = config.IMAGE_SHAPE[0]
             y_dim, x_dim = image.shape[:2]

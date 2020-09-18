@@ -71,7 +71,7 @@ def flip_bbox(bboxes, flip_code, image_shape):
         y = y - (image_shape[0]/2)
         if flip_code == 0:
             y = -y
-        else:
+        elif flip_code == 1:
             x = -x
         x = x + (image_shape[1] / 2)
         y = y + (image_shape[0] / 2)
@@ -79,7 +79,6 @@ def flip_bbox(bboxes, flip_code, image_shape):
         transformed_bbox = [x, y, w, h, theta]
         bbox_new.append(transformed_bbox)
     return np.array(bbox_new)
-
 
 def rotate_image(image, rotation_angle, scale=1):
     center_y, center_x = np.array(image.shape[:2]) / 2

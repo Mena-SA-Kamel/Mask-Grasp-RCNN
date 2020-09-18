@@ -87,9 +87,7 @@ class GraspMaskRCNNConfig(Config):
     MODEL_SAVE_PERIOD = 8
     TRAIN_BN = False
     TRAIN_GRASP_BN = False
-    NUM_AUGMENTATIONS = 0
-    CENTER_CROP_IMAGE = False
-
+    NUM_AUGMENTATIONS = 5
 
 class GraspMaskRCNNInferenceConfig(GraspMaskRCNNConfig):
     GPU_COUNT = 1
@@ -130,14 +128,15 @@ class GraspMaskRCNNDataset(Dataset):
             id = id + 1
 
     def generate_augmentations(self):
-        augmentation_types = ['angle', 'dx', 'dy', 'flip', 'contrast', 'noise']
-        augmentations = random.sample(list(augmentation_types), 3)
+        # augmentation_types = ['angle', 'dx', 'dy', 'flip', 'contrast', 'noise']
+        augmentation_types = ['contrast', 'noise']
+        augmentations = random.sample(list(augmentation_types), 2)
         augmentations_list = np.zeros(6)
         augmentations_list[3] = 2
 
         if 'angle' in augmentations:
             angle = randrange(0, 30)
-            augmentations_list[0] = 0
+            augmentations_list[0] = angle
 
         if 'dx' in augmentations:
             dx = randrange(-50, 50)
@@ -152,7 +151,7 @@ class GraspMaskRCNNDataset(Dataset):
             augmentations_list[3] = flip
 
         if 'contrast' in augmentations:
-            contrast = random.uniform(0.5, 3)
+            contrast = random.uniform(0.5, 2)
             augmentations_list[4] = contrast
 
         if 'noise' in augmentations: # Gaussian noise std
@@ -810,15 +809,15 @@ sess = tf.Session(config=config)
 
 training_dataset = GraspMaskRCNNDataset()
 # training_dataset.construct_dataset(dataset_dir = '../../../Datasets/SAMS-Dataset')
-training_dataset.load_dataset(dataset_dir='../../../Datasets/jacquard_dataset_resized_new')
+training_dataset.load_dataset(dataset_dir='../../../Datasets/jacquard_dataset_resized_new', augmentation=True)
 training_dataset.prepare()
 
 validating_dataset = GraspMaskRCNNDataset()
-validating_dataset.load_dataset(dataset_dir='../../../Datasets/jacquard_dataset_resized_new', type='val_set')
+validating_dataset.load_dataset(dataset_dir='../../../Datasets/jacquard_dataset_resized_new', type='val_set', augmentation=True)
 validating_dataset.prepare()
 
 testing_dataset = GraspMaskRCNNDataset()
-testing_dataset.load_dataset(dataset_dir='../../../Datasets/jacquard_dataset_resized_new', type='test_set')
+testing_dataset.load_dataset(dataset_dir='../../../Datasets/jacquard_dataset_resized_new', type='test_set', augmentation=True)
 testing_dataset.prepare()
 
 config = GraspMaskRCNNConfig()
@@ -871,7 +870,7 @@ mode = "mask_grasp_rcnn"
 # mrcnn_model_path = 'models/Good_models/Training_SAMS_dataset_LR-div-5-div-10-HYBRID-weights/mask_rcnn_object_vs_background_0051.h5'
 # mask_grasp_model_path = 'models/grasp_and_mask20200905T1322/mask_rcnn_grasp_and_mask_0400.h5'
 # mask_grasp_model_path = 'models/mask_grasp_rcnn_attempt#1b/mask_rcnn_grasp_and_mask_0108.h5'
-mask_grasp_model_path = 'models/colab_result_id#1/mask_rcnn_grasp_and_mask_0208.h5'
+mask_grasp_model_path = 'models/colab_result_id#1/mask_rcnn_grasp_and_mask_0200.h5'
 
 
 mask_grasp_model = modellib.MaskRCNN(mode="inference",
@@ -890,19 +889,19 @@ image_ids = random.choices(dataset.image_ids, k=15)
 for image_id in image_ids:
      original_image, image_meta, gt_class_id, gt_bbox, gt_mask, gt_grasp_boxes, gt_grasp_id =\
          modellib.load_image_gt(dataset, inference_config,
-                                image_id, use_mini_mask=True, image_type='rgbd', mode='mask_grasp_rcnn')
+                                image_id, use_mini_mask=True, image_type='rgbd', mode='mask_grasp_rcnn', pre_augment=True)
 
      results = mask_grasp_model.detect([original_image], verbose=1, task=mode)
      r = results[0]
-     # if r['rois'].shape[0] > 0:
-     if True:
+     if r['rois'].shape[0] > 0:
+     # if True:
          # visualize.display_instances(original_image, r['rois'], r['masks'], r['class_ids'],
          #                            dataset.class_names, r['scores'], show_bbox=True, thresh = 0)
          mask_image = testing_dataset.get_mask_overlay(original_image[:, :, 0:3], r['masks'], r['scores'], 0)
          grasping_deltas = r['grasp_boxes']
          grasping_probs = r['grasp_probs']
 
-         fig, axs = plt.subplots(2, 3)#figsize=(25, 5))
+         fig, axs = plt.subplots(2, 3, figsize=(15, 5))
          axs[0, 0].imshow(original_image.astype(np.uint8))
          axs[0, 1].imshow(mask_image.astype(np.uint8))
          axs[0, 2].imshow(original_image.astype(np.uint8))
