@@ -60,7 +60,7 @@ inference_config = GraspMaskRCNNInferenceConfig()
 
 MODEL_DIR = "models"
 # mask_grasp_model_path = 'models/colab_result_id#1/mask_rcnn_grasp_and_mask_0152.h5'
-mask_grasp_model_path = 'models/colab_result_id#1/mask_rcnn_grasp_and_mask_0208.h5'
+mask_grasp_model_path = 'models/colab_result_id#1/mask_rcnn_grasp_and_mask_0040.h5'
 
 
 mask_grasp_model = modellib.MaskRCNN(mode="inference",
@@ -112,7 +112,7 @@ try:
         # post_nms_predictions, pre_nms_predictions = dataset_object.refine_results(r, mask_grasp_model.anchors, model.config)
         color_image_to_display = depth_3_channel = cv2.cvtColor(rgbd_image_resized[:, :, 0:3].astype('uint8'),
                                                                 cv2.COLOR_RGB2BGR)
-        masked_image = dataset_object.get_mask_overlay(color_image_to_display, r['masks'], r['scores'], threshold=0)
+        masked_image, colors = dataset_object.get_mask_overlay(color_image_to_display, r['masks'], r['scores'], threshold=0)
 
         grasping_deltas = r['grasp_boxes']
         grasping_probs = r['grasp_probs']
@@ -122,7 +122,11 @@ try:
         if len(r['rois']) > 0:
             plot_boxes=True
         for j, rect in enumerate(r['rois']):
-            color = generate_random_color()
+            # color = generate_random_color()
+            color = (np.array(colors[j])*255).astype('uint8')
+            color = (int(color[0]), int(color[1]), int(color[2]))
+            # centroid_color = np.array((int(centroid_color[0]), int(centroid_color[1]), int(centroid_color[2])))
+
             expanded_rect = utils.expand_roi_by_percent(rect, percentage=inference_config.GRASP_ROI_EXPAND_FACTOR,
                                                         image_shape=inference_config.IMAGE_SHAPE[:2])
 
@@ -149,13 +153,15 @@ try:
 
         depth_3_channel = cv2.cvtColor(rgbd_image_resized[:, :, 3].astype('uint8'), cv2.COLOR_GRAY2BGR)
         if plot_boxes:
-            images = np.hstack((color_image_to_display, depth_3_channel, masked_image, grasp_rectangles_image))
+            # images = np.hstack((color_image_to_display, depth_3_channel, masked_image, grasp_rectangles_image))
+            images = np.hstack((masked_image, grasp_rectangles_image))
         else:
-            images = np.hstack((color_image_to_display, depth_3_channel, masked_image))
+            # images = np.hstack((color_image_to_display, depth_3_channel, masked_image))
+            images = np.hstack((masked_image, color_image_to_display))
 
         # images = np.hstack((color_image))
-        cv2.namedWindow('Align Example', cv2.WINDOW_AUTOSIZE)
-        cv2.imshow('Align Example', images)
+        cv2.namedWindow('MASK-GRASP RCNN OUTPUT', cv2.WINDOW_AUTOSIZE)
+        cv2.imshow('MASK-GRASP RCNN OUTPUT', images)
         key = cv2.waitKey(1)
 
         if frame_count == 0:
