@@ -780,16 +780,16 @@ class GraspMaskRCNNDataset(Dataset):
         # all_boxes = np.delete(all_boxes, invalid_y, axis=0)
         # probabilities = np.delete(probabilities, invalid_y, axis=0)
 
-        # sorting_ix = np.argsort(probabilities[:, 1])[::-1][:10]
+        sorting_ix = np.argsort(probabilities[:, 1])[::-1][:10]
 
         # top_boxes = all_boxes[probabilities[:,1] > config.DETECTION_MIN_CONFIDENCE]
         # top_box_probabilities = probabilities[probabilities[:,1] > config.DETECTION_MIN_CONFIDENCE]
-        top_boxes = all_boxes[probabilities[:,1] > 0.90]
-        top_box_probabilities = probabilities[probabilities[:,1] > 0.90]
+        # top_boxes = all_boxes[probabilities[:,1] > 0.90]
+        # top_box_probabilities = probabilities[probabilities[:,1] > 0.90]
         # if np.shape(top_boxes)[0] == 0:
         #     sorting_ix = np.argsort(probabilities[:, 1])[::-1][:1]
-        #     top_boxes = all_boxes[sorting_ix]
-        #     top_box_probabilities = probabilities[sorting_ix]
+        top_boxes = all_boxes[sorting_ix]
+        top_box_probabilities = probabilities[sorting_ix]
         top_boxes, top_box_probabilities, pre_nms_boxes, pre_nms_scores = self.orient_box_nms(top_boxes, top_box_probabilities, config)
 
         return top_boxes, pre_nms_boxes
@@ -809,15 +809,18 @@ sess = tf.Session(config=config)
 
 training_dataset = GraspMaskRCNNDataset()
 # training_dataset.construct_dataset(dataset_dir = '../../../Datasets/SAMS-Dataset')
-training_dataset.load_dataset(dataset_dir='../../../Datasets/jacquard_dataset_resized_new', augmentation=True)
+# training_dataset.load_dataset(dataset_dir='../../../Datasets/jacquard_dataset_resized_new', augmentation=True)
+training_dataset.load_dataset(dataset_dir='../../../Datasets/jacquard_dataset_resized_new')
 training_dataset.prepare()
 
 validating_dataset = GraspMaskRCNNDataset()
-validating_dataset.load_dataset(dataset_dir='../../../Datasets/jacquard_dataset_resized_new', type='val_set', augmentation=True)
+# validating_dataset.load_dataset(dataset_dir='../../../Datasets/jacquard_dataset_resized_new', type='val_set', augmentation=True)
+validating_dataset.load_dataset(dataset_dir='../../../Datasets/jacquard_dataset_resized_new', type='val_set')
 validating_dataset.prepare()
 
 testing_dataset = GraspMaskRCNNDataset()
-testing_dataset.load_dataset(dataset_dir='../../../Datasets/jacquard_dataset_resized_new', type='test_set', augmentation=True)
+# testing_dataset.load_dataset(dataset_dir='../../../Datasets/jacquard_dataset_resized_new', type='test_set', augmentation=True)
+testing_dataset.load_dataset(dataset_dir='../../../Datasets/jacquard_dataset_resized_new', type='test_set')
 testing_dataset.prepare()
 
 config = GraspMaskRCNNConfig()
