@@ -1096,7 +1096,7 @@ def detection_targets_graph(proposals, gt_class_ids, gt_boxes, gt_masks, anchors
         y1 = (y1 - gt_y1) / gt_h
         x1 = (x1 - gt_x1) / gt_w
         y2 = (y2 - gt_y1) / gt_h
-        x2 = (x2 - gt_x1) / gt_wmap
+        x2 = (x2 - gt_x1) / gt_w
         boxes = tf.concat([y1, x1, y2, x2], 1)
     box_ids = tf.range(0, tf.shape(roi_masks)[0])
     masks = tf.image.crop_and_resize(tf.cast(roi_masks, tf.float32), boxes,

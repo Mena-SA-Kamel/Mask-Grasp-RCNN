@@ -703,6 +703,38 @@ class GraspMaskRCNNDataset(Dataset):
 
         return np.array(rotated_points)
 
+    def compute_jacquard_index_and_angle_difference(self, top_1_box, gt_boxes):
+        gt_boxes = gt_boxes[0]
+        gt_x, gt_y, gt_w, gt_h, gt_theta = np.split(gt_boxes, indices_or_sections = 5, axis=-1)
+
+        gt_box_vertices = np.zeros((gt_boxes.shape[0], 4))
+        gt_box_vertices[:, 0] = np.squeeze(gt_y - gt_h / 2)
+        gt_box_vertices[:, 1] = np.squeeze(gt_x - gt_w / 2)
+        gt_box_vertices[:, 2] = np.squeeze(gt_y + gt_h / 2)
+        gt_box_vertices[:, 3] = np.squeeze(gt_x + gt_w / 2)
+
+        x, y, w, h, theta = top_1_box[0]
+        top_1_vertices = [y - h / 2, x - w / 2, y + h / 2, x + w / 2]
+        # top_1_vertices = np.tile(top_1_vertices, (gt_boxes.shape[0], 1))
+
+        # top_1_box_area = np.tile(w * h, (gt_boxes.shape[0], 1))
+        top_1_box_area = w * h
+        gt_box_areas = gt_w * gt_h
+
+        iou = utils.compute_iou(top_1_vertices, gt_box_vertices, top_1_box_area, np.squeeze(gt_box_areas))
+        jacquard_condition = np.reshape(iou > 0.25, [-1, 1])
+
+        top_1_box_theta = np.tile(np.array(theta), (gt_boxes.shape[0], 1))
+
+        x_minus_y = np.radians(gt_theta) - np.radians(top_1_box_theta)
+        angle_difference = np.arctan2(np.sin(x_minus_y), np.cos(x_minus_y))
+        angle_difference = np.abs(np.degrees(angle_difference))
+        angle_condition = angle_difference < 30
+
+        matches = np.logical_and(jacquard_condition, angle_condition)
+        # print (np.count_nonzero(matches == True))
+        return np.any(matches)
+
     def orient_box_nms(self, boxes, scores, config):
         scores = scores[:, 1]
         sorting_ix = np.argsort(scores)[::-1]
@@ -742,7 +774,7 @@ class GraspMaskRCNNDataset(Dataset):
             box_vertices = np.delete(box_vertices, ix_to_remove, axis=0)
             thetas = np.delete(thetas, ix_to_remove)
             ix += 1
-        print(boxes.shape, filtered_boxes.shape)
+        # print(boxes.shape, filtered_boxes.shape)
         return [filtered_boxes, filtered_scores, boxes, scores]
 
     def refine_results(self, probabilities, deltas, anchors, config):
@@ -780,7 +812,7 @@ class GraspMaskRCNNDataset(Dataset):
         # all_boxes = np.delete(all_boxes, invalid_y, axis=0)
         # probabilities = np.delete(probabilities, invalid_y, axis=0)
 
-        sorting_ix = np.argsort(probabilities[:, 1])[::-1][:10]
+        sorting_ix = np.argsort(probabilities[:, 1])[::-1][:1]
 
         # top_boxes = all_boxes[probabilities[:,1] > config.DETECTION_MIN_CONFIDENCE]
         # top_box_probabilities = probabilities[probabilities[:,1] > config.DETECTION_MIN_CONFIDENCE]
@@ -792,7 +824,7 @@ class GraspMaskRCNNDataset(Dataset):
         top_box_probabilities = probabilities[sorting_ix]
         top_boxes, top_box_probabilities, pre_nms_boxes, pre_nms_scores = self.orient_box_nms(top_boxes, top_box_probabilities, config)
 
-        return top_boxes, pre_nms_boxes
+        return top_boxes, top_box_probabilities, pre_nms_boxes, pre_nms_scores
 
     def generate_random_color(self):
         r = random.random()#*255
@@ -888,18 +920,14 @@ mask_grasp_model.load_weights(mask_grasp_model_path, by_name=True)
 
 dataset = validating_dataset
 image_ids = random.choices(dataset.image_ids, k=15)
-
 for image_id in image_ids:
      original_image, image_meta, gt_class_id, gt_bbox, gt_mask, gt_grasp_boxes, gt_grasp_id =\
          modellib.load_image_gt(dataset, inference_config,
                                 image_id, use_mini_mask=True, image_type='rgbd', mode='mask_grasp_rcnn', pre_augment=True)
 
-     results = mask_grasp_model.detect([original_image], verbose=1, task=mode)
+     results = mask_grasp_model.detect([original_image], verbose=0, task=mode)
      r = results[0]
      if r['rois'].shape[0] > 0:
-     # if True:
-         # visualize.display_instances(original_image, r['rois'], r['masks'], r['class_ids'],
-         #                            dataset.class_names, r['scores'], show_bbox=True, thresh = 0)
          mask_image, _ = testing_dataset.get_mask_overlay(original_image[:, :, 0:3], r['masks'], r['scores'], 0)
          grasping_deltas = r['grasp_boxes']
          grasping_probs = r['grasp_probs']
@@ -927,6 +955,8 @@ for image_id in image_ids:
              p = patches.Rectangle((x1, y1), (x2-x1), (y2-y1), angle=0, edgecolor=dataset.generate_random_color(), linewidth=2, facecolor='none')
              axs[0, 0].add_patch(p)
 
+         top_image_rois = np.reshape(np.array([]), [-1, 5])
+         top_image_roi_probabilities = np.reshape(np.array([]), [-1])
 
          for j, rect in enumerate(r['rois']):
              color = dataset.generate_random_color()
@@ -949,9 +979,12 @@ for image_id in image_ids:
                                                        config.GRASP_ANCHOR_ANGLES,
                                                        expanded_rect_normalized)
 
-
-             post_nms_predictions, pre_nms_predictions = dataset.refine_results(grasping_probs[j], grasping_deltas[j],
+             post_nms_predictions, top_box_probabilities, pre_nms_predictions, pre_nms_scores = dataset.refine_results(grasping_probs[j], grasping_deltas[j],
                                                                                 grasping_anchors, config)
+
+             top_image_rois = np.append(top_image_rois, pre_nms_predictions, axis=0)
+             top_image_roi_probabilities = np.append(top_image_roi_probabilities, pre_nms_scores, axis=0)
+
 
 
              for i, rect in enumerate(pre_nms_predictions):
@@ -964,6 +997,7 @@ for image_id in image_ids:
                  t2 = mpl.transforms.Affine2D().rotate_deg_around(x, y, theta) + axs[1, 1].transData
                  p.set_transform(t2)
                  axs[1, 1].add_patch(p)
+
 
              for i, rect2 in enumerate(post_nms_predictions):
                  x, y, w, h, theta = rect2
@@ -987,28 +1021,97 @@ for image_id in image_ids:
                  p3.set_transform(t2)
                  axs[0, 2].add_patch(p3)
 
-         for roi_instance in gt_grasp_boxes:
-            for i, rect4 in enumerate(roi_instance):
-                if np.sum(rect4) == 0:
-                    continue
-                x, y, w, h, theta = rect4
-                x1 = x - w / 2
-                y1 = y - h / 2
-                theta %= 360
-                p4 = patches.Rectangle((x1, y1), w, h, angle=0, edgecolor=(0, 1, 0),
-                                       linewidth=0.5, facecolor='none')
-                t2 = mpl.transforms.Affine2D().rotate_deg_around(x, y, theta) + axs[1, 0].transData
-                p4.set_transform(t2)
-                axs[1, 0].add_patch(p4)
+     for roi_instance in gt_grasp_boxes:
+         for i, rect4 in enumerate(roi_instance):
+             if np.sum(rect4) == 0:
+                 continue
+             x, y, w, h, theta = rect4
+             x1 = x - w / 2
+             y1 = y - h / 2
+             theta %= 360
+             p4 = patches.Rectangle((x1, y1), w, h, angle=0, edgecolor=(0, 1, 0),
+                                    linewidth=0.5, facecolor='none')
+             t2 = mpl.transforms.Affine2D().rotate_deg_around(x, y, theta) + axs[1, 0].transData
+             p4.set_transform(t2)
+             axs[1, 0].add_patch(p4)
 
-         fig.suptitle('Image path : ' + dataset.image_info[image_id]['path'] +
-                                       '\nAugmentations : [\'angle\', \'dx\', \'dy\', \'flip\', \'contrast\', \'Gaussian STD\'] => ' +
-                                       str(dataset.image_info[image_id]['augmentation']))
-         plt.show(block=False)
+     fig.suptitle('Image path : ' + dataset.image_info[image_id]['path'] +
+                  '\nAugmentations : [\'angle\', \'dx\', \'dy\', \'flip\', \'contrast\', \'Gaussian STD\'] => ' +
+                  str(dataset.image_info[image_id]['augmentation']))
+     plt.show(block=False)
 
 import code;
-
 code.interact(local=dict(globals(), **locals()))
+
+# ##### Computing Grasp Detection Accuracy #####
+#
+# # mrcnn_model_path = 'models/Good_models/Training_SAMS_dataset_LR-div-5-div-10-HYBRID-weights/mask_rcnn_object_vs_background_0051.h5'
+# # mask_grasp_model_path = 'models/grasp_and_mask20200905T1322/mask_rcnn_grasp_and_mask_0400.h5'
+# # mask_grasp_model_path = 'models/mask_grasp_rcnn_attempt#1b/mask_rcnn_grasp_and_mask_0108.h5'
+# mask_grasp_model_path = 'models/colab_result_id#1/mask_rcnn_grasp_and_mask_0144.h5'
+#
+# mask_grasp_model = modellib.MaskRCNN(mode="inference",
+#                            config=inference_config,
+#                            model_dir=MODEL_DIR, task=mode)
+# mask_grasp_model.load_weights(mask_grasp_model_path, by_name=True)
+#
+# dataset = validating_dataset
+# counter = 0
+# num_positive_samples = 0
+# for image_id in dataset.image_ids:
+#      original_image, image_meta, gt_class_id, gt_bbox, gt_mask, gt_grasp_boxes, gt_grasp_id =\
+#          modellib.load_image_gt(dataset, inference_config,
+#                                 image_id, use_mini_mask=True, image_type='rgbd', mode='mask_grasp_rcnn', pre_augment=True)
+#
+#      results = mask_grasp_model.detect([original_image], verbose=0, task=mode)
+#      r = results[0]
+#      if r['rois'].shape[0] > 0:
+#          grasping_deltas = r['grasp_boxes']
+#          grasping_probs = r['grasp_probs']
+#          bboxes = r['rois']
+#
+#          top_image_rois = np.reshape(np.array([]), [-1, 5])
+#          top_image_roi_probabilities = np.reshape(np.array([]), [-1])
+#
+#          for j, rect in enumerate(r['rois']):
+#              color = dataset.generate_random_color()
+#              expanded_rect = utils.expand_roi_by_percent(rect, percentage=config.GRASP_ROI_EXPAND_FACTOR,
+#                                                           image_shape=config.IMAGE_SHAPE[:2])
+#              expanded_rect_normalized = utils.norm_boxes(expanded_rect, config.IMAGE_SHAPE[:2])
+#
+#              y1, x1, y2, x2 = expanded_rect_normalized
+#              w = abs(x2 - x1)
+#              h = abs(y2 - y1)
+#              ROI_shape = np.array([h, w])
+#              pooled_feature_stride = np.array(ROI_shape/config.GRASP_POOL_SIZE)#.astype('uint8')
+#
+#
+#              grasping_anchors = utils.generate_grasping_anchors(config.GRASP_ANCHOR_SIZE,
+#                                                        config.GRASP_ANCHOR_RATIOS,
+#                                                        [config.GRASP_POOL_SIZE, config.GRASP_POOL_SIZE],
+#                                                        pooled_feature_stride,
+#                                                        1,
+#                                                        config.GRASP_ANCHOR_ANGLES,
+#                                                        expanded_rect_normalized)
+#
+#              post_nms_predictions, top_box_probabilities, pre_nms_predictions, pre_nms_scores = dataset.refine_results(grasping_probs[j], grasping_deltas[j],
+#                                                                                 grasping_anchors, config)
+#
+#              top_image_rois = np.append(top_image_rois, pre_nms_predictions, axis=0)
+#              top_image_roi_probabilities = np.append(top_image_roi_probabilities, pre_nms_scores, axis=0)
+#      top_box = np.reshape(top_image_rois[np.argmax(top_image_roi_probabilities)], [-1, 5])
+#      top_prob = np.max(top_image_roi_probabilities)
+#
+#      counter += 1
+#      true_positive = dataset.compute_jacquard_index_and_angle_difference(top_box, gt_grasp_boxes)
+#      if true_positive:
+#          num_positive_samples += 1
+#      print (num_positive_samples / counter)
+#
+#
+# import code;
+#
+# code.interact(local=dict(globals(), **locals()))
 
 
 
