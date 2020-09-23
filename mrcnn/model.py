@@ -1991,6 +1991,10 @@ def tf_deg2rad(angle):
     pi_over_180 = pi /180
     return angle * pi_over_180
 
+def tf_rad2deg(angle):
+    pi_over_180 = pi /180
+    return angle / pi_over_180
+
 def compute_iou(box, boxes, box_area, boxes_area):
     """Calculates IoU of the given box with the array of the given boxes.
     box: 1D vector [y1, x1, y2, x2]
@@ -2084,6 +2088,33 @@ def smooth_l1_loss(y_true, y_pred):
     diff = K.abs(y_true - y_pred)
     less_than_one = K.cast(K.less(diff, 1.0), "float32")
     loss = (less_than_one * 0.5 * diff**2) + (1 - less_than_one) * (diff - 0.5)
+    return loss
+
+def grasp_smooth_l1_loss(y_true, y_pred, config):
+    """Implements Smooth-L1 loss.
+    y_true and y_pred are typically: [N, 4], but could be any shape.
+    """
+    true_box_terms = y_true[:,:,:4]
+    true_angle_term = y_true[:,:,-1] * 180/len(config.GRASP_ANCHOR_ANGLES)
+    pred_box_terms = y_pred[:, :, :4]
+    pred_angle_term = y_pred[:, :, -1] * 180/len(config.GRASP_ANCHOR_ANGLES)
+
+    # simple smooth l1 loss on the box terms (dx, dy, dw, dh)
+    box_diff = K.abs(true_box_terms - pred_box_terms)
+    less_than_one = K.cast(K.less(box_diff, 1.0), "float32")
+    box_loss = (less_than_one * 0.5 * box_diff ** 2) + (1 - less_than_one) * (box_diff - 0.5)
+
+    # simple smooth l1 loss on the angle terms (dtheta)
+    x_minus_y = tf_deg2rad(true_angle_term) - tf_deg2rad(pred_angle_term)
+    angle_difference = tf.atan2(tf.sin(x_minus_y), tf.cos(x_minus_y))
+    angle_difference = tf_rad2deg(angle_difference)
+
+    angle_diff = K.abs(angle_difference / 90)
+    less_than_one = K.cast(K.less(angle_diff, 1.0), "float32")
+    angle_loss = (less_than_one * 0.5 * angle_diff**2) + (1 - less_than_one) * (angle_diff - 0.5)
+    angle_loss = tf.expand_dims(angle_loss, axis=-1) * config.ANGLE_BETA_FACTOR
+
+    loss = tf.concat([box_loss, angle_loss], axis=-1)
     return loss
 
 def cumpute_top_negative_losses_graph(inputs):
@@ -2181,7 +2212,7 @@ def grasp_loss_graph(config, target_bbox, target_class, bbox, class_logits, roi_
         classification_loss = total_negative_loss + total_positive_loss
 
         # Regression Loss
-        regression_loss = smooth_l1_loss(batch_target_bbox_filtered, batch_bbox_filtered)
+        regression_loss = grasp_smooth_l1_loss(batch_target_bbox_filtered, batch_bbox_filtered, config)
         mean_regression_loss = K.mean(regression_loss, axis=-1)
 
         # Only positive anchors count towards the loss
