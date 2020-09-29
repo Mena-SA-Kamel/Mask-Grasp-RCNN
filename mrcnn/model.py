@@ -2718,8 +2718,9 @@ def load_image_gt(dataset, config, image_id, augment=False, augmentation=None, o
         bbox_resize_5_dimensional = dataset.bbox_convert_to_five_dimension(bbox_resized, image_id)
 
     elif mode == 'mask_grasp_rcnn':
-        crop_image = bool(random.getrandbits(1))
+        crop_image = False
         if augmentations != []:
+            crop_image = bool(random.getrandbits(1))
             angle, dx, dy, flip, contrast, noise = augmentations
             # Randomly take center crops of the image to enable the grasp branch to train on different object scales
             if dx != 0 or dy != 0:
