@@ -37,6 +37,7 @@ def rotate_bboxes(bboxes, rotation_angle, image_shape, class_ids, scale=1):
         # new_theta = deg2rad(theta) + deg2rad(1*rotation_angle)
         # angle = np.arctan2(np.sin(new_theta), np.cos(new_theta))
         # angle /= (pi /180)
+        rotation_angle *= -1
 
         transformed_bbox = [new_x, new_y, w, h, theta + rotation_angle]
 

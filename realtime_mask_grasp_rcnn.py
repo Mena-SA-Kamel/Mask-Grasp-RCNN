@@ -60,7 +60,8 @@ inference_config = GraspMaskRCNNInferenceConfig()
 
 MODEL_DIR = "models"
 # mask_grasp_model_path = 'models/colab_result_id#1/mask_rcnn_grasp_and_mask_0152.h5'
-mask_grasp_model_path = 'models/colab_result_id#1/mask_rcnn_grasp_and_mask_0040.h5'
+# mask_grasp_model_path = 'models/colab_result_id#1/mask_rcnn_grasp_and_mask_0040.h5'
+mask_grasp_model_path = 'models/colab_result_id#1/mask_rcnn_grasp_and_mask_0288.h5'
 
 
 mask_grasp_model = modellib.MaskRCNN(mode="inference",
@@ -143,9 +144,10 @@ try:
                                                                1,
                                                                inference_config.GRASP_ANCHOR_ANGLES,
                                                                expanded_rect_normalized)
-
-            post_nms_predictions, pre_nms_predictions = dataset_object.refine_results(probabilities=grasping_probs[j], deltas=grasping_deltas[j],anchors=grasping_anchors, config=inference_config)
-
+            #
+            # post_nms_predictions, pre_nms_predictions = dataset_object.refine_results(probabilities=grasping_probs[j], deltas=grasping_deltas[j],anchors=grasping_anchors, config=inference_config)
+            post_nms_predictions, top_box_probabilities, pre_nms_predictions, pre_nms_scores = dataset_object.refine_results(
+                grasping_probs[j], grasping_deltas[j], grasping_anchors, inference_config, filter_mode='prob')
             for i, rect in enumerate(pre_nms_predictions):
                 # rect = dataset_object.bbox_convert_to_four_vertices([rect])
                 rect = cv2.boxPoints(((rect[0], rect[1]), (rect[2], rect[3]), rect[4]))

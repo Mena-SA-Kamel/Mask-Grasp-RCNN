@@ -21,6 +21,8 @@ import bisect
 import tensorflow as tf
 import keras
 from math import pi
+import matplotlib.patches as patches
+import matplotlib as mpl
 from .clr_callback import CyclicLR
 
 import keras.backend as K
@@ -819,8 +821,6 @@ def grasping_overlaps_graph(anchors, boxes):
     iou = intersection / union
 
     # Compute delta theta between boxes1 and boxes2 to get the ARIoU
-
-
     b1_theta *= 360
     b2_theta *= 360
 
@@ -1189,7 +1189,6 @@ def detection_targets_graph(proposals, gt_class_ids, gt_boxes, gt_masks, anchors
 
     grasp_anchor_match = tf.pad(grasp_anchor_match, [[0, N + P], (0, 0), (0, 0)])
     grasp_deltas = tf.pad(grasp_deltas, [[0, N + P], (0, 0), (0, 0)])
-
     return rois, roi_gt_class_ids, deltas, masks, grasping_anchors, grasp_anchor_match, grasp_deltas
 
 
@@ -1624,9 +1623,9 @@ def build_new_grasping_graph(rois, feature_maps, image_meta,
     # Expanding ROIs to allow network learn the features associated with the background
     if use_expanded_rois:
         rois_to_use = KL.Lambda(expand_roi_by_percent, name="expand_rois", arguments={'percentage': rois_expand_factor})(rois)
-        rois_to_use = KL.Lambda(expand_roi_by_percent, name="expand_rois", arguments={'percentage': rois_expand_factor})(rois)
     else:
         rois_to_use = rois
+
     x = PyramidROIAlign([pool_size, pool_size],
                         name="roi_align_grasp")([rois_to_use, image_meta] + feature_maps)
 
@@ -2723,7 +2722,7 @@ def load_image_gt(dataset, config, image_id, augment=False, augmentation=None, o
             crop_image = bool(random.getrandbits(1))
             angle, dx, dy, flip, contrast, noise = augmentations
             # Randomly take center crops of the image to enable the grasp branch to train on different object scales
-            if dx != 0 or dy != 0:
+            if dx != 0 or dy != 0 or angle!= 0:
                 crop_image = True
         image = dataset.load_image(image_id, augmentation=augmentations, image_type=image_type)
         original_shape = image.shape
@@ -2769,14 +2768,12 @@ def load_image_gt(dataset, config, image_id, augment=False, augmentation=None, o
                 max_dim=config.IMAGE_MAX_DIM,
                 mode=config.IMAGE_RESIZE_MODE)
             mask = utils.resize_mask(mask, scale, padding, crop)
+
             bbox_resize_5_dimensional = utils.resize_grasp_box(window, grasp_bbox_5_dimensional, original_shape)
 
-
-        # import matplotlib.patches as patches
-        # import matplotlib as mpl
         # fig, axs = plt.subplots()  # figsize=(25, 5))
-        # axs.imshow(image)
-        # for i, rect in enumerate(grasp_bbox_5_dimensional):
+        # axs.imshow(np.array(image[:,:,:3]).astype('uint8'))
+        # for i, rect in enumerate(bbox_resize_5_dimensional):
         #     for box in rect:
         #         x, y, w, h, theta = box
         #         x1 = x - w / 2
@@ -2787,12 +2784,8 @@ def load_image_gt(dataset, config, image_id, augment=False, augmentation=None, o
         #         t2 = mpl.transforms.Affine2D().rotate_deg_around(x, y, theta) + axs.transData
         #         p.set_transform(t2)
         #         axs.add_patch(p)
-        # plt.show(block=False)
-        # import code;
-        # code.interact(local=dict(globals(), **locals()))
-
-
-
+        # print ('Crop image: ', crop_image, ' augmentation: ', augmentations)
+        # plt.show()
     else:
         image = dataset.load_image(image_id, image_type=image_type)
         original_shape = image.shape
@@ -4438,7 +4431,6 @@ class MaskRCNN():
                                      fc_layers_size=config.FPN_CLASSIF_FC_LAYERS_SIZE, task='mask_grasp_rcnn',
                                      num_grasp_anchors=config.GRASP_ANCHORS_PER_ROI,
                                      angles=config.GRASP_ANCHOR_ANGLES)
-
 
             grasp_class_logits, grasp_probs, grasp_bbox = build_new_grasping_graph(rois, mrcnn_feature_maps, input_image_meta,
                                                                                    config.GRASP_POOL_SIZE, config.NUM_CLASSES,

@@ -274,10 +274,19 @@ def grasping_overlaps_graph_new(grasping_anchors, grasping_boxes):
     # Compute IOU
     iou = intersection / union
 
-    # Compute delta theta between boxes1 and boxes2 to get the ARIoU
-    angle_differences = tf.cos(tf_deg2rad(b1_theta) - tf_deg2rad(b2_theta))
-    angle_differences = tf.maximum(angle_differences, 0)
-    arIoU = iou * angle_differences
+    x_minus_y = tf_deg2rad(b1_theta) - tf_deg2rad(b2_theta)
+    angle_difference = tf.atan2(tf.sin(x_minus_y), tf.cos(x_minus_y))
+    angle_scalar = tf.cos(angle_difference)
+
+    # angle_differences = tf.cos(tf_deg2rad(b1_theta) - tf_deg2rad(b2_theta))
+
+    angle_scalar = tf.maximum(angle_scalar, 0)
+    arIoU = iou * angle_scalar
+
+    # # Compute delta theta between boxes1 and boxes2 to get the ARIoU
+    # angle_differences = tf.cos(tf_deg2rad(b1_theta) - tf_deg2rad(b2_theta))
+    # angle_differences = tf.maximum(angle_differences, 0)
+    # arIoU = iou * angle_differences
     arIoU = arIoU * tf.expand_dims(tf.cast(non_zero_grasp_boxes, dtype=tf.float32), axis=-1)
     arIoU = tf.expand_dims(tf.reshape(arIoU, tf.shape(grasping_anchors)[:2]), axis=-1)
     return arIoU
@@ -335,7 +344,7 @@ positive_rois = [[ 70, 50, 313, 330],
 roi_gt_grasp_boxes = np.array([[[215, 272.5, 14.86606875, 28.31952463,-42.27368901],
                                      [240.5, 140.5,  36.05551275,   4.10478145,-70.55996517],
                                      [267, 253, 15.62049935, 29.06437174,-39.80557109],
-                                     [0, 0, 0, 0, 0],
+                                     [100, 250, 5, 5,-39.80557109],
                                      [159.5, 205.5,  37.01351105,  18.42570404,-51.58194466],
                                      [280, 268.5,  12.80624847,  18.58467766,-38.65980825],
                                      [242, 141,  37.48332963,   3.52156549, -43.91907581],
@@ -443,7 +452,7 @@ grasp_overlaps = grasping_overlaps_graph_new(grasping_anchors_reshaped, grasping
 grasp_overlaps_reshaped = tf.reshape(tf.squeeze(grasp_overlaps), [grasp_overlaps.shape[0], boxes2.shape[1], boxes1.shape[1]])
 
 ARIOU_NEG_THRESHOLD = 0.01
-ARIOU_POS_THRESHOLD = 0.3
+ARIOU_POS_THRESHOLD = 0.1
 
 # grasp_anchor_match - this is 1 for positive anchors, -1 for negative anchors
 # grasp_box_match - this specifies the id of the grasp box for each positive anchor, -1 for negative anchors
@@ -563,19 +572,20 @@ for i in range(gt_boxes_np.shape[0]):
         p = patches.Polygon(rect, linewidth=2,edgecolor='g',facecolor='none')
         fig.axes[i].add_patch(p)
 
-    GRASP_ANCHOR_ANGLES = [-67.5, -22.5, 22.5, 67.5]
-    # Choose positive_anchors
-    anchors = grasp_anchors_np[i]
-    positive_anchors_mask = (grasp_anchor_match[i]>0).numpy()
-    deltas = grasp_deltas[i] * GRASP_BBOX_STD_DEV
-    refined_anchors = utils.apply_box_deltas(anchors[positive_anchors_mask], deltas[positive_anchors_mask], 'mask_grasp_rcnn', len(GRASP_ANCHOR_ANGLES))
-    for refined_anchor in refined_anchors:
-        rect = utils.bbox_convert_to_four_vertices([refined_anchor])[0]
-        p = patches.Polygon(rect, linewidth=0.5,edgecolor='2',facecolor='none')
-        fig.axes[i].add_patch(p)
+    # GRASP_ANCHOR_ANGLES = [-67.5, -22.5, 22.5, 67.5]
+    # # Choose positive_anchors
+    # anchors = grasp_anchors_np[i]
+    # positive_anchors_mask = (grasp_anchor_match[i]>0).numpy()
+    # deltas = grasp_deltas[i] * GRASP_BBOX_STD_DEV
+    # refined_anchors = utils.apply_box_deltas(anchors[positive_anchors_mask], deltas[positive_anchors_mask], 'mask_grasp_rcnn', len(GRASP_ANCHOR_ANGLES))
+    # for refined_anchor in refined_anchors:
+    #     rect = utils.bbox_convert_to_four_vertices([refined_anchor])[0]
+    #     p = patches.Polygon(rect, linewidth=0.5,edgecolor='k',facecolor='none')
+    #     fig.axes[i].add_patch(p)
 
 #
-# import code; code.interact(local=dict(globals(), **locals()))
+plt.show()
+import code; code.interact(local=dict(globals(), **locals()))
 # x_minus_y = tf_deg2rad(30) - tf_deg2rad(60)
 # angle_difference = tf.atan2(tf.sin(x_minus_y), tf.cos(x_minus_y))
 # angle_scalar = tf.cos(angle_difference)
