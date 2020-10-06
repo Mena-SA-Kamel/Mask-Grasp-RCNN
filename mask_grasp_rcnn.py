@@ -89,7 +89,7 @@ class GraspMaskRCNNConfig(Config):
     CYCLIC_LR = False
     MODEL_SAVE_PERIOD = 8
     TRAIN_BN = False
-    TRAIN_GRASP_BN = False
+    TRAIN_GRASP_BN = True
     NUM_AUGMENTATIONS = 5
     ANGLE_BETA_FACTOR = 10
     GRASP_MIN_CONFIDENCE = 0.9
@@ -890,6 +890,7 @@ mode = "mask_grasp_rcnn"
 # COCO_MODEL_PATH = os.path.join("models", "mask_rcnn_object_vs_background_HYBRID-50_head_50_all.h5")
 # COCO_MODEL_PATH = 'models/Good_models/Training_SAMS_dataset_LR-same-div-2-HYBRID-weights.h5'
 COCO_MODEL_PATH = os.path.join("models", "Good_models", "Training_SAMS_dataset_LR-same-div-2-HYBRID-weights", "SAMS_DATASET_TRAINING_REFERENCE.h5")
+# COCO_MODEL_PATH = 'models/colab_result_id#1/mask_rcnn_grasp_and_mask_0288.h5'
 # COCO_MODEL_PATH = os.path.join("models", "mask_rcnn_coco.h5")
 model = modellib.MaskRCNN(mode="training", config=config,
                              model_dir=MODEL_DIR, task='mask_grasp_rcnn')
@@ -934,7 +935,8 @@ model.keras_model.save_weights(model_path)
 # # mrcnn_model_path = 'models/Good_models/Training_SAMS_dataset_LR-div-5-div-10-HYBRID-weights/mask_rcnn_object_vs_background_0051.h5'
 # # mask_grasp_model_path = 'models/grasp_and_mask20200905T1322/mask_rcnn_grasp_and_mask_0400.h5'
 # # mask_grasp_model_path = 'models/mask_grasp_rcnn_attempt#1b/mask_rcnn_grasp_and_mask_0108.h5'
-# mask_grasp_model_path = 'models/colab_result_id#1/mask_rcnn_grasp_and_mask_0288.h5'
+# # mask_grasp_model_path = 'models/colab_result_id#1/mask_rcnn_grasp_and_mask_0344.h5'
+# mask_grasp_model_path = 'models/colab_result_id#1/mask_rcnn_grasp_and_mask_0056.h5'
 #
 #
 # mask_grasp_model = modellib.MaskRCNN(mode="inference",
@@ -948,7 +950,7 @@ model.keras_model.save_weights(model_path)
 # # grasping_model.load_weights(grasping_model_path, by_name=True)
 #
 # dataset = validating_dataset
-# image_ids = random.choices(dataset.image_ids, k=60)
+# image_ids = random.choices(dataset.image_ids, k=30)
 # for image_id in image_ids:
 #      original_image, image_meta, gt_class_id, gt_bbox, gt_mask, gt_grasp_boxes, gt_grasp_id =\
 #          modellib.load_image_gt(dataset, inference_config,
@@ -1074,7 +1076,7 @@ model.keras_model.save_weights(model_path)
 # # mrcnn_model_path = 'models/Good_models/Training_SAMS_dataset_LR-div-5-div-10-HYBRID-weights/mask_rcnn_object_vs_background_0051.h5'
 # # mask_grasp_model_path = 'models/grasp_and_mask20200905T1322/mask_rcnn_grasp_and_mask_0400.h5'
 # # mask_grasp_model_path = 'models/mask_grasp_rcnn_attempt#1b/mask_rcnn_grasp_and_mask_0108.h5'
-# mask_grasp_model_path = 'models/colab_result_id#1/mask_rcnn_grasp_and_mask_0288.h5'
+# mask_grasp_model_path = 'models/colab_result_id#1/mask_rcnn_grasp_and_mask_0248.h5'
 #
 # mask_grasp_model = modellib.MaskRCNN(mode="inference",
 #                            config=inference_config,
@@ -1142,31 +1144,31 @@ model.keras_model.save_weights(model_path)
 #              num_positive_samples += 1
 #              break
 #      print(num_positive_samples / counter)
-#      # if not true_positive:
-#      #     fig, ax = plt.subplots()
-#      #     ax.imshow(original_image[:, :, :3])
-#      #     for i, rect in enumerate(gt_grasp_boxes[0]):
-#      #         x, y, w, h, theta = rect
-#      #         x1 = x - w / 2
-#      #         y1 = y - h / 2
-#      #         theta %= 360
-#      #         p = patches.Rectangle((x1, y1), w, h, angle=0, edgecolor=(1, 0, 1),
-#      #                               linewidth=1, facecolor='none')
-#      #         t2 = mpl.transforms.Affine2D().rotate_deg_around(x, y, theta) + ax.transData
-#      #         p.set_transform(t2)
-#      #         ax.add_patch(p)
-#      #     for i, rect in enumerate(top_image_rois):
-#      #         x, y, w, h, theta = rect
-#      #         x1 = x - w / 2
-#      #         y1 = y - h / 2
-#      #         theta %= 360
-#      #         p = patches.Rectangle((x1, y1), w, h, angle=0, edgecolor=(0, 0, 0),
-#      #                               linewidth=1, facecolor='none')
-#      #         t2 = mpl.transforms.Affine2D().rotate_deg_around(x, y, theta) + ax.transData
-#      #         p.set_transform(t2)
-#      #         ax.add_patch(p)
-#      #
-#      #     plt.show()
+#      if not true_positive:
+#          fig, ax = plt.subplots()
+#          ax.imshow(original_image[:, :, :3])
+#          for i, rect in enumerate(gt_grasp_boxes[0]):
+#              x, y, w, h, theta = rect
+#              x1 = x - w / 2
+#              y1 = y - h / 2
+#              theta %= 360
+#              p = patches.Rectangle((x1, y1), w, h, angle=0, edgecolor=(1, 0, 1),
+#                                    linewidth=1, facecolor='none')
+#              t2 = mpl.transforms.Affine2D().rotate_deg_around(x, y, theta) + ax.transData
+#              p.set_transform(t2)
+#              ax.add_patch(p)
+#          for i, rect in enumerate(top_image_rois):
+#              x, y, w, h, theta = rect
+#              x1 = x - w / 2
+#              y1 = y - h / 2
+#              theta %= 360
+#              p = patches.Rectangle((x1, y1), w, h, angle=0, edgecolor=(0, 0, 0),
+#                                    linewidth=1, facecolor='none')
+#              t2 = mpl.transforms.Affine2D().rotate_deg_around(x, y, theta) + ax.transData
+#              p.set_transform(t2)
+#              ax.add_patch(p)
+#
+#          plt.show()
 #
 #
 #

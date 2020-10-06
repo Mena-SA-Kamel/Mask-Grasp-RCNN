@@ -2,7 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 # results_file = open("colab_result_8b_July_16, 2020.txt", "r")
-results_file = open("attempt_#23-October2_2020.txt", "r")
+results_file = open("attempt_#25-October5_2020.txt", "r")
 epochs = results_file.read().splitlines()
 epochs = np.array(epochs)
 
