@@ -1214,24 +1214,24 @@ def detection_targets_graph(proposals, gt_class_ids, gt_boxes, gt_masks, anchors
     # grasp_overlaps [NUM_INSTANCES, 196(number of anchors) * number of grasping boxes]
     # grasp_overlaps has the shape [num_instances, num_grasp_instances, num_anchors]
 
-    # grasp_overlaps = tf.cond(
-    #     tf.greater(tf.shape(grasping_anchors)[0], 0),
-    #     true_fn=lambda: grasping_overlaps_graph(grasping_anchors, final_roi_gt_grasp_boxes),
-    #     false_fn=lambda: tf.cast(tf.constant([]), tf.float32)
-    # )
-
-    # grasping_anchors, grasp_anchor_match, grasp_deltas = tf.cond(
-    #     tf.greater(tf.shape(grasp_overlaps)[0], 0),
-    #     true_fn=lambda: generate_grasping_targets(grasp_overlaps, grasping_anchors,
-    #                                                 final_roi_gt_grasp_boxes, config),
-    #     false_fn=lambda: generate_zero_targets(grasping_anchors, config)
-    # )
+    grasp_overlaps = tf.cond(
+        tf.greater(tf.shape(grasping_anchors)[0], 0),
+        true_fn=lambda: grasping_overlaps_graph(grasping_anchors, final_roi_gt_grasp_boxes),
+        false_fn=lambda: tf.cast(tf.constant([]), tf.float32)
+    )
 
     grasping_anchors, grasp_anchor_match, grasp_deltas = tf.cond(
-        tf.greater(tf.shape(grasping_anchors)[0], 0),
-        true_fn=lambda: generate_grasp_training_targets(grasping_anchors, final_roi_gt_grasp_boxes, config),
+        tf.greater(tf.shape(grasp_overlaps)[0], 0),
+        true_fn=lambda: generate_grasping_targets(grasp_overlaps, grasping_anchors,
+                                                    final_roi_gt_grasp_boxes, config),
         false_fn=lambda: generate_zero_targets(grasping_anchors, config)
     )
+
+    # grasping_anchors, grasp_anchor_match, grasp_deltas = tf.cond(
+    #     tf.greater(tf.shape(grasping_anchors)[0], 0),
+    #     true_fn=lambda: generate_grasp_training_targets(grasping_anchors, final_roi_gt_grasp_boxes, config),
+    #     false_fn=lambda: generate_zero_targets(grasping_anchors, config)
+    # )
 
 
     # grasping_anchors, grasp_anchor_match, grasp_deltas = generate_grasping_targets(grasp_overlaps, grasping_anchors,
@@ -2794,7 +2794,9 @@ def load_image_gt(dataset, config, image_id, augment=False, augmentation=None, o
         image = dataset.load_image(image_id, augmentation=augmentations, image_type=image_type)
         original_shape = image.shape
         grasp_bbox_5_dimensional, grasp_class_ids = dataset.load_bounding_boxes(image_id, augmentations, config.NUM_GRASP_BOXES_PER_INSTANCE)
-        mask, class_ids = dataset.load_mask(image_id)
+        mask, class_ids = dataset.load_mask(image_id, augmentations)
+
+
 
         if crop_image:
             x_dim_crop = config.IMAGE_SHAPE[1]
@@ -2826,6 +2828,7 @@ def load_image_gt(dataset, config, image_id, augment=False, augmentation=None, o
             bbox_resize_5_dimensional = grasp_bbox_5_dimensional
             window = [0, 0, image.shape[0], image.shape[1]]
             scale = 1
+
 
         else:
             image, window, scale, padding, crop = utils.resize_image(
@@ -2864,6 +2867,11 @@ def load_image_gt(dataset, config, image_id, augment=False, augmentation=None, o
             max_dim=config.IMAGE_MAX_DIM,
             mode=config.IMAGE_RESIZE_MODE)
         mask = utils.resize_mask(mask, scale, padding, crop)
+    #
+    # fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(10, 10))
+    # ax1.imshow(image.astype('uint8'))
+    # ax2.imshow(mask[:, :, 0])
+    # plt.show()
 
     # Random horizontal flips.
     # TODO: will be removed in a future update in favor of augmentation
@@ -4578,7 +4586,7 @@ class MaskRCNN():
                                                                                    use_expanded_rois=config.USE_EXPANDED_ROIS,
                                                                                    rois_expand_factor=config.GRASP_ROI_EXPAND_FACTOR,
                                                                                    anchor_stride=config.GRASP_ANCHOR_STRIDE,
-                                                                                   train_bn=config.TRAIN_GRASP_BN,
+                                                                                   train_bn=False,
                                                                                    num_grasp_anchors=config.GRASP_ANCHORS_PER_ROI,
                                                                                    angles=config.GRASP_ANCHOR_ANGLES)
 
@@ -5039,7 +5047,7 @@ class MaskRCNN():
 
         if self.config.CYCLIC_LR:
             #Callbacks
-            clr_triangular = CyclicLR(base_lr=self.config.LEARNING_RATE / 15, max_lr=self.config.LEARNING_RATE,
+            clr_triangular = CyclicLR(base_lr=self.config.LEARNING_RATE / 15, max_lr=self.config.LEARNING_RATE*15,
                                       step_size=self.config.STEPS_PER_EPOCH * 4, mode='triangular',
                                       gamma=1., scale_fn=None, scale_mode='cycle')
             callbacks = [

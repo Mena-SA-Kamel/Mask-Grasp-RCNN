@@ -2,7 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 # results_file = open("colab_result_8b_July_16, 2020.txt", "r")
-results_file = open("attempt_#14d-September11_2020.txt", "r")
+results_file = open("attempt_#26-October6_2020.txt", "r")
 epochs = results_file.read().splitlines()
 epochs = np.array(epochs)
 
@@ -70,7 +70,7 @@ ax1.plot(epoch_numbers, grasp_losses, label='Grasp loss')
 # ax1.text(250,0.090,'LR = 0.0002')
 # ax1.set_title('Training Loss')
 # ax1.legend()
-# ax1.set_xlim([0, 100])
+# ax1.set_xlim([0, 300])
 # ax1.set_ylim([0.6, 1.2])
 
 ax1.plot(epoch_numbers, val_grasp_losses, label='Validation Grasp loss')
@@ -87,6 +87,8 @@ ax1.plot(epoch_numbers, val_grasp_losses, label='Validation Grasp loss')
 
 ax1.set(xlabel='Epochs', ylabel='Loss')
 ax1.legend()
+# ax1.set_xlim([-10, 350])
+# ax1.set_ylim([0.3, 0.8])
 # ax2.set(xlabel='Epochs', ylabel='Loss')
 
 fig.tight_layout(pad=1.0)
