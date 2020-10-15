@@ -2785,6 +2785,7 @@ def load_image_gt(dataset, config, image_id, augment=False, augmentation=None, o
 
     elif mode == 'mask_grasp_rcnn':
         crop_image = False
+
         if augmentations != []:
             crop_image = bool(random.getrandbits(1))
             angle, dx, dy, flip, contrast, noise = augmentations
@@ -2794,9 +2795,15 @@ def load_image_gt(dataset, config, image_id, augment=False, augmentation=None, o
         image = dataset.load_image(image_id, augmentation=augmentations, image_type=image_type)
         original_shape = image.shape
         grasp_bbox_5_dimensional, grasp_class_ids = dataset.load_bounding_boxes(image_id, augmentations, config.NUM_GRASP_BOXES_PER_INSTANCE)
-        mask, class_ids = dataset.load_mask(image_id, augmentations)
 
-
+        # Datasets like cornell don't encode any information regarding the mask or location of the object, so we
+        # initiate a placeholder for the masks
+        image_path = dataset.image_info[image_id]['label_path']
+        if ('cornell' in image_path) or ('multi_grasp' in image_path):
+            mask = np.ones([original_shape[0], original_shape[1], 1])
+            class_ids = np.array([1])
+        else:
+            mask, class_ids = dataset.load_mask(image_id, augmentations)
 
         if crop_image:
             x_dim_crop = config.IMAGE_SHAPE[1]
@@ -2829,7 +2836,6 @@ def load_image_gt(dataset, config, image_id, augment=False, augmentation=None, o
             window = [0, 0, image.shape[0], image.shape[1]]
             scale = 1
 
-
         else:
             image, window, scale, padding, crop = utils.resize_image(
                 image,
@@ -2838,24 +2844,27 @@ def load_image_gt(dataset, config, image_id, augment=False, augmentation=None, o
                 max_dim=config.IMAGE_MAX_DIM,
                 mode=config.IMAGE_RESIZE_MODE)
             mask = utils.resize_mask(mask, scale, padding, crop)
-
             bbox_resize_5_dimensional = utils.resize_grasp_box(window, grasp_bbox_5_dimensional, original_shape)
-
-        # fig, axs = plt.subplots()  # figsize=(25, 5))
-        # axs.imshow(np.array(image[:,:,:3]).astype('uint8'))
-        # for i, rect in enumerate(bbox_resize_5_dimensional):
-        #     for box in rect:
-        #         x, y, w, h, theta = box
-        #         x1 = x - w / 2
-        #         y1 = y - h / 2
-        #         theta %= 360
-        #         p = patches.Rectangle((x1, y1), w, h, angle=0, edgecolor=(0,1,1),
-        #                               linewidth=1, facecolor='none')
-        #         t2 = mpl.transforms.Affine2D().rotate_deg_around(x, y, theta) + axs.transData
-        #         p.set_transform(t2)
-        #         axs.add_patch(p)
-        # print ('Crop image: ', crop_image, ' augmentation: ', augmentations)
-        # plt.show()
+            #
+            # fig, axs = plt.subplots()  # figsize=(25, 5))
+            # axs.imshow(np.array(image[:, :, :3]).astype('uint8'))
+            # for i, rect in enumerate(bbox_resize_5_dimensional):
+            #     for box in rect:
+            #         x, y, w, h, theta = box
+            #         # import code;
+            #         # code.interact(local=dict(globals(), **locals()))
+            #         x1 = x - w / 2
+            #         y1 = y - h / 2
+            #         theta %= 360
+            #         p = patches.Rectangle((x1, y1), w, h, angle=0, edgecolor=(0, 1, 1),
+            #                               linewidth=1, facecolor='none')
+            #         t2 = mpl.transforms.Affine2D().rotate_deg_around(x, y, theta) + axs.transData
+            #         p.set_transform(t2)
+            #         axs.add_patch(p)
+            # print('Crop image: ', crop_image, ' augmentation: ', augmentations)
+            # plt.show(block=False)
+            # import code;
+            # code.interact(local=dict(globals(), **locals()))
     else:
         image = dataset.load_image(image_id, image_type=image_type)
         original_shape = image.shape
@@ -2867,11 +2876,6 @@ def load_image_gt(dataset, config, image_id, augment=False, augmentation=None, o
             max_dim=config.IMAGE_MAX_DIM,
             mode=config.IMAGE_RESIZE_MODE)
         mask = utils.resize_mask(mask, scale, padding, crop)
-    #
-    # fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(10, 10))
-    # ax1.imshow(image.astype('uint8'))
-    # ax2.imshow(mask[:, :, 0])
-    # plt.show()
 
     # Random horizontal flips.
     # TODO: will be removed in a future update in favor of augmentation
@@ -3609,8 +3613,6 @@ def mask_grasp_data_generator(dataset, config, shuffle=True, augment=False, augm
                                   use_mini_mask=config.USE_MINI_MASK,
                                   image_type='rgbd',
                                   mode=mode)
-
-
             # Skip images that have no instances. This can happen in cases
             # where we train on a subset of classes and the image doesn't
             # have any of the classes we care about.

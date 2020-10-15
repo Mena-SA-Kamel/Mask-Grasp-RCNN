@@ -878,18 +878,21 @@ def crop_bbox(window, bbox_vertices, original_shape, target_shape):
 
 def resize_grasp_box(window, grasp_box, original_shape):
     x, y, w, h, theta = np.split(grasp_box, indices_or_sections=5, axis=-1)
-
     y1, x1, y2, x2 = window
     new_image_width = x2 - x1
     new_image_height = y2 - y1
-
     x_ratio = x / original_shape[1]
     y_ratio = y / original_shape[0]
     w_ratio = w / original_shape[1]
     h_ratio = h / original_shape[0]
 
-    x_new = x_ratio * new_image_width
-    y_new = y_ratio * new_image_height
+    x_new = (x_ratio * new_image_width)
+    y_new = (y_ratio * new_image_height)
+    non_zero_boxes = np.logical_and(x_new != 0,  y_new != 0)
+
+    x_new[non_zero_boxes] = x_new[non_zero_boxes] + x1
+    y_new[non_zero_boxes] = y_new[non_zero_boxes] + y1
+
     w_new = w_ratio * new_image_width
     h_new = h_ratio * new_image_height
 
