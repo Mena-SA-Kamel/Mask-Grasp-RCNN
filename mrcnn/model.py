@@ -2845,26 +2845,26 @@ def load_image_gt(dataset, config, image_id, augment=False, augmentation=None, o
                 mode=config.IMAGE_RESIZE_MODE)
             mask = utils.resize_mask(mask, scale, padding, crop)
             bbox_resize_5_dimensional = utils.resize_grasp_box(window, grasp_bbox_5_dimensional, original_shape)
-            #
-            # fig, axs = plt.subplots()  # figsize=(25, 5))
-            # axs.imshow(np.array(image[:, :, :3]).astype('uint8'))
-            # for i, rect in enumerate(bbox_resize_5_dimensional):
-            #     for box in rect:
-            #         x, y, w, h, theta = box
-            #         # import code;
-            #         # code.interact(local=dict(globals(), **locals()))
-            #         x1 = x - w / 2
-            #         y1 = y - h / 2
-            #         theta %= 360
-            #         p = patches.Rectangle((x1, y1), w, h, angle=0, edgecolor=(0, 1, 1),
-            #                               linewidth=1, facecolor='none')
-            #         t2 = mpl.transforms.Affine2D().rotate_deg_around(x, y, theta) + axs.transData
-            #         p.set_transform(t2)
-            #         axs.add_patch(p)
-            # print('Crop image: ', crop_image, ' augmentation: ', augmentations)
-            # plt.show(block=False)
-            # import code;
-            # code.interact(local=dict(globals(), **locals()))
+        #
+        # fig, axs = plt.subplots()  # figsize=(25, 5))
+        # axs.imshow(np.array(image[:, :, :3]).astype('uint8'))
+        # for i, rect in enumerate(bbox_resize_5_dimensional):
+        #     for box in rect:
+        #         x, y, w, h, theta = box
+        #         # import code;
+        #         # code.interact(local=dict(globals(), **locals()))
+        #         x1 = x - w / 2
+        #         y1 = y - h / 2
+        #         theta %= 360
+        #         p = patches.Rectangle((x1, y1), w, h, angle=0, edgecolor=(0, 1, 1),
+        #                               linewidth=1, facecolor='none')
+        #         t2 = mpl.transforms.Affine2D().rotate_deg_around(x, y, theta) + axs.transData
+        #         p.set_transform(t2)
+        #         axs.add_patch(p)
+        # print('Crop image: ', crop_image, ' augmentation: ', augmentations)
+        # plt.show(block=False)
+        # import code;
+        # code.interact(local=dict(globals(), **locals()))
     else:
         image = dataset.load_image(image_id, image_type=image_type)
         original_shape = image.shape

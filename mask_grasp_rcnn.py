@@ -72,7 +72,7 @@ class GraspMaskRCNNConfig(Config):
     ARIOU_NEG_THRESHOLD = 0.01
     ARIOU_POS_THRESHOLD = 0.1
     # LEARNING_RATE = 0.00002
-    LEARNING_RATE = 0.0002 # was 0.00001
+    LEARNING_RATE = 0.0001 # was 0.00001
     # WEIGHT_DECAY = 0.000003
     WEIGHT_DECAY = 0.00001
     ROI_BOX_SENSITIVITY = 0 # 0 means just checks if the gt_grasp_box center <x,y> is in the RoI
@@ -710,9 +710,17 @@ class GraspMaskRCNNDataset(Dataset):
                 bbox_5_dimensional = []
                 for box in bounding_box_vertices:
                     center_location, box_size, theta = cv2.minAreaRect(box)
+                    # The first two coordinates of a rectangle define the line
+                    # representing the orientation of the gripper plate
+                    x1, y1 = box[0]
+                    x2, y2 = box[1]
+                    x3, y3 = box[2]
+                    theta_radians = math.atan2(y2 - y1, x2 - x1)
+                    theta_degree = self.rad2deg(theta_radians)
+                    width = ((y2 - y1)**2 + (x2 - x1)**2)**0.5
+                    height = ((y3 - y2)**2 + (x3 - x2)**2)**0.5
                     x, y = center_location
-                    w, h = box_size
-                    bbox_5_dimensional.append([x, y, w, h, theta])
+                    bbox_5_dimensional.append([x, y, width, height, theta_degree])
                 bbox_5_dimensional = np.array(bbox_5_dimensional)
 
                 # bbox_5_dimensional = self.bbox_convert_to_five_dimension([bounding_box_vertices])
@@ -1036,7 +1044,7 @@ model = modellib.MaskRCNN(mode="training", config=config,
 #                                "mrcnn_bbox", "mrcnn_mask"])
 model.load_weights(COCO_MODEL_PATH, by_name=True)
 #
-# model.train(training_dataset, validating_dataset,
+# model.train(training_dataset, validating_dataset,load_bounding_boxes
 #                learning_rate=config.LEARNING_RATE,
 #                epochs=200,
 #                layers=r"(conv1)|(rpn\_.*)|(fpn\_.*)|(mrcnn\_.*)|(grasp\_.*)",
@@ -1073,7 +1081,7 @@ model.keras_model.save_weights(model_path)
 # # mask_grasp_model_path = 'models/mask_grasp_rcnn_attempt#1b/mask_rcnn_grasp_and_mask_0108.h5'
 # # mask_grasp_model_path = 'models/colab_result_id#1/mask_rcnn_grasp_and_mask_0344.h5'
 # # mask_grasp_model_path = 'models/colab_result_id#1/attempt#26c_weights.h5'
-# mask_grasp_model_path = 'models/colab_result_id#1/mask_rcnn_grasp_and_mask_0288.h5'
+# mask_grasp_model_path = 'models/colab_result_id#1/mask_rcnn_grasp_and_mask_0312.h5'
 #
 #
 # mask_grasp_model = modellib.MaskRCNN(mode="inference",
