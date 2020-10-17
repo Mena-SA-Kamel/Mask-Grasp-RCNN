@@ -221,38 +221,39 @@ WARNING:tensorflow:From /tensorflow-1.15.2/python3.6/tensorflow_core/python/comp
 Instructions for updating:
 non-resource variables are not supported in the long term
 Using TensorFlow backend.
-WARNING:tensorflow:From mask_grasp_rcnn.py:990: The name tf.ConfigProto is deprecated. Please use tf.compat.v1.ConfigProto instead.
+WARNING:tensorflow:From mask_grasp_rcnn.py:998: The name tf.ConfigProto is deprecated. Please use tf.compat.v1.ConfigProto instead.
 
-WARNING:tensorflow:From mask_grasp_rcnn.py:992: The name tf.Session is deprecated. Please use tf.compat.v1.Session instead.
+WARNING:tensorflow:From mask_grasp_rcnn.py:1000: The name tf.Session is deprecated. Please use tf.compat.v1.Session instead.
 
-2020-10-15 22:27:15.654372: I tensorflow/core/platform/profile_utils/cpu_utils.cc:94] CPU Frequency: 2200000000 Hz
-2020-10-15 22:27:15.654689: I tensorflow/compiler/xla/service/service.cc:168] XLA service 0x2dcd100 initialized for platform Host (this does not guarantee that XLA will be used). Devices:
-2020-10-15 22:27:15.654725: I tensorflow/compiler/xla/service/service.cc:176]   StreamExecutor device (0): Host, Default Version
-2020-10-15 22:27:15.658932: I tensorflow/stream_executor/platform/default/dso_loader.cc:44] Successfully opened dynamic library libcuda.so.1
-2020-10-15 22:27:15.848871: I tensorflow/stream_executor/cuda/cuda_gpu_executor.cc:983] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero
-2020-10-15 22:27:15.849629: I tensorflow/compiler/xla/service/service.cc:168] XLA service 0x2dcd2c0 initialized for platform CUDA (this does not guarantee that XLA will be used). Devices:
-2020-10-15 22:27:15.849660: I tensorflow/compiler/xla/service/service.cc:176]   StreamExecutor device (0): Tesla V100-SXM2-16GB, Compute Capability 7.0
-2020-10-15 22:27:15.851263: I tensorflow/stream_executor/cuda/cuda_gpu_executor.cc:983] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero
-2020-10-15 22:27:15.851904: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1639] Found device 0 with properties:
+2020-10-16 16:11:46.919424: I tensorflow/core/platform/cpu_feature_guard.cc:142] Your CPU supports instructions that this TensorFlow binary was not compiled to use: AVX512F
+2020-10-16 16:11:46.968988: I tensorflow/core/platform/profile_utils/cpu_utils.cc:94] CPU Frequency: 2000160000 Hz
+2020-10-16 16:11:46.969344: I tensorflow/compiler/xla/service/service.cc:168] XLA service 0x1f23480 initialized for platform Host (this does not guarantee that XLA will be used). Devices:
+2020-10-16 16:11:46.969382: I tensorflow/compiler/xla/service/service.cc:176]   StreamExecutor device (0): Host, Default Version
+2020-10-16 16:11:46.974242: I tensorflow/stream_executor/platform/default/dso_loader.cc:44] Successfully opened dynamic library libcuda.so.1
+2020-10-16 16:11:47.169917: I tensorflow/stream_executor/cuda/cuda_gpu_executor.cc:983] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero
+2020-10-16 16:11:47.170747: I tensorflow/compiler/xla/service/service.cc:168] XLA service 0x1f22bc0 initialized for platform CUDA (this does not guarantee that XLA will be used). Devices:
+2020-10-16 16:11:47.170779: I tensorflow/compiler/xla/service/service.cc:176]   StreamExecutor device (0): Tesla V100-SXM2-16GB, Compute Capability 7.0
+2020-10-16 16:11:47.176489: I tensorflow/stream_executor/cuda/cuda_gpu_executor.cc:983] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero
+2020-10-16 16:11:47.177134: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1639] Found device 0 with properties:
 name: Tesla V100-SXM2-16GB major: 7 minor: 0 memoryClockRate(GHz): 1.53
 pciBusID: 0000:00:04.0
-2020-10-15 22:27:15.852285: I tensorflow/stream_executor/platform/default/dso_loader.cc:44] Successfully opened dynamic library libcudart.so.10.1
-2020-10-15 22:27:16.085581: I tensorflow/stream_executor/platform/default/dso_loader.cc:44] Successfully opened dynamic library libcublas.so.10
-2020-10-15 22:27:16.203748: I tensorflow/stream_executor/platform/default/dso_loader.cc:44] Successfully opened dynamic library libcufft.so.10
-2020-10-15 22:27:16.253664: I tensorflow/stream_executor/platform/default/dso_loader.cc:44] Successfully opened dynamic library libcurand.so.10
-2020-10-15 22:27:16.499123: I tensorflow/stream_executor/platform/default/dso_loader.cc:44] Successfully opened dynamic library libcusolver.so.10
-2020-10-15 22:27:16.549596: I tensorflow/stream_executor/platform/default/dso_loader.cc:44] Successfully opened dynamic library libcusparse.so.10
-2020-10-15 22:27:17.019371: I tensorflow/stream_executor/platform/default/dso_loader.cc:44] Successfully opened dynamic library libcudnn.so.7
-2020-10-15 22:27:17.019609: I tensorflow/stream_executor/cuda/cuda_gpu_executor.cc:983] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero
-2020-10-15 22:27:17.020343: I tensorflow/stream_executor/cuda/cuda_gpu_executor.cc:983] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero
-2020-10-15 22:27:17.021004: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1767] Adding visible gpu devices: 0
-2020-10-15 22:27:17.023810: I tensorflow/stream_executor/platform/default/dso_loader.cc:44] Successfully opened dynamic library libcudart.so.10.1
-2020-10-15 22:27:17.025431: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1180] Device interconnect StreamExecutor with strength 1 edge matrix:
-2020-10-15 22:27:17.025472: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1186]      0
-2020-10-15 22:27:17.025486: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1199] 0:   N
-2020-10-15 22:27:17.045077: I tensorflow/stream_executor/cuda/cuda_gpu_executor.cc:983] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero
-2020-10-15 22:27:17.045792: I tensorflow/stream_executor/cuda/cuda_gpu_executor.cc:983] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero
-2020-10-15 22:27:17.046438: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1325] Created TensorFlow device (/job:localhost/replica:0/task:0/device:GPU:0 with 15024 MB memory) -> physical GPU (device: 0, name: Tesla V100-SXM2-16GB, pci bus id: 0000:00:04.0, compute capability: 7.0)
+2020-10-16 16:11:47.177564: I tensorflow/stream_executor/platform/default/dso_loader.cc:44] Successfully opened dynamic library libcudart.so.10.1
+2020-10-16 16:11:47.439510: I tensorflow/stream_executor/platform/default/dso_loader.cc:44] Successfully opened dynamic library libcublas.so.10
+2020-10-16 16:11:47.573691: I tensorflow/stream_executor/platform/default/dso_loader.cc:44] Successfully opened dynamic library libcufft.so.10
+2020-10-16 16:11:47.601691: I tensorflow/stream_executor/platform/default/dso_loader.cc:44] Successfully opened dynamic library libcurand.so.10
+2020-10-16 16:11:47.875703: I tensorflow/stream_executor/platform/default/dso_loader.cc:44] Successfully opened dynamic library libcusolver.so.10
+2020-10-16 16:11:47.894289: I tensorflow/stream_executor/platform/default/dso_loader.cc:44] Successfully opened dynamic library libcusparse.so.10
+2020-10-16 16:11:48.420081: I tensorflow/stream_executor/platform/default/dso_loader.cc:44] Successfully opened dynamic library libcudnn.so.7
+2020-10-16 16:11:48.420329: I tensorflow/stream_executor/cuda/cuda_gpu_executor.cc:983] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero
+2020-10-16 16:11:48.421022: I tensorflow/stream_executor/cuda/cuda_gpu_executor.cc:983] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero
+2020-10-16 16:11:48.421627: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1767] Adding visible gpu devices: 0
+2020-10-16 16:11:48.428282: I tensorflow/stream_executor/platform/default/dso_loader.cc:44] Successfully opened dynamic library libcudart.so.10.1
+2020-10-16 16:11:48.430066: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1180] Device interconnect StreamExecutor with strength 1 edge matrix:
+2020-10-16 16:11:48.430123: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1186]      0
+2020-10-16 16:11:48.430148: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1199] 0:   N
+2020-10-16 16:11:48.432477: I tensorflow/stream_executor/cuda/cuda_gpu_executor.cc:983] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero
+2020-10-16 16:11:48.433226: I tensorflow/stream_executor/cuda/cuda_gpu_executor.cc:983] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero
+2020-10-16 16:11:48.433886: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1325] Created TensorFlow device (/job:localhost/replica:0/task:0/device:GPU:0 with 15024 MB memory) -> physical GPU (device: 0, name: Tesla V100-SXM2-16GB, pci bus id: 0000:00:04.0, compute capability: 7.0)
 WARNING:tensorflow:From /tensorflow-1.15.2/python3.6/tensorflow_core/python/ops/resource_variable_ops.py:1630: calling BaseResourceVariable.__init__ (from tensorflow.python.ops.resource_variable_ops) with constraint is deprecated and will be removed in a future version.
 Instructions for updating:
 If using Keras pass *_constraint arguments to layers.
@@ -264,47 +265,47 @@ Use tf.where in 2.0, which has the same broadcast rule as np.where
 WARNING:tensorflow:From /content/drive/My Drive/object_vs_background/mrcnn/model.py:1169: calling crop_and_resize_v1 (from tensorflow.python.ops.image_ops_impl) with box_ind is deprecated and will be removed in a future version.
 Instructions for updating:
 box_ind is deprecated, use box_indices instead
-2020-10-15 22:27:23.334405: I tensorflow/stream_executor/cuda/cuda_gpu_executor.cc:983] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero
-2020-10-15 22:27:23.334995: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1639] Found device 0 with properties:
+2020-10-16 16:11:55.316450: I tensorflow/stream_executor/cuda/cuda_gpu_executor.cc:983] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero
+2020-10-16 16:11:55.317166: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1639] Found device 0 with properties:
 name: Tesla V100-SXM2-16GB major: 7 minor: 0 memoryClockRate(GHz): 1.53
 pciBusID: 0000:00:04.0
-2020-10-15 22:27:23.335101: I tensorflow/stream_executor/platform/default/dso_loader.cc:44] Successfully opened dynamic library libcudart.so.10.1
-2020-10-15 22:27:23.335129: I tensorflow/stream_executor/platform/default/dso_loader.cc:44] Successfully opened dynamic library libcublas.so.10
-2020-10-15 22:27:23.335142: I tensorflow/stream_executor/platform/default/dso_loader.cc:44] Successfully opened dynamic library libcufft.so.10
-2020-10-15 22:27:23.335156: I tensorflow/stream_executor/platform/default/dso_loader.cc:44] Successfully opened dynamic library libcurand.so.10
-2020-10-15 22:27:23.335174: I tensorflow/stream_executor/platform/default/dso_loader.cc:44] Successfully opened dynamic library libcusolver.so.10
-2020-10-15 22:27:23.335188: I tensorflow/stream_executor/platform/default/dso_loader.cc:44] Successfully opened dynamic library libcusparse.so.10
-2020-10-15 22:27:23.335203: I tensorflow/stream_executor/platform/default/dso_loader.cc:44] Successfully opened dynamic library libcudnn.so.7
-2020-10-15 22:27:23.335277: I tensorflow/stream_executor/cuda/cuda_gpu_executor.cc:983] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero
-2020-10-15 22:27:23.335841: I tensorflow/stream_executor/cuda/cuda_gpu_executor.cc:983] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero
-2020-10-15 22:27:23.336375: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1767] Adding visible gpu devices: 0
-2020-10-15 22:27:23.337054: I tensorflow/stream_executor/cuda/cuda_gpu_executor.cc:983] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero
-2020-10-15 22:27:23.337613: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1639] Found device 0 with properties:
+2020-10-16 16:11:55.317245: I tensorflow/stream_executor/platform/default/dso_loader.cc:44] Successfully opened dynamic library libcudart.so.10.1
+2020-10-16 16:11:55.317266: I tensorflow/stream_executor/platform/default/dso_loader.cc:44] Successfully opened dynamic library libcublas.so.10
+2020-10-16 16:11:55.317280: I tensorflow/stream_executor/platform/default/dso_loader.cc:44] Successfully opened dynamic library libcufft.so.10
+2020-10-16 16:11:55.317296: I tensorflow/stream_executor/platform/default/dso_loader.cc:44] Successfully opened dynamic library libcurand.so.10
+2020-10-16 16:11:55.317311: I tensorflow/stream_executor/platform/default/dso_loader.cc:44] Successfully opened dynamic library libcusolver.so.10
+2020-10-16 16:11:55.317327: I tensorflow/stream_executor/platform/default/dso_loader.cc:44] Successfully opened dynamic library libcusparse.so.10
+2020-10-16 16:11:55.317342: I tensorflow/stream_executor/platform/default/dso_loader.cc:44] Successfully opened dynamic library libcudnn.so.7
+2020-10-16 16:11:55.317416: I tensorflow/stream_executor/cuda/cuda_gpu_executor.cc:983] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero
+2020-10-16 16:11:55.318037: I tensorflow/stream_executor/cuda/cuda_gpu_executor.cc:983] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero
+2020-10-16 16:11:55.318617: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1767] Adding visible gpu devices: 0
+2020-10-16 16:11:55.319411: I tensorflow/stream_executor/cuda/cuda_gpu_executor.cc:983] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero
+2020-10-16 16:11:55.320044: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1639] Found device 0 with properties:
 name: Tesla V100-SXM2-16GB major: 7 minor: 0 memoryClockRate(GHz): 1.53
 pciBusID: 0000:00:04.0
-2020-10-15 22:27:23.337660: I tensorflow/stream_executor/platform/default/dso_loader.cc:44] Successfully opened dynamic library libcudart.so.10.1
-2020-10-15 22:27:23.337680: I tensorflow/stream_executor/platform/default/dso_loader.cc:44] Successfully opened dynamic library libcublas.so.10
-2020-10-15 22:27:23.337695: I tensorflow/stream_executor/platform/default/dso_loader.cc:44] Successfully opened dynamic library libcufft.so.10
-2020-10-15 22:27:23.337712: I tensorflow/stream_executor/platform/default/dso_loader.cc:44] Successfully opened dynamic library libcurand.so.10
-2020-10-15 22:27:23.337725: I tensorflow/stream_executor/platform/default/dso_loader.cc:44] Successfully opened dynamic library libcusolver.so.10
-2020-10-15 22:27:23.337737: I tensorflow/stream_executor/platform/default/dso_loader.cc:44] Successfully opened dynamic library libcusparse.so.10
-2020-10-15 22:27:23.337750: I tensorflow/stream_executor/platform/default/dso_loader.cc:44] Successfully opened dynamic library libcudnn.so.7
-2020-10-15 22:27:23.337799: I tensorflow/stream_executor/cuda/cuda_gpu_executor.cc:983] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero
-2020-10-15 22:27:23.338397: I tensorflow/stream_executor/cuda/cuda_gpu_executor.cc:983] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero
-2020-10-15 22:27:23.338975: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1767] Adding visible gpu devices: 0
-2020-10-15 22:27:23.339013: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1180] Device interconnect StreamExecutor with strength 1 edge matrix:
-2020-10-15 22:27:23.339035: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1186]      0
-2020-10-15 22:27:23.339045: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1199] 0:   N
-2020-10-15 22:27:23.339132: I tensorflow/stream_executor/cuda/cuda_gpu_executor.cc:983] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero
-2020-10-15 22:27:23.339689: I tensorflow/stream_executor/cuda/cuda_gpu_executor.cc:983] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero
-2020-10-15 22:27:23.340240: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1325] Created TensorFlow device (/job:localhost/replica:0/task:0/device:GPU:0 with 15024 MB memory) -> physical GPU (device: 0, name: Tesla V100-SXM2-16GB, pci bus id: 0000:00:04.0, compute capability: 7.0)
+2020-10-16 16:11:55.320093: I tensorflow/stream_executor/platform/default/dso_loader.cc:44] Successfully opened dynamic library libcudart.so.10.1
+2020-10-16 16:11:55.320125: I tensorflow/stream_executor/platform/default/dso_loader.cc:44] Successfully opened dynamic library libcublas.so.10
+2020-10-16 16:11:55.320160: I tensorflow/stream_executor/platform/default/dso_loader.cc:44] Successfully opened dynamic library libcufft.so.10
+2020-10-16 16:11:55.320176: I tensorflow/stream_executor/platform/default/dso_loader.cc:44] Successfully opened dynamic library libcurand.so.10
+2020-10-16 16:11:55.320191: I tensorflow/stream_executor/platform/default/dso_loader.cc:44] Successfully opened dynamic library libcusolver.so.10
+2020-10-16 16:11:55.320206: I tensorflow/stream_executor/platform/default/dso_loader.cc:44] Successfully opened dynamic library libcusparse.so.10
+2020-10-16 16:11:55.320221: I tensorflow/stream_executor/platform/default/dso_loader.cc:44] Successfully opened dynamic library libcudnn.so.7
+2020-10-16 16:11:55.320279: I tensorflow/stream_executor/cuda/cuda_gpu_executor.cc:983] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero
+2020-10-16 16:11:55.320914: I tensorflow/stream_executor/cuda/cuda_gpu_executor.cc:983] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero
+2020-10-16 16:11:55.321491: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1767] Adding visible gpu devices: 0
+2020-10-16 16:11:55.321524: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1180] Device interconnect StreamExecutor with strength 1 edge matrix:
+2020-10-16 16:11:55.321536: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1186]      0
+2020-10-16 16:11:55.321543: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1199] 0:   N
+2020-10-16 16:11:55.321618: I tensorflow/stream_executor/cuda/cuda_gpu_executor.cc:983] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero
+2020-10-16 16:11:55.322259: I tensorflow/stream_executor/cuda/cuda_gpu_executor.cc:983] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero
+2020-10-16 16:11:55.322825: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1325] Created TensorFlow device (/job:localhost/replica:0/task:0/device:GPU:0 with 15024 MB memory) -> physical GPU (device: 0, name: Tesla V100-SXM2-16GB, pci bus id: 0000:00:04.0, compute capability: 7.0)
 WARNING:tensorflow:From /tensorflow-1.15.2/python3.6/tensorflow_core/python/util/deprecation.py:507: calling count_nonzero (from tensorflow.python.ops.math_ops) with axis is deprecated and will be removed in a future version.
 Instructions for updating:
 reduction_indices is deprecated, use axis instead
 
 Starting at epoch 0. LR=0.0001
 
-Checkpoint Path: /content/drive/My Drive/models/grasp_and_mask20201015T2228/mask_rcnn_grasp_and_mask_{epoch:04d}.h5
+Checkpoint Path: /content/drive/My Drive/models/grasp_and_mask20201016T1612/mask_rcnn_grasp_and_mask_{epoch:04d}.h5
 Selecting layers to train
 In model:  rpn_model
 grasp_conv1            (TimeDistributed)
@@ -333,273 +334,293 @@ WARNING:tensorflow:From /tensorflow-1.15.2/python3.6/keras/callbacks/tensorboard
 
 WARNING:tensorflow:From /tensorflow-1.15.2/python3.6/keras/callbacks/tensorboard_v1.py:203: The name tf.summary.FileWriter is deprecated. Please use tf.compat.v1.summary.FileWriter instead.
 
-Epoch 1/400
-2020-10-15 22:29:35.340879: I tensorflow/stream_executor/platform/default/dso_loader.cc:44] Successfully opened dynamic library libcublas.so.10
-2020-10-15 22:29:36.884553: I tensorflow/stream_executor/platform/default/dso_loader.cc:44] Successfully opened dynamic library libcudnn.so.7
-300/300 [==============================] - 196s 654ms/step - loss: 9.3852 - rpn_class_loss: 0.2473 - rpn_bbox_loss: 1.3290 - mrcnn_class_loss: 0.7572 - mrcnn_bbox_loss: 1.3598 - mrcnn_mask_loss: 5.2337 - grasp_loss: 0.4582 - val_loss: 6.8911 - val_rpn_class_loss: 0.0789 - val_rpn_bbox_loss: 0.6648 - val_mrcnn_class_loss: 1.0484 - val_mrcnn_bbox_loss: 1.0421 - val_mrcnn_mask_loss: 4.1358 - val_grasp_loss: 0.4711
+Epoch 1/500
+2020-10-16 16:13:49.345867: I tensorflow/stream_executor/platform/default/dso_loader.cc:44] Successfully opened dynamic library libcublas.so.10
+2020-10-16 16:13:50.891053: I tensorflow/stream_executor/platform/default/dso_loader.cc:44] Successfully opened dynamic library libcudnn.so.7
+300/300 [==============================] - 203s 676ms/step - loss: 9.4674 - rpn_class_loss: 0.2505 - rpn_bbox_loss: 1.3363 - mrcnn_class_loss: 0.7548 - mrcnn_bbox_loss: 1.3567 - mrcnn_mask_loss: 5.2051 - grasp_loss: 0.5639 - val_loss: 8.9886 - val_rpn_class_loss: 0.0791 - val_rpn_bbox_loss: 0.6692 - val_mrcnn_class_loss: 1.0494 - val_mrcnn_bbox_loss: 1.0400 - val_mrcnn_mask_loss: 4.1361 - val_grasp_loss: 0.6059
 WARNING:tensorflow:From /tensorflow-1.15.2/python3.6/keras/callbacks/tensorboard_v1.py:343: The name tf.Summary is deprecated. Please use tf.compat.v1.Summary instead.
 
-Epoch 2/400
-300/300 [==============================] - 173s 578ms/step - loss: 9.3841 - rpn_class_loss: 0.2496 - rpn_bbox_loss: 1.3329 - mrcnn_class_loss: 0.7749 - mrcnn_bbox_loss: 1.3658 - mrcnn_mask_loss: 5.2145 - grasp_loss: 0.4464 - val_loss: 7.8603 - val_rpn_class_loss: 0.0800 - val_rpn_bbox_loss: 0.6609 - val_mrcnn_class_loss: 1.0548 - val_mrcnn_bbox_loss: 1.0296 - val_mrcnn_mask_loss: 4.0539 - val_grasp_loss: 0.4772
-Epoch 3/400
-300/300 [==============================] - 174s 580ms/step - loss: 9.5076 - rpn_class_loss: 0.2445 - rpn_bbox_loss: 1.3416 - mrcnn_class_loss: 0.7582 - mrcnn_bbox_loss: 1.3696 - mrcnn_mask_loss: 5.3370 - grasp_loss: 0.4566 - val_loss: 7.2471 - val_rpn_class_loss: 0.0787 - val_rpn_bbox_loss: 0.6704 - val_mrcnn_class_loss: 1.0439 - val_mrcnn_bbox_loss: 1.0422 - val_mrcnn_mask_loss: 4.1484 - val_grasp_loss: 0.4825
-Epoch 4/400
-300/300 [==============================] - 173s 578ms/step - loss: 9.3256 - rpn_class_loss: 0.2416 - rpn_bbox_loss: 1.3308 - mrcnn_class_loss: 0.7341 - mrcnn_bbox_loss: 1.3539 - mrcnn_mask_loss: 5.2082 - grasp_loss: 0.4569 - val_loss: 7.0319 - val_rpn_class_loss: 0.0789 - val_rpn_bbox_loss: 0.6652 - val_mrcnn_class_loss: 1.0727 - val_mrcnn_bbox_loss: 1.0415 - val_mrcnn_mask_loss: 4.1261 - val_grasp_loss: 0.4479
-Epoch 5/400
-300/300 [==============================] - 173s 577ms/step - loss: 9.3039 - rpn_class_loss: 0.2462 - rpn_bbox_loss: 1.3362 - mrcnn_class_loss: 0.7386 - mrcnn_bbox_loss: 1.3594 - mrcnn_mask_loss: 5.1726 - grasp_loss: 0.4508 - val_loss: 7.1784 - val_rpn_class_loss: 0.0799 - val_rpn_bbox_loss: 0.6600 - val_mrcnn_class_loss: 1.0428 - val_mrcnn_bbox_loss: 1.0376 - val_mrcnn_mask_loss: 4.1347 - val_grasp_loss: 0.4616
-Epoch 6/400
-300/300 [==============================] - 174s 580ms/step - loss: 9.3326 - rpn_class_loss: 0.2407 - rpn_bbox_loss: 1.3281 - mrcnn_class_loss: 0.7750 - mrcnn_bbox_loss: 1.3514 - mrcnn_mask_loss: 5.1840 - grasp_loss: 0.4535 - val_loss: 6.7805 - val_rpn_class_loss: 0.0789 - val_rpn_bbox_loss: 0.6603 - val_mrcnn_class_loss: 1.0503 - val_mrcnn_bbox_loss: 1.0282 - val_mrcnn_mask_loss: 4.0359 - val_grasp_loss: 0.4699
-Epoch 7/400
-300/300 [==============================] - 172s 573ms/step - loss: 9.2907 - rpn_class_loss: 0.2414 - rpn_bbox_loss: 1.3302 - mrcnn_class_loss: 0.7623 - mrcnn_bbox_loss: 1.3487 - mrcnn_mask_loss: 5.1512 - grasp_loss: 0.4570 - val_loss: 7.0955 - val_rpn_class_loss: 0.0786 - val_rpn_bbox_loss: 0.6689 - val_mrcnn_class_loss: 1.0659 - val_mrcnn_bbox_loss: 1.0491 - val_mrcnn_mask_loss: 4.1654 - val_grasp_loss: 0.4723
-Epoch 8/400
-300/300 [==============================] - 172s 574ms/step - loss: 9.2778 - rpn_class_loss: 0.2430 - rpn_bbox_loss: 1.3309 - mrcnn_class_loss: 0.7588 - mrcnn_bbox_loss: 1.3483 - mrcnn_mask_loss: 5.1486 - grasp_loss: 0.4481 - val_loss: 6.4867 - val_rpn_class_loss: 0.0795 - val_rpn_bbox_loss: 0.6682 - val_mrcnn_class_loss: 1.0315 - val_mrcnn_bbox_loss: 1.0369 - val_mrcnn_mask_loss: 4.0940 - val_grasp_loss: 0.4593
-Epoch 9/400
-300/300 [==============================] - 171s 569ms/step - loss: 9.2941 - rpn_class_loss: 0.2461 - rpn_bbox_loss: 1.3361 - mrcnn_class_loss: 0.7587 - mrcnn_bbox_loss: 1.3555 - mrcnn_mask_loss: 5.1555 - grasp_loss: 0.4422 - val_loss: 7.1923 - val_rpn_class_loss: 0.0795 - val_rpn_bbox_loss: 0.6629 - val_mrcnn_class_loss: 1.0783 - val_mrcnn_bbox_loss: 1.0409 - val_mrcnn_mask_loss: 4.1843 - val_grasp_loss: 0.4742
-Epoch 10/400
-300/300 [==============================] - 171s 570ms/step - loss: 9.3222 - rpn_class_loss: 0.2476 - rpn_bbox_loss: 1.3314 - mrcnn_class_loss: 0.7470 - mrcnn_bbox_loss: 1.3577 - mrcnn_mask_loss: 5.1911 - grasp_loss: 0.4474 - val_loss: 6.9867 - val_rpn_class_loss: 0.0798 - val_rpn_bbox_loss: 0.6601 - val_mrcnn_class_loss: 1.0499 - val_mrcnn_bbox_loss: 1.0389 - val_mrcnn_mask_loss: 4.1253 - val_grasp_loss: 0.5047
-Epoch 11/400
-300/300 [==============================] - 171s 570ms/step - loss: 9.2790 - rpn_class_loss: 0.2419 - rpn_bbox_loss: 1.3341 - mrcnn_class_loss: 0.7479 - mrcnn_bbox_loss: 1.3495 - mrcnn_mask_loss: 5.1546 - grasp_loss: 0.4511 - val_loss: 7.1212 - val_rpn_class_loss: 0.0790 - val_rpn_bbox_loss: 0.6621 - val_mrcnn_class_loss: 1.0421 - val_mrcnn_bbox_loss: 1.0335 - val_mrcnn_mask_loss: 4.0222 - val_grasp_loss: 0.4532
-Epoch 12/400
-300/300 [==============================] - 171s 568ms/step - loss: 9.3509 - rpn_class_loss: 0.2418 - rpn_bbox_loss: 1.3361 - mrcnn_class_loss: 0.7517 - mrcnn_bbox_loss: 1.3584 - mrcnn_mask_loss: 5.2163 - grasp_loss: 0.4466 - val_loss: 7.0447 - val_rpn_class_loss: 0.0793 - val_rpn_bbox_loss: 0.6653 - val_mrcnn_class_loss: 1.0694 - val_mrcnn_bbox_loss: 1.0455 - val_mrcnn_mask_loss: 4.2323 - val_grasp_loss: 0.4700
-Epoch 13/400
-300/300 [==============================] - 171s 568ms/step - loss: 9.4197 - rpn_class_loss: 0.2444 - rpn_bbox_loss: 1.3326 - mrcnn_class_loss: 0.7477 - mrcnn_bbox_loss: 1.3599 - mrcnn_mask_loss: 5.2985 - grasp_loss: 0.4367 - val_loss: 6.7696 - val_rpn_class_loss: 0.0786 - val_rpn_bbox_loss: 0.6714 - val_mrcnn_class_loss: 1.0437 - val_mrcnn_bbox_loss: 1.0357 - val_mrcnn_mask_loss: 4.0870 - val_grasp_loss: 0.4573
-Epoch 14/400
-300/300 [==============================] - 170s 567ms/step - loss: 9.3170 - rpn_class_loss: 0.2499 - rpn_bbox_loss: 1.3280 - mrcnn_class_loss: 0.7543 - mrcnn_bbox_loss: 1.3571 - mrcnn_mask_loss: 5.1946 - grasp_loss: 0.4333 - val_loss: 6.8102 - val_rpn_class_loss: 0.0789 - val_rpn_bbox_loss: 0.6624 - val_mrcnn_class_loss: 1.0504 - val_mrcnn_bbox_loss: 1.0311 - val_mrcnn_mask_loss: 4.0527 - val_grasp_loss: 0.4417
-Epoch 15/400
-300/300 [==============================] - 171s 569ms/step - loss: 9.4519 - rpn_class_loss: 0.2408 - rpn_bbox_loss: 1.3375 - mrcnn_class_loss: 0.7570 - mrcnn_bbox_loss: 1.3635 - mrcnn_mask_loss: 5.2990 - grasp_loss: 0.4541 - val_loss: 7.1176 - val_rpn_class_loss: 0.0792 - val_rpn_bbox_loss: 0.6635 - val_mrcnn_class_loss: 1.0588 - val_mrcnn_bbox_loss: 1.0483 - val_mrcnn_mask_loss: 4.1739 - val_grasp_loss: 0.4544
-Epoch 16/400
-300/300 [==============================] - 169s 565ms/step - loss: 9.4137 - rpn_class_loss: 0.2475 - rpn_bbox_loss: 1.3333 - mrcnn_class_loss: 0.7427 - mrcnn_bbox_loss: 1.3688 - mrcnn_mask_loss: 5.2843 - grasp_loss: 0.4370 - val_loss: 7.4035 - val_rpn_class_loss: 0.0795 - val_rpn_bbox_loss: 0.6648 - val_mrcnn_class_loss: 1.0529 - val_mrcnn_bbox_loss: 1.0344 - val_mrcnn_mask_loss: 4.1153 - val_grasp_loss: 0.4522
-Epoch 17/400
-300/300 [==============================] - 170s 567ms/step - loss: 9.5081 - rpn_class_loss: 0.2419 - rpn_bbox_loss: 1.3468 - mrcnn_class_loss: 0.7455 - mrcnn_bbox_loss: 1.3752 - mrcnn_mask_loss: 5.3430 - grasp_loss: 0.4558 - val_loss: 7.0315 - val_rpn_class_loss: 0.0802 - val_rpn_bbox_loss: 0.6603 - val_mrcnn_class_loss: 1.0478 - val_mrcnn_bbox_loss: 1.0393 - val_mrcnn_mask_loss: 4.1171 - val_grasp_loss: 0.4575
-Epoch 18/400
-300/300 [==============================] - 171s 569ms/step - loss: 9.3097 - rpn_class_loss: 0.2461 - rpn_bbox_loss: 1.3279 - mrcnn_class_loss: 0.7478 - mrcnn_bbox_loss: 1.3505 - mrcnn_mask_loss: 5.1988 - grasp_loss: 0.4386 - val_loss: 7.3081 - val_rpn_class_loss: 0.0780 - val_rpn_bbox_loss: 0.6722 - val_mrcnn_class_loss: 1.0594 - val_mrcnn_bbox_loss: 1.0385 - val_mrcnn_mask_loss: 4.1362 - val_grasp_loss: 0.4546
-Epoch 19/400
-300/300 [==============================] - 171s 570ms/step - loss: 9.3530 - rpn_class_loss: 0.2462 - rpn_bbox_loss: 1.3342 - mrcnn_class_loss: 0.7433 - mrcnn_bbox_loss: 1.3678 - mrcnn_mask_loss: 5.2196 - grasp_loss: 0.4418 - val_loss: 7.2198 - val_rpn_class_loss: 0.0797 - val_rpn_bbox_loss: 0.6632 - val_mrcnn_class_loss: 1.0493 - val_mrcnn_bbox_loss: 1.0314 - val_mrcnn_mask_loss: 4.0542 - val_grasp_loss: 0.4514
-Epoch 20/400
-300/300 [==============================] - 172s 573ms/step - loss: 9.3427 - rpn_class_loss: 0.2438 - rpn_bbox_loss: 1.3395 - mrcnn_class_loss: 0.7506 - mrcnn_bbox_loss: 1.3594 - mrcnn_mask_loss: 5.2139 - grasp_loss: 0.4355 - val_loss: 7.9821 - val_rpn_class_loss: 0.0788 - val_rpn_bbox_loss: 0.6621 - val_mrcnn_class_loss: 1.0527 - val_mrcnn_bbox_loss: 1.0398 - val_mrcnn_mask_loss: 4.1390 - val_grasp_loss: 0.4516
-Epoch 21/400
-300/300 [==============================] - 171s 569ms/step - loss: 9.2343 - rpn_class_loss: 0.2444 - rpn_bbox_loss: 1.3298 - mrcnn_class_loss: 0.7526 - mrcnn_bbox_loss: 1.3425 - mrcnn_mask_loss: 5.1176 - grasp_loss: 0.4474 - val_loss: 7.3604 - val_rpn_class_loss: 0.0795 - val_rpn_bbox_loss: 0.6648 - val_mrcnn_class_loss: 1.0617 - val_mrcnn_bbox_loss: 1.0426 - val_mrcnn_mask_loss: 4.1419 - val_grasp_loss: 0.4516
-Epoch 22/400
-300/300 [==============================] - 171s 569ms/step - loss: 9.4279 - rpn_class_loss: 0.2422 - rpn_bbox_loss: 1.3421 - mrcnn_class_loss: 0.7455 - mrcnn_bbox_loss: 1.3716 - mrcnn_mask_loss: 5.2849 - grasp_loss: 0.4416 - val_loss: 8.0303 - val_rpn_class_loss: 0.0805 - val_rpn_bbox_loss: 0.6613 - val_mrcnn_class_loss: 1.0468 - val_mrcnn_bbox_loss: 1.0441 - val_mrcnn_mask_loss: 4.1827 - val_grasp_loss: 0.4428
-Epoch 23/400
-300/300 [==============================] - 172s 573ms/step - loss: 9.4122 - rpn_class_loss: 0.2446 - rpn_bbox_loss: 1.3342 - mrcnn_class_loss: 0.7661 - mrcnn_bbox_loss: 1.3727 - mrcnn_mask_loss: 5.2543 - grasp_loss: 0.4403 - val_loss: 8.5051 - val_rpn_class_loss: 0.0794 - val_rpn_bbox_loss: 0.6622 - val_mrcnn_class_loss: 1.0597 - val_mrcnn_bbox_loss: 1.0264 - val_mrcnn_mask_loss: 3.9835 - val_grasp_loss: 0.4378
-Epoch 24/400
-300/300 [==============================] - 172s 572ms/step - loss: 9.3319 - rpn_class_loss: 0.2420 - rpn_bbox_loss: 1.3359 - mrcnn_class_loss: 0.7586 - mrcnn_bbox_loss: 1.3624 - mrcnn_mask_loss: 5.1996 - grasp_loss: 0.4333 - val_loss: 7.6853 - val_rpn_class_loss: 0.0783 - val_rpn_bbox_loss: 0.6706 - val_mrcnn_class_loss: 1.0477 - val_mrcnn_bbox_loss: 1.0423 - val_mrcnn_mask_loss: 4.1724 - val_grasp_loss: 0.4506
-Epoch 25/400
-300/300 [==============================] - 171s 570ms/step - loss: 9.2795 - rpn_class_loss: 0.2442 - rpn_bbox_loss: 1.3365 - mrcnn_class_loss: 0.7505 - mrcnn_bbox_loss: 1.3497 - mrcnn_mask_loss: 5.1774 - grasp_loss: 0.4212 - val_loss: 7.6392 - val_rpn_class_loss: 0.0802 - val_rpn_bbox_loss: 0.6607 - val_mrcnn_class_loss: 1.0394 - val_mrcnn_bbox_loss: 1.0407 - val_mrcnn_mask_loss: 4.1653 - val_grasp_loss: 0.4431
-Epoch 26/400
-300/300 [==============================] - 172s 574ms/step - loss: 9.3452 - rpn_class_loss: 0.2420 - rpn_bbox_loss: 1.3350 - mrcnn_class_loss: 0.7489 - mrcnn_bbox_loss: 1.3580 - mrcnn_mask_loss: 5.2269 - grasp_loss: 0.4345 - val_loss: 6.6271 - val_rpn_class_loss: 0.0785 - val_rpn_bbox_loss: 0.6658 - val_mrcnn_class_loss: 1.0701 - val_mrcnn_bbox_loss: 1.0341 - val_mrcnn_mask_loss: 4.0734 - val_grasp_loss: 0.4503
-Epoch 27/400
-300/300 [==============================] - 171s 570ms/step - loss: 9.3756 - rpn_class_loss: 0.2429 - rpn_bbox_loss: 1.3373 - mrcnn_class_loss: 0.7318 - mrcnn_bbox_loss: 1.3730 - mrcnn_mask_loss: 5.2625 - grasp_loss: 0.4280 - val_loss: 7.9737 - val_rpn_class_loss: 0.0792 - val_rpn_bbox_loss: 0.6696 - val_mrcnn_class_loss: 1.0456 - val_mrcnn_bbox_loss: 1.0467 - val_mrcnn_mask_loss: 4.2117 - val_grasp_loss: 0.4523
-Epoch 28/400
-300/300 [==============================] - 172s 574ms/step - loss: 9.3254 - rpn_class_loss: 0.2439 - rpn_bbox_loss: 1.3333 - mrcnn_class_loss: 0.7497 - mrcnn_bbox_loss: 1.3667 - mrcnn_mask_loss: 5.1944 - grasp_loss: 0.4374 - val_loss: 7.4838 - val_rpn_class_loss: 0.0800 - val_rpn_bbox_loss: 0.6630 - val_mrcnn_class_loss: 1.0721 - val_mrcnn_bbox_loss: 1.0374 - val_mrcnn_mask_loss: 4.0835 - val_grasp_loss: 0.4362
-Epoch 29/400
-300/300 [==============================] - 173s 575ms/step - loss: 9.3387 - rpn_class_loss: 0.2450 - rpn_bbox_loss: 1.3450 - mrcnn_class_loss: 0.7501 - mrcnn_bbox_loss: 1.3589 - mrcnn_mask_loss: 5.1963 - grasp_loss: 0.4434 - val_loss: 6.9208 - val_rpn_class_loss: 0.0786 - val_rpn_bbox_loss: 0.6669 - val_mrcnn_class_loss: 1.0578 - val_mrcnn_bbox_loss: 1.0428 - val_mrcnn_mask_loss: 4.1292 - val_grasp_loss: 0.4310
-Epoch 30/400
-300/300 [==============================] - 173s 576ms/step - loss: 9.2960 - rpn_class_loss: 0.2422 - rpn_bbox_loss: 1.3352 - mrcnn_class_loss: 0.7528 - mrcnn_bbox_loss: 1.3538 - mrcnn_mask_loss: 5.1843 - grasp_loss: 0.4276 - val_loss: 7.6713 - val_rpn_class_loss: 0.0791 - val_rpn_bbox_loss: 0.6676 - val_mrcnn_class_loss: 1.0474 - val_mrcnn_bbox_loss: 1.0287 - val_mrcnn_mask_loss: 4.0774 - val_grasp_loss: 0.4591
-Epoch 31/400
-300/300 [==============================] - 173s 577ms/step - loss: 9.3387 - rpn_class_loss: 0.2451 - rpn_bbox_loss: 1.3361 - mrcnn_class_loss: 0.7427 - mrcnn_bbox_loss: 1.3622 - mrcnn_mask_loss: 5.2163 - grasp_loss: 0.4363 - val_loss: 7.0617 - val_rpn_class_loss: 0.0806 - val_rpn_bbox_loss: 0.6563 - val_mrcnn_class_loss: 1.0429 - val_mrcnn_bbox_loss: 1.0406 - val_mrcnn_mask_loss: 4.1357 - val_grasp_loss: 0.4280
-Epoch 32/400
-300/300 [==============================] - 173s 577ms/step - loss: 9.4298 - rpn_class_loss: 0.2406 - rpn_bbox_loss: 1.3300 - mrcnn_class_loss: 0.7561 - mrcnn_bbox_loss: 1.3679 - mrcnn_mask_loss: 5.3002 - grasp_loss: 0.4350 - val_loss: 7.2393 - val_rpn_class_loss: 0.0787 - val_rpn_bbox_loss: 0.6650 - val_mrcnn_class_loss: 1.0561 - val_mrcnn_bbox_loss: 1.0412 - val_mrcnn_mask_loss: 4.1302 - val_grasp_loss: 0.4586
-Epoch 33/400
-300/300 [==============================] - 174s 581ms/step - loss: 9.4583 - rpn_class_loss: 0.2424 - rpn_bbox_loss: 1.3407 - mrcnn_class_loss: 0.7683 - mrcnn_bbox_loss: 1.3715 - mrcnn_mask_loss: 5.3017 - grasp_loss: 0.4336 - val_loss: 7.9319 - val_rpn_class_loss: 0.0799 - val_rpn_bbox_loss: 0.6631 - val_mrcnn_class_loss: 1.0563 - val_mrcnn_bbox_loss: 1.0368 - val_mrcnn_mask_loss: 4.1132 - val_grasp_loss: 0.4340
-Epoch 34/400
-300/300 [==============================] - 175s 583ms/step - loss: 9.3829 - rpn_class_loss: 0.2455 - rpn_bbox_loss: 1.3329 - mrcnn_class_loss: 0.7662 - mrcnn_bbox_loss: 1.3661 - mrcnn_mask_loss: 5.2440 - grasp_loss: 0.4283 - val_loss: 6.7852 - val_rpn_class_loss: 0.0782 - val_rpn_bbox_loss: 0.6680 - val_mrcnn_class_loss: 1.0439 - val_mrcnn_bbox_loss: 1.0357 - val_mrcnn_mask_loss: 4.1134 - val_grasp_loss: 0.4262
-Epoch 35/400
-300/300 [==============================] - 174s 580ms/step - loss: 9.3907 - rpn_class_loss: 0.2459 - rpn_bbox_loss: 1.3354 - mrcnn_class_loss: 0.7540 - mrcnn_bbox_loss: 1.3657 - mrcnn_mask_loss: 5.2601 - grasp_loss: 0.4296 - val_loss: 7.0093 - val_rpn_class_loss: 0.0792 - val_rpn_bbox_loss: 0.6645 - val_mrcnn_class_loss: 1.0633 - val_mrcnn_bbox_loss: 1.0441 - val_mrcnn_mask_loss: 4.1329 - val_grasp_loss: 0.4374
-Epoch 36/400
-300/300 [==============================] - 174s 580ms/step - loss: 9.2362 - rpn_class_loss: 0.2424 - rpn_bbox_loss: 1.3250 - mrcnn_class_loss: 0.7513 - mrcnn_bbox_loss: 1.3471 - mrcnn_mask_loss: 5.1439 - grasp_loss: 0.4265 - val_loss: 6.9149 - val_rpn_class_loss: 0.0795 - val_rpn_bbox_loss: 0.6671 - val_mrcnn_class_loss: 1.0482 - val_mrcnn_bbox_loss: 1.0402 - val_mrcnn_mask_loss: 4.1437 - val_grasp_loss: 0.4277
-Epoch 37/400
-300/300 [==============================] - 174s 579ms/step - loss: 9.4619 - rpn_class_loss: 0.2430 - rpn_bbox_loss: 1.3400 - mrcnn_class_loss: 0.7510 - mrcnn_bbox_loss: 1.3745 - mrcnn_mask_loss: 5.3218 - grasp_loss: 0.4317 - val_loss: 7.2978 - val_rpn_class_loss: 0.0800 - val_rpn_bbox_loss: 0.6568 - val_mrcnn_class_loss: 1.0472 - val_mrcnn_bbox_loss: 1.0356 - val_mrcnn_mask_loss: 4.0635 - val_grasp_loss: 0.4375
-Epoch 38/400
-300/300 [==============================] - 173s 578ms/step - loss: 9.4321 - rpn_class_loss: 0.2465 - rpn_bbox_loss: 1.3415 - mrcnn_class_loss: 0.7444 - mrcnn_bbox_loss: 1.3858 - mrcnn_mask_loss: 5.2937 - grasp_loss: 0.4201 - val_loss: 7.1859 - val_rpn_class_loss: 0.0791 - val_rpn_bbox_loss: 0.6684 - val_mrcnn_class_loss: 1.0685 - val_mrcnn_bbox_loss: 1.0360 - val_mrcnn_mask_loss: 4.1634 - val_grasp_loss: 0.4312
-Epoch 39/400
-300/300 [==============================] - 173s 576ms/step - loss: 9.3049 - rpn_class_loss: 0.2444 - rpn_bbox_loss: 1.3419 - mrcnn_class_loss: 0.7498 - mrcnn_bbox_loss: 1.3620 - mrcnn_mask_loss: 5.1802 - grasp_loss: 0.4265 - val_loss: 6.4827 - val_rpn_class_loss: 0.0776 - val_rpn_bbox_loss: 0.6654 - val_mrcnn_class_loss: 1.0498 - val_mrcnn_bbox_loss: 1.0417 - val_mrcnn_mask_loss: 4.1176 - val_grasp_loss: 0.4366
-Epoch 40/400
-300/300 [==============================] - 173s 576ms/step - loss: 9.3766 - rpn_class_loss: 0.2443 - rpn_bbox_loss: 1.3417 - mrcnn_class_loss: 0.7543 - mrcnn_bbox_loss: 1.3612 - mrcnn_mask_loss: 5.2432 - grasp_loss: 0.4319 - val_loss: 7.9241 - val_rpn_class_loss: 0.0821 - val_rpn_bbox_loss: 0.6510 - val_mrcnn_class_loss: 1.0477 - val_mrcnn_bbox_loss: 1.0329 - val_mrcnn_mask_loss: 4.0870 - val_grasp_loss: 0.4370
-Epoch 41/400
-300/300 [==============================] - 172s 572ms/step - loss: 9.2598 - rpn_class_loss: 0.2442 - rpn_bbox_loss: 1.3209 - mrcnn_class_loss: 0.7511 - mrcnn_bbox_loss: 1.3576 - mrcnn_mask_loss: 5.1640 - grasp_loss: 0.4221 - val_loss: 7.1985 - val_rpn_class_loss: 0.0774 - val_rpn_bbox_loss: 0.6790 - val_mrcnn_class_loss: 1.0657 - val_mrcnn_bbox_loss: 1.0454 - val_mrcnn_mask_loss: 4.1468 - val_grasp_loss: 0.4446
-Epoch 42/400
-300/300 [==============================] - 172s 572ms/step - loss: 9.1802 - rpn_class_loss: 0.2504 - rpn_bbox_loss: 1.3323 - mrcnn_class_loss: 0.7551 - mrcnn_bbox_loss: 1.3480 - mrcnn_mask_loss: 5.0774 - grasp_loss: 0.4171 - val_loss: 6.8707 - val_rpn_class_loss: 0.0802 - val_rpn_bbox_loss: 0.6542 - val_mrcnn_class_loss: 1.0420 - val_mrcnn_bbox_loss: 1.0304 - val_mrcnn_mask_loss: 4.0987 - val_grasp_loss: 0.4430
-Epoch 43/400
-300/300 [==============================] - 172s 572ms/step - loss: 9.3412 - rpn_class_loss: 0.2439 - rpn_bbox_loss: 1.3328 - mrcnn_class_loss: 0.7420 - mrcnn_bbox_loss: 1.3578 - mrcnn_mask_loss: 5.2350 - grasp_loss: 0.4297 - val_loss: 7.8035 - val_rpn_class_loss: 0.0776 - val_rpn_bbox_loss: 0.6751 - val_mrcnn_class_loss: 1.0757 - val_mrcnn_bbox_loss: 1.0475 - val_mrcnn_mask_loss: 4.1627 - val_grasp_loss: 0.4546
-Epoch 44/400
-300/300 [==============================] - 171s 570ms/step - loss: 9.3543 - rpn_class_loss: 0.2464 - rpn_bbox_loss: 1.3367 - mrcnn_class_loss: 0.7514 - mrcnn_bbox_loss: 1.3678 - mrcnn_mask_loss: 5.2251 - grasp_loss: 0.4269 - val_loss: 7.9995 - val_rpn_class_loss: 0.0802 - val_rpn_bbox_loss: 0.6582 - val_mrcnn_class_loss: 1.0197 - val_mrcnn_bbox_loss: 1.0336 - val_mrcnn_mask_loss: 4.0962 - val_grasp_loss: 0.4256
-Epoch 45/400
-300/300 [==============================] - 172s 574ms/step - loss: 9.3445 - rpn_class_loss: 0.2445 - rpn_bbox_loss: 1.3373 - mrcnn_class_loss: 0.7442 - mrcnn_bbox_loss: 1.3569 - mrcnn_mask_loss: 5.2369 - grasp_loss: 0.4247 - val_loss: 8.0809 - val_rpn_class_loss: 0.0792 - val_rpn_bbox_loss: 0.6685 - val_mrcnn_class_loss: 1.0633 - val_mrcnn_bbox_loss: 1.0396 - val_mrcnn_mask_loss: 4.1089 - val_grasp_loss: 0.4359
-Epoch 46/400
-300/300 [==============================] - 172s 572ms/step - loss: 9.3395 - rpn_class_loss: 0.2434 - rpn_bbox_loss: 1.3363 - mrcnn_class_loss: 0.7536 - mrcnn_bbox_loss: 1.3570 - mrcnn_mask_loss: 5.2280 - grasp_loss: 0.4213 - val_loss: 6.9401 - val_rpn_class_loss: 0.0786 - val_rpn_bbox_loss: 0.6719 - val_mrcnn_class_loss: 1.0530 - val_mrcnn_bbox_loss: 1.0397 - val_mrcnn_mask_loss: 4.1331 - val_grasp_loss: 0.4309
-Epoch 47/400
-300/300 [==============================] - 171s 570ms/step - loss: 9.3219 - rpn_class_loss: 0.2465 - rpn_bbox_loss: 1.3348 - mrcnn_class_loss: 0.7538 - mrcnn_bbox_loss: 1.3609 - mrcnn_mask_loss: 5.2059 - grasp_loss: 0.4200 - val_loss: 6.9786 - val_rpn_class_loss: 0.0793 - val_rpn_bbox_loss: 0.6600 - val_mrcnn_class_loss: 1.0590 - val_mrcnn_bbox_loss: 1.0338 - val_mrcnn_mask_loss: 4.0960 - val_grasp_loss: 0.4273
-Epoch 48/400
-300/300 [==============================] - 170s 568ms/step - loss: 9.3542 - rpn_class_loss: 0.2421 - rpn_bbox_loss: 1.3347 - mrcnn_class_loss: 0.7491 - mrcnn_bbox_loss: 1.3616 - mrcnn_mask_loss: 5.2447 - grasp_loss: 0.4219 - val_loss: 8.2459 - val_rpn_class_loss: 0.0802 - val_rpn_bbox_loss: 0.6583 - val_mrcnn_class_loss: 1.0518 - val_mrcnn_bbox_loss: 1.0374 - val_mrcnn_mask_loss: 4.1235 - val_grasp_loss: 0.4271
-Epoch 49/400
-300/300 [==============================] - 171s 571ms/step - loss: 9.3687 - rpn_class_loss: 0.2424 - rpn_bbox_loss: 1.3309 - mrcnn_class_loss: 0.7529 - mrcnn_bbox_loss: 1.3643 - mrcnn_mask_loss: 5.2545 - grasp_loss: 0.4237 - val_loss: 6.9647 - val_rpn_class_loss: 0.0792 - val_rpn_bbox_loss: 0.6641 - val_mrcnn_class_loss: 1.0535 - val_mrcnn_bbox_loss: 1.0427 - val_mrcnn_mask_loss: 4.1137 - val_grasp_loss: 0.4321
-Epoch 50/400
-300/300 [==============================] - 172s 573ms/step - loss: 9.3259 - rpn_class_loss: 0.2453 - rpn_bbox_loss: 1.3367 - mrcnn_class_loss: 0.7510 - mrcnn_bbox_loss: 1.3605 - mrcnn_mask_loss: 5.2098 - grasp_loss: 0.4225 - val_loss: 6.9082 - val_rpn_class_loss: 0.0788 - val_rpn_bbox_loss: 0.6682 - val_mrcnn_class_loss: 1.0555 - val_mrcnn_bbox_loss: 1.0369 - val_mrcnn_mask_loss: 4.1231 - val_grasp_loss: 0.4257
-Epoch 51/400
-300/300 [==============================] - 171s 572ms/step - loss: 9.3353 - rpn_class_loss: 0.2438 - rpn_bbox_loss: 1.3310 - mrcnn_class_loss: 0.7540 - mrcnn_bbox_loss: 1.3584 - mrcnn_mask_loss: 5.2232 - grasp_loss: 0.4250 - val_loss: 7.2948 - val_rpn_class_loss: 0.0787 - val_rpn_bbox_loss: 0.6647 - val_mrcnn_class_loss: 1.0579 - val_mrcnn_bbox_loss: 1.0385 - val_mrcnn_mask_loss: 4.1139 - val_grasp_loss: 0.4296
-Epoch 52/400
-300/300 [==============================] - 172s 573ms/step - loss: 9.3278 - rpn_class_loss: 0.2464 - rpn_bbox_loss: 1.3396 - mrcnn_class_loss: 0.7472 - mrcnn_bbox_loss: 1.3622 - mrcnn_mask_loss: 5.2114 - grasp_loss: 0.4210 - val_loss: 7.7304 - val_rpn_class_loss: 0.0792 - val_rpn_bbox_loss: 0.6629 - val_mrcnn_class_loss: 1.0461 - val_mrcnn_bbox_loss: 1.0402 - val_mrcnn_mask_loss: 4.1403 - val_grasp_loss: 0.4306
-Epoch 53/400
-300/300 [==============================] - 173s 575ms/step - loss: 9.3138 - rpn_class_loss: 0.2478 - rpn_bbox_loss: 1.3359 - mrcnn_class_loss: 0.7539 - mrcnn_bbox_loss: 1.3627 - mrcnn_mask_loss: 5.1969 - grasp_loss: 0.4165 - val_loss: 8.4822 - val_rpn_class_loss: 0.0800 - val_rpn_bbox_loss: 0.6599 - val_mrcnn_class_loss: 1.0553 - val_mrcnn_bbox_loss: 1.0328 - val_mrcnn_mask_loss: 4.0902 - val_grasp_loss: 0.4246
-Epoch 54/400
-300/300 [==============================] - 173s 577ms/step - loss: 9.3668 - rpn_class_loss: 0.2419 - rpn_bbox_loss: 1.3365 - mrcnn_class_loss: 0.7574 - mrcnn_bbox_loss: 1.3626 - mrcnn_mask_loss: 5.2490 - grasp_loss: 0.4194 - val_loss: 8.0557 - val_rpn_class_loss: 0.0784 - val_rpn_bbox_loss: 0.6768 - val_mrcnn_class_loss: 1.0656 - val_mrcnn_bbox_loss: 1.0429 - val_mrcnn_mask_loss: 4.1647 - val_grasp_loss: 0.4343
-Epoch 55/400
-300/300 [==============================] - 173s 575ms/step - loss: 9.3314 - rpn_class_loss: 0.2445 - rpn_bbox_loss: 1.3370 - mrcnn_class_loss: 0.7507 - mrcnn_bbox_loss: 1.3653 - mrcnn_mask_loss: 5.2169 - grasp_loss: 0.4171 - val_loss: 7.1256 - val_rpn_class_loss: 0.0798 - val_rpn_bbox_loss: 0.6584 - val_mrcnn_class_loss: 1.0412 - val_mrcnn_bbox_loss: 1.0373 - val_mrcnn_mask_loss: 4.1264 - val_grasp_loss: 0.4192
-Epoch 56/400
-300/300 [==============================] - 172s 574ms/step - loss: 9.3745 - rpn_class_loss: 0.2440 - rpn_bbox_loss: 1.3394 - mrcnn_class_loss: 0.7521 - mrcnn_bbox_loss: 1.3643 - mrcnn_mask_loss: 5.2545 - grasp_loss: 0.4203 - val_loss: 8.2783 - val_rpn_class_loss: 0.0793 - val_rpn_bbox_loss: 0.6649 - val_mrcnn_class_loss: 1.0527 - val_mrcnn_bbox_loss: 1.0431 - val_mrcnn_mask_loss: 4.1056 - val_grasp_loss: 0.4301
-Epoch 57/400
-300/300 [==============================] - 173s 575ms/step - loss: 9.3094 - rpn_class_loss: 0.2454 - rpn_bbox_loss: 1.3333 - mrcnn_class_loss: 0.7516 - mrcnn_bbox_loss: 1.3592 - mrcnn_mask_loss: 5.2045 - grasp_loss: 0.4153 - val_loss: 7.0853 - val_rpn_class_loss: 0.0789 - val_rpn_bbox_loss: 0.6619 - val_mrcnn_class_loss: 1.0463 - val_mrcnn_bbox_loss: 1.0309 - val_mrcnn_mask_loss: 4.0525 - val_grasp_loss: 0.4328
-Epoch 58/400
-300/300 [==============================] - 171s 571ms/step - loss: 9.2752 - rpn_class_loss: 0.2436 - rpn_bbox_loss: 1.3307 - mrcnn_class_loss: 0.7633 - mrcnn_bbox_loss: 1.3472 - mrcnn_mask_loss: 5.1768 - grasp_loss: 0.4136 - val_loss: 8.2491 - val_rpn_class_loss: 0.0804 - val_rpn_bbox_loss: 0.6542 - val_mrcnn_class_loss: 1.0650 - val_mrcnn_bbox_loss: 1.0385 - val_mrcnn_mask_loss: 4.1902 - val_grasp_loss: 0.4325
-Epoch 59/400
-300/300 [==============================] - 172s 575ms/step - loss: 9.3417 - rpn_class_loss: 0.2430 - rpn_bbox_loss: 1.3357 - mrcnn_class_loss: 0.7561 - mrcnn_bbox_loss: 1.3661 - mrcnn_mask_loss: 5.2237 - grasp_loss: 0.4171 - val_loss: 7.4014 - val_rpn_class_loss: 0.0793 - val_rpn_bbox_loss: 0.6775 - val_mrcnn_class_loss: 1.0537 - val_mrcnn_bbox_loss: 1.0411 - val_mrcnn_mask_loss: 4.1036 - val_grasp_loss: 0.4149
-Epoch 60/400
-300/300 [==============================] - 172s 573ms/step - loss: 9.2699 - rpn_class_loss: 0.2421 - rpn_bbox_loss: 1.3296 - mrcnn_class_loss: 0.7537 - mrcnn_bbox_loss: 1.3522 - mrcnn_mask_loss: 5.1750 - grasp_loss: 0.4172 - val_loss: 6.8783 - val_rpn_class_loss: 0.0790 - val_rpn_bbox_loss: 0.6618 - val_mrcnn_class_loss: 1.0645 - val_mrcnn_bbox_loss: 1.0458 - val_mrcnn_mask_loss: 4.1599 - val_grasp_loss: 0.4258
-Epoch 61/400
-300/300 [==============================] - 170s 566ms/step - loss: 9.3098 - rpn_class_loss: 0.2419 - rpn_bbox_loss: 1.3333 - mrcnn_class_loss: 0.7462 - mrcnn_bbox_loss: 1.3595 - mrcnn_mask_loss: 5.2100 - grasp_loss: 0.4190 - val_loss: 7.1790 - val_rpn_class_loss: 0.0783 - val_rpn_bbox_loss: 0.6665 - val_mrcnn_class_loss: 1.0426 - val_mrcnn_bbox_loss: 1.0342 - val_mrcnn_mask_loss: 4.0932 - val_grasp_loss: 0.4194
-Epoch 62/400
-300/300 [==============================] - 171s 570ms/step - loss: 9.3532 - rpn_class_loss: 0.2444 - rpn_bbox_loss: 1.3366 - mrcnn_class_loss: 0.7499 - mrcnn_bbox_loss: 1.3643 - mrcnn_mask_loss: 5.2382 - grasp_loss: 0.4199 - val_loss: 7.0092 - val_rpn_class_loss: 0.0786 - val_rpn_bbox_loss: 0.6701 - val_mrcnn_class_loss: 1.0532 - val_mrcnn_bbox_loss: 1.0451 - val_mrcnn_mask_loss: 4.1805 - val_grasp_loss: 0.4285
-Epoch 63/400
-300/300 [==============================] - 171s 569ms/step - loss: 9.3220 - rpn_class_loss: 0.2478 - rpn_bbox_loss: 1.3349 - mrcnn_class_loss: 0.7532 - mrcnn_bbox_loss: 1.3677 - mrcnn_mask_loss: 5.2055 - grasp_loss: 0.4130 - val_loss: 7.8416 - val_rpn_class_loss: 0.0789 - val_rpn_bbox_loss: 0.6609 - val_mrcnn_class_loss: 1.0492 - val_mrcnn_bbox_loss: 1.0301 - val_mrcnn_mask_loss: 4.0699 - val_grasp_loss: 0.4192
-Epoch 64/400
-300/300 [==============================] - 171s 570ms/step - loss: 9.3714 - rpn_class_loss: 0.2436 - rpn_bbox_loss: 1.3356 - mrcnn_class_loss: 0.7467 - mrcnn_bbox_loss: 1.3645 - mrcnn_mask_loss: 5.2692 - grasp_loss: 0.4119 - val_loss: 8.0789 - val_rpn_class_loss: 0.0795 - val_rpn_bbox_loss: 0.6625 - val_mrcnn_class_loss: 1.0535 - val_mrcnn_bbox_loss: 1.0386 - val_mrcnn_mask_loss: 4.1076 - val_grasp_loss: 0.4284
-Epoch 65/400
-300/300 [==============================] - 170s 566ms/step - loss: 9.4011 - rpn_class_loss: 0.2418 - rpn_bbox_loss: 1.3339 - mrcnn_class_loss: 0.7500 - mrcnn_bbox_loss: 1.3671 - mrcnn_mask_loss: 5.2932 - grasp_loss: 0.4150 - val_loss: 7.8068 - val_rpn_class_loss: 0.0799 - val_rpn_bbox_loss: 0.6626 - val_mrcnn_class_loss: 1.0503 - val_mrcnn_bbox_loss: 1.0394 - val_mrcnn_mask_loss: 4.1133 - val_grasp_loss: 0.4145
-Epoch 66/400
-300/300 [==============================] - 169s 565ms/step - loss: 9.2882 - rpn_class_loss: 0.2455 - rpn_bbox_loss: 1.3353 - mrcnn_class_loss: 0.7537 - mrcnn_bbox_loss: 1.3546 - mrcnn_mask_loss: 5.1852 - grasp_loss: 0.4140 - val_loss: 7.3417 - val_rpn_class_loss: 0.0794 - val_rpn_bbox_loss: 0.6639 - val_mrcnn_class_loss: 1.0513 - val_mrcnn_bbox_loss: 1.0410 - val_mrcnn_mask_loss: 4.1508 - val_grasp_loss: 0.4276
-Epoch 67/400
-300/300 [==============================] - 169s 565ms/step - loss: 9.3038 - rpn_class_loss: 0.2450 - rpn_bbox_loss: 1.3374 - mrcnn_class_loss: 0.7490 - mrcnn_bbox_loss: 1.3616 - mrcnn_mask_loss: 5.1963 - grasp_loss: 0.4145 - val_loss: 8.5583 - val_rpn_class_loss: 0.0793 - val_rpn_bbox_loss: 0.6652 - val_mrcnn_class_loss: 1.0572 - val_mrcnn_bbox_loss: 1.0393 - val_mrcnn_mask_loss: 4.1312 - val_grasp_loss: 0.4245
-Epoch 68/400
-300/300 [==============================] - 170s 566ms/step - loss: 9.3148 - rpn_class_loss: 0.2444 - rpn_bbox_loss: 1.3306 - mrcnn_class_loss: 0.7529 - mrcnn_bbox_loss: 1.3596 - mrcnn_mask_loss: 5.2160 - grasp_loss: 0.4114 - val_loss: 7.5172 - val_rpn_class_loss: 0.0801 - val_rpn_bbox_loss: 0.6578 - val_mrcnn_class_loss: 1.0564 - val_mrcnn_bbox_loss: 1.0329 - val_mrcnn_mask_loss: 4.0713 - val_grasp_loss: 0.4291
-Epoch 69/400
-300/300 [==============================] - 169s 564ms/step - loss: 9.3596 - rpn_class_loss: 0.2439 - rpn_bbox_loss: 1.3333 - mrcnn_class_loss: 0.7540 - mrcnn_bbox_loss: 1.3637 - mrcnn_mask_loss: 5.2507 - grasp_loss: 0.4141 - val_loss: 7.0434 - val_rpn_class_loss: 0.0789 - val_rpn_bbox_loss: 0.6707 - val_mrcnn_class_loss: 1.0469 - val_mrcnn_bbox_loss: 1.0402 - val_mrcnn_mask_loss: 4.1522 - val_grasp_loss: 0.4205
-Epoch 70/400
-300/300 [==============================] - 170s 566ms/step - loss: 9.2448 - rpn_class_loss: 0.2422 - rpn_bbox_loss: 1.3283 - mrcnn_class_loss: 0.7520 - mrcnn_bbox_loss: 1.3524 - mrcnn_mask_loss: 5.1601 - grasp_loss: 0.4098 - val_loss: 7.5843 - val_rpn_class_loss: 0.0785 - val_rpn_bbox_loss: 0.6662 - val_mrcnn_class_loss: 1.0562 - val_mrcnn_bbox_loss: 1.0401 - val_mrcnn_mask_loss: 4.1262 - val_grasp_loss: 0.4221
-Epoch 71/400
-300/300 [==============================] - 169s 564ms/step - loss: 9.3612 - rpn_class_loss: 0.2432 - rpn_bbox_loss: 1.3345 - mrcnn_class_loss: 0.7608 - mrcnn_bbox_loss: 1.3700 - mrcnn_mask_loss: 5.2332 - grasp_loss: 0.4195 - val_loss: 7.3756 - val_rpn_class_loss: 0.0781 - val_rpn_bbox_loss: 0.6696 - val_mrcnn_class_loss: 1.0442 - val_mrcnn_bbox_loss: 1.0393 - val_mrcnn_mask_loss: 4.1183 - val_grasp_loss: 0.4129
-Epoch 72/400
-300/300 [==============================] - 170s 567ms/step - loss: 9.3432 - rpn_class_loss: 0.2418 - rpn_bbox_loss: 1.3302 - mrcnn_class_loss: 0.7582 - mrcnn_bbox_loss: 1.3591 - mrcnn_mask_loss: 5.2414 - grasp_loss: 0.4125 - val_loss: 7.5531 - val_rpn_class_loss: 0.0812 - val_rpn_bbox_loss: 0.6598 - val_mrcnn_class_loss: 1.0666 - val_mrcnn_bbox_loss: 1.0407 - val_mrcnn_mask_loss: 4.1636 - val_grasp_loss: 0.4192
-Epoch 73/400
-300/300 [==============================] - 170s 566ms/step - loss: 9.3370 - rpn_class_loss: 0.2438 - rpn_bbox_loss: 1.3368 - mrcnn_class_loss: 0.7601 - mrcnn_bbox_loss: 1.3640 - mrcnn_mask_loss: 5.2232 - grasp_loss: 0.4090 - val_loss: 7.1390 - val_rpn_class_loss: 0.0782 - val_rpn_bbox_loss: 0.6687 - val_mrcnn_class_loss: 1.0540 - val_mrcnn_bbox_loss: 1.0399 - val_mrcnn_mask_loss: 4.1036 - val_grasp_loss: 0.4226
-Epoch 74/400
-300/300 [==============================] - 170s 566ms/step - loss: 9.3610 - rpn_class_loss: 0.2454 - rpn_bbox_loss: 1.3351 - mrcnn_class_loss: 0.7522 - mrcnn_bbox_loss: 1.3638 - mrcnn_mask_loss: 5.2529 - grasp_loss: 0.4116 - val_loss: 7.0240 - val_rpn_class_loss: 0.0794 - val_rpn_bbox_loss: 0.6618 - val_mrcnn_class_loss: 1.0588 - val_mrcnn_bbox_loss: 1.0388 - val_mrcnn_mask_loss: 4.0948 - val_grasp_loss: 0.4388
-Epoch 75/400
-300/300 [==============================] - 169s 562ms/step - loss: 9.3190 - rpn_class_loss: 0.2454 - rpn_bbox_loss: 1.3343 - mrcnn_class_loss: 0.7501 - mrcnn_bbox_loss: 1.3641 - mrcnn_mask_loss: 5.2124 - grasp_loss: 0.4127 - val_loss: 7.1753 - val_rpn_class_loss: 0.0784 - val_rpn_bbox_loss: 0.6661 - val_mrcnn_class_loss: 1.0503 - val_mrcnn_bbox_loss: 1.0336 - val_mrcnn_mask_loss: 4.1178 - val_grasp_loss: 0.4106
-Epoch 76/400
-300/300 [==============================] - 169s 562ms/step - loss: 9.2633 - rpn_class_loss: 0.2448 - rpn_bbox_loss: 1.3326 - mrcnn_class_loss: 0.7557 - mrcnn_bbox_loss: 1.3587 - mrcnn_mask_loss: 5.1574 - grasp_loss: 0.4141 - val_loss: 7.7504 - val_rpn_class_loss: 0.0799 - val_rpn_bbox_loss: 0.6588 - val_mrcnn_class_loss: 1.0507 - val_mrcnn_bbox_loss: 1.0377 - val_mrcnn_mask_loss: 4.1303 - val_grasp_loss: 0.4186
-Epoch 77/400
-300/300 [==============================] - 169s 562ms/step - loss: 9.3316 - rpn_class_loss: 0.2431 - rpn_bbox_loss: 1.3359 - mrcnn_class_loss: 0.7501 - mrcnn_bbox_loss: 1.3570 - mrcnn_mask_loss: 5.2351 - grasp_loss: 0.4104 - val_loss: 7.5272 - val_rpn_class_loss: 0.0801 - val_rpn_bbox_loss: 0.6649 - val_mrcnn_class_loss: 1.0495 - val_mrcnn_bbox_loss: 1.0386 - val_mrcnn_mask_loss: 4.0915 - val_grasp_loss: 0.4115
-Epoch 78/400
-300/300 [==============================] - 169s 565ms/step - loss: 9.2912 - rpn_class_loss: 0.2450 - rpn_bbox_loss: 1.3365 - mrcnn_class_loss: 0.7412 - mrcnn_bbox_loss: 1.3569 - mrcnn_mask_loss: 5.2015 - grasp_loss: 0.4100 - val_loss: 6.4727 - val_rpn_class_loss: 0.0786 - val_rpn_bbox_loss: 0.6661 - val_mrcnn_class_loss: 1.0610 - val_mrcnn_bbox_loss: 1.0367 - val_mrcnn_mask_loss: 4.1261 - val_grasp_loss: 0.4206
-Epoch 79/400
-300/300 [==============================] - 168s 560ms/step - loss: 9.2761 - rpn_class_loss: 0.2413 - rpn_bbox_loss: 1.3311 - mrcnn_class_loss: 0.7569 - mrcnn_bbox_loss: 1.3528 - mrcnn_mask_loss: 5.1869 - grasp_loss: 0.4073 - val_loss: 7.8803 - val_rpn_class_loss: 0.0787 - val_rpn_bbox_loss: 0.6662 - val_mrcnn_class_loss: 1.0453 - val_mrcnn_bbox_loss: 1.0430 - val_mrcnn_mask_loss: 4.1047 - val_grasp_loss: 0.4220
-Epoch 80/400
-300/300 [==============================] - 170s 565ms/step - loss: 9.3187 - rpn_class_loss: 0.2450 - rpn_bbox_loss: 1.3325 - mrcnn_class_loss: 0.7498 - mrcnn_bbox_loss: 1.3585 - mrcnn_mask_loss: 5.2239 - grasp_loss: 0.4090 - val_loss: 6.6484 - val_rpn_class_loss: 0.0802 - val_rpn_bbox_loss: 0.6623 - val_mrcnn_class_loss: 1.0582 - val_mrcnn_bbox_loss: 1.0375 - val_mrcnn_mask_loss: 4.0932 - val_grasp_loss: 0.4079
-Epoch 81/400
-300/300 [==============================] - 171s 569ms/step - loss: 9.3576 - rpn_class_loss: 0.2448 - rpn_bbox_loss: 1.3353 - mrcnn_class_loss: 0.7488 - mrcnn_bbox_loss: 1.3639 - mrcnn_mask_loss: 5.2561 - grasp_loss: 0.4089 - val_loss: 7.8752 - val_rpn_class_loss: 0.0784 - val_rpn_bbox_loss: 0.6672 - val_mrcnn_class_loss: 1.0512 - val_mrcnn_bbox_loss: 1.0401 - val_mrcnn_mask_loss: 4.1790 - val_grasp_loss: 0.4273
-Epoch 82/400
-300/300 [==============================] - 170s 565ms/step - loss: 9.3177 - rpn_class_loss: 0.2462 - rpn_bbox_loss: 1.3402 - mrcnn_class_loss: 0.7418 - mrcnn_bbox_loss: 1.3642 - mrcnn_mask_loss: 5.2217 - grasp_loss: 0.4035 - val_loss: 6.9674 - val_rpn_class_loss: 0.0787 - val_rpn_bbox_loss: 0.6659 - val_mrcnn_class_loss: 1.0484 - val_mrcnn_bbox_loss: 1.0335 - val_mrcnn_mask_loss: 4.0510 - val_grasp_loss: 0.4089
-Epoch 83/400
-300/300 [==============================] - 170s 565ms/step - loss: 9.3323 - rpn_class_loss: 0.2463 - rpn_bbox_loss: 1.3367 - mrcnn_class_loss: 0.7515 - mrcnn_bbox_loss: 1.3608 - mrcnn_mask_loss: 5.2307 - grasp_loss: 0.4063 - val_loss: 7.7141 - val_rpn_class_loss: 0.0798 - val_rpn_bbox_loss: 0.6599 - val_mrcnn_class_loss: 1.0571 - val_mrcnn_bbox_loss: 1.0373 - val_mrcnn_mask_loss: 4.1274 - val_grasp_loss: 0.4157
-Epoch 84/400
-300/300 [==============================] - 169s 564ms/step - loss: 9.3071 - rpn_class_loss: 0.2454 - rpn_bbox_loss: 1.3355 - mrcnn_class_loss: 0.7539 - mrcnn_bbox_loss: 1.3565 - mrcnn_mask_loss: 5.2066 - grasp_loss: 0.4092 - val_loss: 7.8993 - val_rpn_class_loss: 0.0792 - val_rpn_bbox_loss: 0.6676 - val_mrcnn_class_loss: 1.0530 - val_mrcnn_bbox_loss: 1.0393 - val_mrcnn_mask_loss: 4.1276 - val_grasp_loss: 0.4110
-Epoch 85/400
-300/300 [==============================] - 169s 564ms/step - loss: 9.2995 - rpn_class_loss: 0.2472 - rpn_bbox_loss: 1.3415 - mrcnn_class_loss: 0.7531 - mrcnn_bbox_loss: 1.3625 - mrcnn_mask_loss: 5.1889 - grasp_loss: 0.4063 - val_loss: 7.7283 - val_rpn_class_loss: 0.0788 - val_rpn_bbox_loss: 0.6651 - val_mrcnn_class_loss: 1.0585 - val_mrcnn_bbox_loss: 1.0367 - val_mrcnn_mask_loss: 4.1352 - val_grasp_loss: 0.4189
-Epoch 86/400
-300/300 [==============================] - 169s 565ms/step - loss: 9.2969 - rpn_class_loss: 0.2439 - rpn_bbox_loss: 1.3311 - mrcnn_class_loss: 0.7553 - mrcnn_bbox_loss: 1.3552 - mrcnn_mask_loss: 5.2045 - grasp_loss: 0.4069 - val_loss: 7.4462 - val_rpn_class_loss: 0.0799 - val_rpn_bbox_loss: 0.6587 - val_mrcnn_class_loss: 1.0463 - val_mrcnn_bbox_loss: 1.0353 - val_mrcnn_mask_loss: 4.0764 - val_grasp_loss: 0.4106
-Epoch 87/400
-300/300 [==============================] - 169s 562ms/step - loss: 9.4314 - rpn_class_loss: 0.2432 - rpn_bbox_loss: 1.3397 - mrcnn_class_loss: 0.7502 - mrcnn_bbox_loss: 1.3684 - mrcnn_mask_loss: 5.3163 - grasp_loss: 0.4136 - val_loss: 7.4031 - val_rpn_class_loss: 0.0794 - val_rpn_bbox_loss: 0.6662 - val_mrcnn_class_loss: 1.0499 - val_mrcnn_bbox_loss: 1.0375 - val_mrcnn_mask_loss: 4.0906 - val_grasp_loss: 0.4161
-Epoch 88/400
-300/300 [==============================] - 168s 561ms/step - loss: 9.2859 - rpn_class_loss: 0.2455 - rpn_bbox_loss: 1.3352 - mrcnn_class_loss: 0.7550 - mrcnn_bbox_loss: 1.3589 - mrcnn_mask_loss: 5.1854 - grasp_loss: 0.4059 - val_loss: 8.1816 - val_rpn_class_loss: 0.0798 - val_rpn_bbox_loss: 0.6583 - val_mrcnn_class_loss: 1.0575 - val_mrcnn_bbox_loss: 1.0334 - val_mrcnn_mask_loss: 4.1103 - val_grasp_loss: 0.4160
-Epoch 89/400
-300/300 [==============================] - 169s 564ms/step - loss: 9.3119 - rpn_class_loss: 0.2448 - rpn_bbox_loss: 1.3298 - mrcnn_class_loss: 0.7483 - mrcnn_bbox_loss: 1.3565 - mrcnn_mask_loss: 5.2280 - grasp_loss: 0.4044 - val_loss: 7.4393 - val_rpn_class_loss: 0.0779 - val_rpn_bbox_loss: 0.6735 - val_mrcnn_class_loss: 1.0641 - val_mrcnn_bbox_loss: 1.0472 - val_mrcnn_mask_loss: 4.1899 - val_grasp_loss: 0.4136
-Epoch 90/400
-300/300 [==============================] - 169s 562ms/step - loss: 9.3267 - rpn_class_loss: 0.2463 - rpn_bbox_loss: 1.3338 - mrcnn_class_loss: 0.7571 - mrcnn_bbox_loss: 1.3617 - mrcnn_mask_loss: 5.2222 - grasp_loss: 0.4056 - val_loss: 7.0044 - val_rpn_class_loss: 0.0780 - val_rpn_bbox_loss: 0.6734 - val_mrcnn_class_loss: 1.0538 - val_mrcnn_bbox_loss: 1.0355 - val_mrcnn_mask_loss: 4.0938 - val_grasp_loss: 0.4140
-Epoch 91/400
-300/300 [==============================] - 169s 562ms/step - loss: 9.3596 - rpn_class_loss: 0.2441 - rpn_bbox_loss: 1.3368 - mrcnn_class_loss: 0.7545 - mrcnn_bbox_loss: 1.3644 - mrcnn_mask_loss: 5.2519 - grasp_loss: 0.4080 - val_loss: 7.5436 - val_rpn_class_loss: 0.0801 - val_rpn_bbox_loss: 0.6547 - val_mrcnn_class_loss: 1.0446 - val_mrcnn_bbox_loss: 1.0327 - val_mrcnn_mask_loss: 4.0898 - val_grasp_loss: 0.4151
-Epoch 92/400
-300/300 [==============================] - 168s 560ms/step - loss: 9.3137 - rpn_class_loss: 0.2436 - rpn_bbox_loss: 1.3364 - mrcnn_class_loss: 0.7626 - mrcnn_bbox_loss: 1.3598 - mrcnn_mask_loss: 5.2118 - grasp_loss: 0.3996 - val_loss: 7.5466 - val_rpn_class_loss: 0.0777 - val_rpn_bbox_loss: 0.6744 - val_mrcnn_class_loss: 1.0565 - val_mrcnn_bbox_loss: 1.0424 - val_mrcnn_mask_loss: 4.0985 - val_grasp_loss: 0.4167
-Epoch 93/400
-300/300 [==============================] - 169s 562ms/step - loss: 9.3183 - rpn_class_loss: 0.2458 - rpn_bbox_loss: 1.3366 - mrcnn_class_loss: 0.7483 - mrcnn_bbox_loss: 1.3592 - mrcnn_mask_loss: 5.2230 - grasp_loss: 0.4055 - val_loss: 8.0463 - val_rpn_class_loss: 0.0803 - val_rpn_bbox_loss: 0.6541 - val_mrcnn_class_loss: 1.0562 - val_mrcnn_bbox_loss: 1.0387 - val_mrcnn_mask_loss: 4.1415 - val_grasp_loss: 0.4133
-Epoch 94/400
-300/300 [==============================] - 168s 559ms/step - loss: 9.2559 - rpn_class_loss: 0.2442 - rpn_bbox_loss: 1.3323 - mrcnn_class_loss: 0.7565 - mrcnn_bbox_loss: 1.3575 - mrcnn_mask_loss: 5.1646 - grasp_loss: 0.4008 - val_loss: 7.9220 - val_rpn_class_loss: 0.0793 - val_rpn_bbox_loss: 0.6652 - val_mrcnn_class_loss: 1.0517 - val_mrcnn_bbox_loss: 1.0455 - val_mrcnn_mask_loss: 4.1575 - val_grasp_loss: 0.4080
-Epoch 95/400
-300/300 [==============================] - 168s 561ms/step - loss: 9.3240 - rpn_class_loss: 0.2416 - rpn_bbox_loss: 1.3353 - mrcnn_class_loss: 0.7481 - mrcnn_bbox_loss: 1.3619 - mrcnn_mask_loss: 5.2295 - grasp_loss: 0.4075 - val_loss: 7.2110 - val_rpn_class_loss: 0.0788 - val_rpn_bbox_loss: 0.6638 - val_mrcnn_class_loss: 1.0548 - val_mrcnn_bbox_loss: 1.0310 - val_mrcnn_mask_loss: 4.0770 - val_grasp_loss: 0.4082
-Epoch 96/400
-300/300 [==============================] - 169s 562ms/step - loss: 9.2972 - rpn_class_loss: 0.2437 - rpn_bbox_loss: 1.3341 - mrcnn_class_loss: 0.7553 - mrcnn_bbox_loss: 1.3609 - mrcnn_mask_loss: 5.1998 - grasp_loss: 0.4034 - val_loss: 8.6398 - val_rpn_class_loss: 0.0783 - val_rpn_bbox_loss: 0.6641 - val_mrcnn_class_loss: 1.0530 - val_mrcnn_bbox_loss: 1.0395 - val_mrcnn_mask_loss: 4.1414 - val_grasp_loss: 0.4148
-Epoch 97/400
-300/300 [==============================] - 169s 562ms/step - loss: 9.4063 - rpn_class_loss: 0.2444 - rpn_bbox_loss: 1.3344 - mrcnn_class_loss: 0.7569 - mrcnn_bbox_loss: 1.3700 - mrcnn_mask_loss: 5.2980 - grasp_loss: 0.4025 - val_loss: 7.0547 - val_rpn_class_loss: 0.0788 - val_rpn_bbox_loss: 0.6626 - val_mrcnn_class_loss: 1.0546 - val_mrcnn_bbox_loss: 1.0344 - val_mrcnn_mask_loss: 4.0870 - val_grasp_loss: 0.4035
-Epoch 98/400
-300/300 [==============================] - 168s 559ms/step - loss: 9.2849 - rpn_class_loss: 0.2444 - rpn_bbox_loss: 1.3327 - mrcnn_class_loss: 0.7583 - mrcnn_bbox_loss: 1.3584 - mrcnn_mask_loss: 5.1898 - grasp_loss: 0.4014 - val_loss: 6.7267 - val_rpn_class_loss: 0.0793 - val_rpn_bbox_loss: 0.6669 - val_mrcnn_class_loss: 1.0602 - val_mrcnn_bbox_loss: 1.0421 - val_mrcnn_mask_loss: 4.1567 - val_grasp_loss: 0.4168
-Epoch 99/400
-300/300 [==============================] - 168s 561ms/step - loss: 9.3361 - rpn_class_loss: 0.2436 - rpn_bbox_loss: 1.3366 - mrcnn_class_loss: 0.7468 - mrcnn_bbox_loss: 1.3663 - mrcnn_mask_loss: 5.2444 - grasp_loss: 0.3982 - val_loss: 8.0813 - val_rpn_class_loss: 0.0786 - val_rpn_bbox_loss: 0.6677 - val_mrcnn_class_loss: 1.0491 - val_mrcnn_bbox_loss: 1.0384 - val_mrcnn_mask_loss: 4.1020 - val_grasp_loss: 0.4137
-Epoch 100/400
-300/300 [==============================] - 169s 562ms/step - loss: 9.3247 - rpn_class_loss: 0.2439 - rpn_bbox_loss: 1.3318 - mrcnn_class_loss: 0.7569 - mrcnn_bbox_loss: 1.3644 - mrcnn_mask_loss: 5.2272 - grasp_loss: 0.4005 - val_loss: 6.8886 - val_rpn_class_loss: 0.0789 - val_rpn_bbox_loss: 0.6664 - val_mrcnn_class_loss: 1.0502 - val_mrcnn_bbox_loss: 1.0390 - val_mrcnn_mask_loss: 4.1206 - val_grasp_loss: 0.4078
-Epoch 101/400
-300/300 [==============================] - 167s 557ms/step - loss: 9.2935 - rpn_class_loss: 0.2444 - rpn_bbox_loss: 1.3334 - mrcnn_class_loss: 0.7495 - mrcnn_bbox_loss: 1.3615 - mrcnn_mask_loss: 5.2078 - grasp_loss: 0.3968 - val_loss: 6.9715 - val_rpn_class_loss: 0.0797 - val_rpn_bbox_loss: 0.6578 - val_mrcnn_class_loss: 1.0520 - val_mrcnn_bbox_loss: 1.0323 - val_mrcnn_mask_loss: 4.0772 - val_grasp_loss: 0.4109
-Epoch 102/400
-300/300 [==============================] - 168s 559ms/step - loss: 9.3050 - rpn_class_loss: 0.2438 - rpn_bbox_loss: 1.3380 - mrcnn_class_loss: 0.7495 - mrcnn_bbox_loss: 1.3617 - mrcnn_mask_loss: 5.2116 - grasp_loss: 0.4003 - val_loss: 6.4281 - val_rpn_class_loss: 0.0788 - val_rpn_bbox_loss: 0.6614 - val_mrcnn_class_loss: 1.0519 - val_mrcnn_bbox_loss: 1.0402 - val_mrcnn_mask_loss: 4.1222 - val_grasp_loss: 0.4102
-Epoch 103/400
-300/300 [==============================] - 170s 565ms/step - loss: 9.2630 - rpn_class_loss: 0.2441 - rpn_bbox_loss: 1.3314 - mrcnn_class_loss: 0.7493 - mrcnn_bbox_loss: 1.3522 - mrcnn_mask_loss: 5.1826 - grasp_loss: 0.4033 - val_loss: 7.0161 - val_rpn_class_loss: 0.0782 - val_rpn_bbox_loss: 0.6726 - val_mrcnn_class_loss: 1.0583 - val_mrcnn_bbox_loss: 1.0443 - val_mrcnn_mask_loss: 4.1816 - val_grasp_loss: 0.4163
-Epoch 104/400
-300/300 [==============================] - 169s 563ms/step - loss: 9.3656 - rpn_class_loss: 0.2433 - rpn_bbox_loss: 1.3336 - mrcnn_class_loss: 0.7550 - mrcnn_bbox_loss: 1.3679 - mrcnn_mask_loss: 5.2670 - grasp_loss: 0.3988 - val_loss: 6.6511 - val_rpn_class_loss: 0.0785 - val_rpn_bbox_loss: 0.6628 - val_mrcnn_class_loss: 1.0514 - val_mrcnn_bbox_loss: 1.0332 - val_mrcnn_mask_loss: 4.0431 - val_grasp_loss: 0.4100
-Epoch 105/400
-300/300 [==============================] - 168s 561ms/step - loss: 9.3047 - rpn_class_loss: 0.2440 - rpn_bbox_loss: 1.3361 - mrcnn_class_loss: 0.7586 - mrcnn_bbox_loss: 1.3588 - mrcnn_mask_loss: 5.2120 - grasp_loss: 0.3952 - val_loss: 6.8674 - val_rpn_class_loss: 0.0789 - val_rpn_bbox_loss: 0.6624 - val_mrcnn_class_loss: 1.0646 - val_mrcnn_bbox_loss: 1.0429 - val_mrcnn_mask_loss: 4.1742 - val_grasp_loss: 0.4073
-Epoch 106/400
-300/300 [==============================] - 169s 563ms/step - loss: 9.3006 - rpn_class_loss: 0.2467 - rpn_bbox_loss: 1.3378 - mrcnn_class_loss: 0.7610 - mrcnn_bbox_loss: 1.3624 - mrcnn_mask_loss: 5.1973 - grasp_loss: 0.3953 - val_loss: 7.6307 - val_rpn_class_loss: 0.0787 - val_rpn_bbox_loss: 0.6692 - val_mrcnn_class_loss: 1.0342 - val_mrcnn_bbox_loss: 1.0394 - val_mrcnn_mask_loss: 4.0995 - val_grasp_loss: 0.4034
-Epoch 107/400
-300/300 [==============================] - 167s 558ms/step - loss: 9.2648 - rpn_class_loss: 0.2454 - rpn_bbox_loss: 1.3318 - mrcnn_class_loss: 0.7601 - mrcnn_bbox_loss: 1.3546 - mrcnn_mask_loss: 5.1728 - grasp_loss: 0.4001 - val_loss: 8.1206 - val_rpn_class_loss: 0.0794 - val_rpn_bbox_loss: 0.6650 - val_mrcnn_class_loss: 1.0655 - val_mrcnn_bbox_loss: 1.0371 - val_mrcnn_mask_loss: 4.1367 - val_grasp_loss: 0.4111
-Epoch 108/400
-300/300 [==============================] - 167s 558ms/step - loss: 9.3037 - rpn_class_loss: 0.2439 - rpn_bbox_loss: 1.3344 - mrcnn_class_loss: 0.7547 - mrcnn_bbox_loss: 1.3608 - mrcnn_mask_loss: 5.2132 - grasp_loss: 0.3967 - val_loss: 6.8843 - val_rpn_class_loss: 0.0785 - val_rpn_bbox_loss: 0.6669 - val_mrcnn_class_loss: 1.0446 - val_mrcnn_bbox_loss: 1.0333 - val_mrcnn_mask_loss: 4.0914 - val_grasp_loss: 0.4019
-Epoch 109/400
-300/300 [==============================] - 168s 559ms/step - loss: 9.3104 - rpn_class_loss: 0.2444 - rpn_bbox_loss: 1.3336 - mrcnn_class_loss: 0.7476 - mrcnn_bbox_loss: 1.3614 - mrcnn_mask_loss: 5.2290 - grasp_loss: 0.3944 - val_loss: 7.2948 - val_rpn_class_loss: 0.0802 - val_rpn_bbox_loss: 0.6578 - val_mrcnn_class_loss: 1.0589 - val_mrcnn_bbox_loss: 1.0422 - val_mrcnn_mask_loss: 4.1529 - val_grasp_loss: 0.4020
-Epoch 110/400
-300/300 [==============================] - 167s 558ms/step - loss: 9.2746 - rpn_class_loss: 0.2435 - rpn_bbox_loss: 1.3302 - mrcnn_class_loss: 0.7513 - mrcnn_bbox_loss: 1.3606 - mrcnn_mask_loss: 5.1914 - grasp_loss: 0.3976 - val_loss: 7.6928 - val_rpn_class_loss: 0.0795 - val_rpn_bbox_loss: 0.6647 - val_mrcnn_class_loss: 1.0485 - val_mrcnn_bbox_loss: 1.0400 - val_mrcnn_mask_loss: 4.1251 - val_grasp_loss: 0.4154
-Epoch 111/400
-300/300 [==============================] - 168s 561ms/step - loss: 9.3696 - rpn_class_loss: 0.2449 - rpn_bbox_loss: 1.3412 - mrcnn_class_loss: 0.7441 - mrcnn_bbox_loss: 1.3688 - mrcnn_mask_loss: 5.2684 - grasp_loss: 0.4023 - val_loss: 6.8173 - val_rpn_class_loss: 0.0789 - val_rpn_bbox_loss: 0.6598 - val_mrcnn_class_loss: 1.0510 - val_mrcnn_bbox_loss: 1.0295 - val_mrcnn_mask_loss: 4.0301 - val_grasp_loss: 0.4025
-Epoch 112/400
-300/300 [==============================] - 168s 560ms/step - loss: 9.3230 - rpn_class_loss: 0.2445 - rpn_bbox_loss: 1.3327 - mrcnn_class_loss: 0.7519 - mrcnn_bbox_loss: 1.3642 - mrcnn_mask_loss: 5.2314 - grasp_loss: 0.3982 - val_loss: 7.4732 - val_rpn_class_loss: 0.0789 - val_rpn_bbox_loss: 0.6659 - val_mrcnn_class_loss: 1.0607 - val_mrcnn_bbox_loss: 1.0402 - val_mrcnn_mask_loss: 4.1259 - val_grasp_loss: 0.4128
-Epoch 113/400
-300/300 [==============================] - 168s 560ms/step - loss: 9.2769 - rpn_class_loss: 0.2415 - rpn_bbox_loss: 1.3291 - mrcnn_class_loss: 0.7504 - mrcnn_bbox_loss: 1.3549 - mrcnn_mask_loss: 5.1976 - grasp_loss: 0.4034 - val_loss: 8.0301 - val_rpn_class_loss: 0.0791 - val_rpn_bbox_loss: 0.6644 - val_mrcnn_class_loss: 1.0498 - val_mrcnn_bbox_loss: 1.0404 - val_mrcnn_mask_loss: 4.1486 - val_grasp_loss: 0.4030
-Epoch 114/400
-300/300 [==============================] - 169s 563ms/step - loss: 9.3181 - rpn_class_loss: 0.2449 - rpn_bbox_loss: 1.3332 - mrcnn_class_loss: 0.7580 - mrcnn_bbox_loss: 1.3644 - mrcnn_mask_loss: 5.2227 - grasp_loss: 0.3948 - val_loss: 7.2204 - val_rpn_class_loss: 0.0788 - val_rpn_bbox_loss: 0.6684 - val_mrcnn_class_loss: 1.0595 - val_mrcnn_bbox_loss: 1.0401 - val_mrcnn_mask_loss: 4.1151 - val_grasp_loss: 0.4031
-Epoch 115/400
-300/300 [==============================] - 169s 564ms/step - loss: 9.2945 - rpn_class_loss: 0.2475 - rpn_bbox_loss: 1.3364 - mrcnn_class_loss: 0.7449 - mrcnn_bbox_loss: 1.3597 - mrcnn_mask_loss: 5.2131 - grasp_loss: 0.3930 - val_loss: 6.5996 - val_rpn_class_loss: 0.0793 - val_rpn_bbox_loss: 0.6640 - val_mrcnn_class_loss: 1.0546 - val_mrcnn_bbox_loss: 1.0382 - val_mrcnn_mask_loss: 4.1501 - val_grasp_loss: 0.4143
-Epoch 116/400
-300/300 [==============================] - 169s 563ms/step - loss: 9.2834 - rpn_class_loss: 0.2421 - rpn_bbox_loss: 1.3344 - mrcnn_class_loss: 0.7515 - mrcnn_bbox_loss: 1.3563 - mrcnn_mask_loss: 5.2039 - grasp_loss: 0.3951 - val_loss: 7.2250 - val_rpn_class_loss: 0.0796 - val_rpn_bbox_loss: 0.6626 - val_mrcnn_class_loss: 1.0504 - val_mrcnn_bbox_loss: 1.0374 - val_mrcnn_mask_loss: 4.1123 - val_grasp_loss: 0.4036
-Epoch 117/400
-300/300 [==============================] - 169s 563ms/step - loss: 9.3031 - rpn_class_loss: 0.2429 - rpn_bbox_loss: 1.3316 - mrcnn_class_loss: 0.7510 - mrcnn_bbox_loss: 1.3642 - mrcnn_mask_loss: 5.2218 - grasp_loss: 0.3917 - val_loss: 6.2433 - val_rpn_class_loss: 0.0794 - val_rpn_bbox_loss: 0.6666 - val_mrcnn_class_loss: 1.0554 - val_mrcnn_bbox_loss: 1.0394 - val_mrcnn_mask_loss: 4.1230 - val_grasp_loss: 0.4178
-Epoch 118/400
-300/300 [==============================] - 168s 559ms/step - loss: 9.2760 - rpn_class_loss: 0.2441 - rpn_bbox_loss: 1.3322 - mrcnn_class_loss: 0.7519 - mrcnn_bbox_loss: 1.3545 - mrcnn_mask_loss: 5.1993 - grasp_loss: 0.3940 - val_loss: 7.0223 - val_rpn_class_loss: 0.0789 - val_rpn_bbox_loss: 0.6633 - val_mrcnn_class_loss: 1.0492 - val_mrcnn_bbox_loss: 1.0366 - val_mrcnn_mask_loss: 4.0893 - val_grasp_loss: 0.4047
-Epoch 119/400
-300/300 [==============================] - 169s 562ms/step - loss: 9.2706 - rpn_class_loss: 0.2436 - rpn_bbox_loss: 1.3330 - mrcnn_class_loss: 0.7650 - mrcnn_bbox_loss: 1.3561 - mrcnn_mask_loss: 5.1751 - grasp_loss: 0.3977 - val_loss: 7.9042 - val_rpn_class_loss: 0.0789 - val_rpn_bbox_loss: 0.6659 - val_mrcnn_class_loss: 1.0600 - val_mrcnn_bbox_loss: 1.0409 - val_mrcnn_mask_loss: 4.1354 - val_grasp_loss: 0.4038
-Epoch 120/400
-300/300 [==============================] - 169s 563ms/step - loss: 9.3505 - rpn_class_loss: 0.2432 - rpn_bbox_loss: 1.3397 - mrcnn_class_loss: 0.7528 - mrcnn_bbox_loss: 1.3675 - mrcnn_mask_loss: 5.2500 - grasp_loss: 0.3973 - val_loss: 7.8616 - val_rpn_class_loss: 0.0802 - val_rpn_bbox_loss: 0.6625 - val_mrcnn_class_loss: 1.0570 - val_mrcnn_bbox_loss: 1.0394 - val_mrcnn_mask_loss: 4.1163 - val_grasp_loss: 0.4060
-Epoch 121/400
-300/300 [==============================] - 169s 563ms/step - loss: 9.2298 - rpn_class_loss: 0.2472 - rpn_bbox_loss: 1.3313 - mrcnn_class_loss: 0.7467 - mrcnn_bbox_loss: 1.3578 - mrcnn_mask_loss: 5.1509 - grasp_loss: 0.3960 - val_loss: 7.7438 - val_rpn_class_loss: 0.0793 - val_rpn_bbox_loss: 0.6605 - val_mrcnn_class_loss: 1.0494 - val_mrcnn_bbox_loss: 1.0405 - val_mrcnn_mask_loss: 4.1737 - val_grasp_loss: 0.3908
-Epoch 122/400
-300/300 [==============================] - 170s 566ms/step - loss: 9.3469 - rpn_class_loss: 0.2437 - rpn_bbox_loss: 1.3406 - mrcnn_class_loss: 0.7510 - mrcnn_bbox_loss: 1.3632 - mrcnn_mask_loss: 5.2513 - grasp_loss: 0.3971 - val_loss: 7.5057 - val_rpn_class_loss: 0.0787 - val_rpn_bbox_loss: 0.6706 - val_mrcnn_class_loss: 1.0412 - val_mrcnn_bbox_loss: 1.0391 - val_mrcnn_mask_loss: 4.1149 - val_grasp_loss: 0.4133
-Epoch 123/400
-300/300 [==============================] - 169s 565ms/step - loss: 9.3529 - rpn_class_loss: 0.2441 - rpn_bbox_loss: 1.3339 - mrcnn_class_loss: 0.7548 - mrcnn_bbox_loss: 1.3629 - mrcnn_mask_loss: 5.2639 - grasp_loss: 0.3934 - val_loss: 8.2058 - val_rpn_class_loss: 0.0785 - val_rpn_bbox_loss: 0.6668 - val_mrcnn_class_loss: 1.0626 - val_mrcnn_bbox_loss: 1.0297 - val_mrcnn_mask_loss: 4.0637 - val_grasp_loss: 0.3938
-Epoch 124/400
-300/300 [==============================] - 169s 564ms/step - loss: 9.3379 - rpn_class_loss: 0.2425 - rpn_bbox_loss: 1.3356 - mrcnn_class_loss: 0.7479 - mrcnn_bbox_loss: 1.3602 - mrcnn_mask_loss: 5.2558 - grasp_loss: 0.3958 - val_loss: 7.8016 - val_rpn_class_loss: 0.0792 - val_rpn_bbox_loss: 0.6606 - val_mrcnn_class_loss: 1.0471 - val_mrcnn_bbox_loss: 1.0402 - val_mrcnn_mask_loss: 4.1292 - val_grasp_loss: 0.3934
-Epoch 125/400
-300/300 [==============================] - 169s 565ms/step - loss: 9.3037 - rpn_class_loss: 0.2426 - rpn_bbox_loss: 1.3296 - mrcnn_class_loss: 0.7494 - mrcnn_bbox_loss: 1.3562 - mrcnn_mask_loss: 5.2307 - grasp_loss: 0.3952 - val_loss: 8.0661 - val_rpn_class_loss: 0.0792 - val_rpn_bbox_loss: 0.6633 - val_mrcnn_class_loss: 1.0666 - val_mrcnn_bbox_loss: 1.0405 - val_mrcnn_mask_loss: 4.1046 - val_grasp_loss: 0.4040
-Epoch 126/400
-300/300 [==============================] - 169s 563ms/step - loss: 9.3545 - rpn_class_loss: 0.2470 - rpn_bbox_loss: 1.3414 - mrcnn_class_loss: 0.7523 - mrcnn_bbox_loss: 1.3691 - mrcnn_mask_loss: 5.2525 - grasp_loss: 0.3924 - val_loss: 7.8135 - val_rpn_class_loss: 0.0777 - val_rpn_bbox_loss: 0.6760 - val_mrcnn_class_loss: 1.0508 - val_mrcnn_bbox_loss: 1.0390 - val_mrcnn_mask_loss: 4.1836 - val_grasp_loss: 0.3981
-Epoch 127/400
-300/300 [==============================] - 168s 559ms/step - loss: 9.3583 - rpn_class_loss: 0.2459 - rpn_bbox_loss: 1.3400 - mrcnn_class_loss: 0.7454 - mrcnn_bbox_loss: 1.3711 - mrcnn_mask_loss: 5.2596 - grasp_loss: 0.3963 - val_loss: 7.3919 - val_rpn_class_loss: 0.0805 - val_rpn_bbox_loss: 0.6500 - val_mrcnn_class_loss: 1.0462 - val_mrcnn_bbox_loss: 1.0323 - val_mrcnn_mask_loss: 4.0319 - val_grasp_loss: 0.4001
-Epoch 128/400
-300/300 [==============================] - 169s 563ms/step - loss: 9.3165 - rpn_class_loss: 0.2455 - rpn_bbox_loss: 1.3357 - mrcnn_class_loss: 0.7528 - mrcnn_bbox_loss: 1.3587 - mrcnn_mask_loss: 5.2282 - grasp_loss: 0.3955 - val_loss: 8.0086 - val_rpn_class_loss: 0.0789 - val_rpn_bbox_loss: 0.6652 - val_mrcnn_class_loss: 1.0601 - val_mrcnn_bbox_loss: 1.0438 - val_mrcnn_mask_loss: 4.1570 - val_grasp_loss: 0.3989
-Epoch 129/400
-300/300 [==============================] - 169s 563ms/step - loss: 9.2961 - rpn_class_loss: 0.2460 - rpn_bbox_loss: 1.3361 - mrcnn_class_loss: 0.7547 - mrcnn_bbox_loss: 1.3597 - mrcnn_mask_loss: 5.2094 - grasp_loss: 0.3903 - val_loss: 6.2274 - val_rpn_class_loss: 0.0795 - val_rpn_bbox_loss: 0.6642 - val_mrcnn_class_loss: 1.0486 - val_mrcnn_bbox_loss: 1.0372 - val_mrcnn_mask_loss: 4.1417 - val_grasp_loss: 0.4085
-Epoch 130/400
-300/300 [==============================] - 169s 563ms/step - loss: 9.2563 - rpn_class_loss: 0.2448 - rpn_bbox_loss: 1.3372 - mrcnn_class_loss: 0.7484 - mrcnn_bbox_loss: 1.3579 - mrcnn_mask_loss: 5.1718 - grasp_loss: 0.3961 - val_loss: 7.8195 - val_rpn_class_loss: 0.0794 - val_rpn_bbox_loss: 0.6650 - val_mrcnn_class_loss: 1.0574 - val_mrcnn_bbox_loss: 1.0359 - val_mrcnn_mask_loss: 4.0710 - val_grasp_loss: 0.4097
-Epoch 131/400
-300/300 [==============================] - 169s 564ms/step - loss: 9.2915 - rpn_class_loss: 0.2460 - rpn_bbox_loss: 1.3321 - mrcnn_class_loss: 0.7533 - mrcnn_bbox_loss: 1.3629 - mrcnn_mask_loss: 5.2075 - grasp_loss: 0.3896 - val_loss: 7.2917 - val_rpn_class_loss: 0.0789 - val_rpn_bbox_loss: 0.6638 - val_mrcnn_class_loss: 1.0560 - val_mrcnn_bbox_loss: 1.0388 - val_mrcnn_mask_loss: 4.1236 - val_grasp_loss: 0.3955
-Epoch 132/400
-300/300 [==============================] - 168s 561ms/step - loss: 9.3579 - rpn_class_loss: 0.2454 - rpn_bbox_loss: 1.3380 - mrcnn_class_loss: 0.7440 - mrcnn_bbox_loss: 1.3694 - mrcnn_mask_loss: 5.2675 - grasp_loss: 0.3936 - val_loss: 8.2953 - val_rpn_class_loss: 0.0792 - val_rpn_bbox_loss: 0.6689 - val_mrcnn_class_loss: 1.0455 - val_mrcnn_bbox_loss: 1.0388 - val_mrcnn_mask_loss: 4.1074 - val_grasp_loss: 0.3942
-Epoch 133/400
-255/300 [========================>.....] - ETA: 20s - loss: 9.2862 - rpn_class_loss: 0.2448 - rpn_bbox_loss: 1.3354 - mrcnn_class_loss: 0.7437 - mrcnn_bbox_loss: 1.3594 - mrcnn_mask_loss: 5.2120 - grasp_loss: 0.3909
+Epoch 2/500
+300/300 [==============================] - 179s 596ms/step - loss: 9.4559 - rpn_class_loss: 0.2439 - rpn_bbox_loss: 1.3349 - mrcnn_class_loss: 0.7424 - mrcnn_bbox_loss: 1.3654 - mrcnn_mask_loss: 5.2325 - grasp_loss: 0.5367 - val_loss: 7.4095 - val_rpn_class_loss: 0.0794 - val_rpn_bbox_loss: 0.6593 - val_mrcnn_class_loss: 1.0617 - val_mrcnn_bbox_loss: 1.0374 - val_mrcnn_mask_loss: 4.1157 - val_grasp_loss: 0.5632
+Epoch 3/500
+300/300 [==============================] - 180s 599ms/step - loss: 9.5119 - rpn_class_loss: 0.2448 - rpn_bbox_loss: 1.3386 - mrcnn_class_loss: 0.7485 - mrcnn_bbox_loss: 1.3612 - mrcnn_mask_loss: 5.2876 - grasp_loss: 0.5312 - val_loss: 7.8279 - val_rpn_class_loss: 0.0793 - val_rpn_bbox_loss: 0.6585 - val_mrcnn_class_loss: 1.0448 - val_mrcnn_bbox_loss: 1.0329 - val_mrcnn_mask_loss: 4.0905 - val_grasp_loss: 0.5574
+Epoch 4/500
+300/300 [==============================] - 179s 595ms/step - loss: 9.4727 - rpn_class_loss: 0.2448 - rpn_bbox_loss: 1.3427 - mrcnn_class_loss: 0.7367 - mrcnn_bbox_loss: 1.3737 - mrcnn_mask_loss: 5.2734 - grasp_loss: 0.5014 - val_loss: 7.6561 - val_rpn_class_loss: 0.0783 - val_rpn_bbox_loss: 0.6721 - val_mrcnn_class_loss: 1.0631 - val_mrcnn_bbox_loss: 1.0379 - val_mrcnn_mask_loss: 4.1388 - val_grasp_loss: 0.5699
+Epoch 5/500
+300/300 [==============================] - 178s 595ms/step - loss: 9.5122 - rpn_class_loss: 0.2496 - rpn_bbox_loss: 1.3383 - mrcnn_class_loss: 0.7473 - mrcnn_bbox_loss: 1.3785 - mrcnn_mask_loss: 5.2992 - grasp_loss: 0.4993 - val_loss: 7.3385 - val_rpn_class_loss: 0.0801 - val_rpn_bbox_loss: 0.6619 - val_mrcnn_class_loss: 1.0413 - val_mrcnn_bbox_loss: 1.0378 - val_mrcnn_mask_loss: 4.0894 - val_grasp_loss: 0.5478
+Epoch 6/500
+300/300 [==============================] - 179s 597ms/step - loss: 9.4857 - rpn_class_loss: 0.2451 - rpn_bbox_loss: 1.3425 - mrcnn_class_loss: 0.7477 - mrcnn_bbox_loss: 1.3722 - mrcnn_mask_loss: 5.2846 - grasp_loss: 0.4936 - val_loss: 6.9014 - val_rpn_class_loss: 0.0787 - val_rpn_bbox_loss: 0.6661 - val_mrcnn_class_loss: 1.0722 - val_mrcnn_bbox_loss: 1.0382 - val_mrcnn_mask_loss: 4.1180 - val_grasp_loss: 0.5212
+Epoch 7/500
+300/300 [==============================] - 178s 593ms/step - loss: 9.4304 - rpn_class_loss: 0.2488 - rpn_bbox_loss: 1.3430 - mrcnn_class_loss: 0.7271 - mrcnn_bbox_loss: 1.3677 - mrcnn_mask_loss: 5.2624 - grasp_loss: 0.4815 - val_loss: 8.0834 - val_rpn_class_loss: 0.0790 - val_rpn_bbox_loss: 0.6659 - val_mrcnn_class_loss: 1.0450 - val_mrcnn_bbox_loss: 1.0517 - val_mrcnn_mask_loss: 4.1442 - val_grasp_loss: 0.5519
+Epoch 8/500
+300/300 [==============================] - 179s 596ms/step - loss: 9.3623 - rpn_class_loss: 0.2547 - rpn_bbox_loss: 1.3465 - mrcnn_class_loss: 0.7290 - mrcnn_bbox_loss: 1.3664 - mrcnn_mask_loss: 5.1736 - grasp_loss: 0.4920 - val_loss: 7.4853 - val_rpn_class_loss: 0.0794 - val_rpn_bbox_loss: 0.6597 - val_mrcnn_class_loss: 1.0468 - val_mrcnn_bbox_loss: 1.0348 - val_mrcnn_mask_loss: 4.1316 - val_grasp_loss: 0.5453
+Epoch 9/500
+300/300 [==============================] - 178s 594ms/step - loss: 9.5614 - rpn_class_loss: 0.2454 - rpn_bbox_loss: 1.3383 - mrcnn_class_loss: 0.7536 - mrcnn_bbox_loss: 1.3790 - mrcnn_mask_loss: 5.3557 - grasp_loss: 0.4893 - val_loss: 7.3438 - val_rpn_class_loss: 0.0800 - val_rpn_bbox_loss: 0.6682 - val_mrcnn_class_loss: 1.0564 - val_mrcnn_bbox_loss: 1.0346 - val_mrcnn_mask_loss: 4.0929 - val_grasp_loss: 0.4966
+Epoch 10/500
+300/300 [==============================] - 179s 597ms/step - loss: 9.4965 - rpn_class_loss: 0.2399 - rpn_bbox_loss: 1.3405 - mrcnn_class_loss: 0.7515 - mrcnn_bbox_loss: 1.3747 - mrcnn_mask_loss: 5.2976 - grasp_loss: 0.4923 - val_loss: 7.9270 - val_rpn_class_loss: 0.0791 - val_rpn_bbox_loss: 0.6636 - val_mrcnn_class_loss: 1.0497 - val_mrcnn_bbox_loss: 1.0467 - val_mrcnn_mask_loss: 4.1601 - val_grasp_loss: 0.5450
+Epoch 11/500
+300/300 [==============================] - 178s 595ms/step - loss: 9.3728 - rpn_class_loss: 0.2517 - rpn_bbox_loss: 1.3419 - mrcnn_class_loss: 0.7421 - mrcnn_bbox_loss: 1.3575 - mrcnn_mask_loss: 5.1912 - grasp_loss: 0.4883 - val_loss: 7.1743 - val_rpn_class_loss: 0.0793 - val_rpn_bbox_loss: 0.6572 - val_mrcnn_class_loss: 1.0626 - val_mrcnn_bbox_loss: 1.0252 - val_mrcnn_mask_loss: 4.0516 - val_grasp_loss: 0.5131
+Epoch 12/500
+300/300 [==============================] - 178s 593ms/step - loss: 9.5016 - rpn_class_loss: 0.2474 - rpn_bbox_loss: 1.3448 - mrcnn_class_loss: 0.7354 - mrcnn_bbox_loss: 1.3777 - mrcnn_mask_loss: 5.3162 - grasp_loss: 0.4801 - val_loss: 7.7854 - val_rpn_class_loss: 0.0766 - val_rpn_bbox_loss: 0.6730 - val_mrcnn_class_loss: 1.0630 - val_mrcnn_bbox_loss: 1.0449 - val_mrcnn_mask_loss: 4.1632 - val_grasp_loss: 0.5187
+Epoch 13/500
+300/300 [==============================] - 179s 596ms/step - loss: 9.4901 - rpn_class_loss: 0.2431 - rpn_bbox_loss: 1.3450 - mrcnn_class_loss: 0.7412 - mrcnn_bbox_loss: 1.3728 - mrcnn_mask_loss: 5.3055 - grasp_loss: 0.4826 - val_loss: 7.5561 - val_rpn_class_loss: 0.0806 - val_rpn_bbox_loss: 0.6646 - val_mrcnn_class_loss: 1.0388 - val_mrcnn_bbox_loss: 1.0397 - val_mrcnn_mask_loss: 4.1535 - val_grasp_loss: 0.5070
+Epoch 14/500
+300/300 [==============================] - 179s 596ms/step - loss: 9.4253 - rpn_class_loss: 0.2485 - rpn_bbox_loss: 1.3405 - mrcnn_class_loss: 0.7322 - mrcnn_bbox_loss: 1.3744 - mrcnn_mask_loss: 5.2500 - grasp_loss: 0.4797 - val_loss: 7.4754 - val_rpn_class_loss: 0.0786 - val_rpn_bbox_loss: 0.6670 - val_mrcnn_class_loss: 1.0565 - val_mrcnn_bbox_loss: 1.0404 - val_mrcnn_mask_loss: 4.1430 - val_grasp_loss: 0.5224
+Epoch 15/500
+300/300 [==============================] - 179s 597ms/step - loss: 9.4199 - rpn_class_loss: 0.2464 - rpn_bbox_loss: 1.3363 - mrcnn_class_loss: 0.7564 - mrcnn_bbox_loss: 1.3707 - mrcnn_mask_loss: 5.2449 - grasp_loss: 0.4652 - val_loss: 6.5432 - val_rpn_class_loss: 0.0790 - val_rpn_bbox_loss: 0.6602 - val_mrcnn_class_loss: 1.0467 - val_mrcnn_bbox_loss: 1.0347 - val_mrcnn_mask_loss: 4.0599 - val_grasp_loss: 0.5113
+Epoch 16/500
+300/300 [==============================] - 179s 596ms/step - loss: 9.5057 - rpn_class_loss: 0.2562 - rpn_bbox_loss: 1.3399 - mrcnn_class_loss: 0.7413 - mrcnn_bbox_loss: 1.3889 - mrcnn_mask_loss: 5.3074 - grasp_loss: 0.4720 - val_loss: 7.7781 - val_rpn_class_loss: 0.0793 - val_rpn_bbox_loss: 0.6671 - val_mrcnn_class_loss: 1.0521 - val_mrcnn_bbox_loss: 1.0406 - val_mrcnn_mask_loss: 4.1468 - val_grasp_loss: 0.4896
+Epoch 17/500
+300/300 [==============================] - 178s 593ms/step - loss: 9.3982 - rpn_class_loss: 0.2510 - rpn_bbox_loss: 1.3450 - mrcnn_class_loss: 0.7486 - mrcnn_bbox_loss: 1.3673 - mrcnn_mask_loss: 5.2161 - grasp_loss: 0.4703 - val_loss: 7.3084 - val_rpn_class_loss: 0.0794 - val_rpn_bbox_loss: 0.6622 - val_mrcnn_class_loss: 1.0566 - val_mrcnn_bbox_loss: 1.0358 - val_mrcnn_mask_loss: 4.0977 - val_grasp_loss: 0.4960
+Epoch 18/500
+300/300 [==============================] - 178s 595ms/step - loss: 9.3541 - rpn_class_loss: 0.2479 - rpn_bbox_loss: 1.3420 - mrcnn_class_loss: 0.7505 - mrcnn_bbox_loss: 1.3644 - mrcnn_mask_loss: 5.1759 - grasp_loss: 0.4734 - val_loss: 7.1369 - val_rpn_class_loss: 0.0790 - val_rpn_bbox_loss: 0.6678 - val_mrcnn_class_loss: 1.0598 - val_mrcnn_bbox_loss: 1.0363 - val_mrcnn_mask_loss: 4.1115 - val_grasp_loss: 0.4768
+Epoch 19/500
+300/300 [==============================] - 179s 597ms/step - loss: 9.4079 - rpn_class_loss: 0.2440 - rpn_bbox_loss: 1.3375 - mrcnn_class_loss: 0.7464 - mrcnn_bbox_loss: 1.3668 - mrcnn_mask_loss: 5.2513 - grasp_loss: 0.4618 - val_loss: 7.3770 - val_rpn_class_loss: 0.0801 - val_rpn_bbox_loss: 0.6615 - val_mrcnn_class_loss: 1.0474 - val_mrcnn_bbox_loss: 1.0420 - val_mrcnn_mask_loss: 4.1492 - val_grasp_loss: 0.4880
+Epoch 20/500
+300/300 [==============================] - 180s 599ms/step - loss: 9.2866 - rpn_class_loss: 0.2499 - rpn_bbox_loss: 1.3319 - mrcnn_class_loss: 0.7486 - mrcnn_bbox_loss: 1.3663 - mrcnn_mask_loss: 5.1274 - grasp_loss: 0.4626 - val_loss: 8.0247 - val_rpn_class_loss: 0.0789 - val_rpn_bbox_loss: 0.6682 - val_mrcnn_class_loss: 1.0593 - val_mrcnn_bbox_loss: 1.0420 - val_mrcnn_mask_loss: 4.1532 - val_grasp_loss: 0.4825
+Epoch 21/500
+300/300 [==============================] - 178s 594ms/step - loss: 9.3909 - rpn_class_loss: 0.2447 - rpn_bbox_loss: 1.3413 - mrcnn_class_loss: 0.7371 - mrcnn_bbox_loss: 1.3583 - mrcnn_mask_loss: 5.2525 - grasp_loss: 0.4569 - val_loss: 8.7999 - val_rpn_class_loss: 0.0788 - val_rpn_bbox_loss: 0.6672 - val_mrcnn_class_loss: 1.0600 - val_mrcnn_bbox_loss: 1.0350 - val_mrcnn_mask_loss: 4.0684 - val_grasp_loss: 0.4724
+Epoch 22/500
+300/300 [==============================] - 177s 591ms/step - loss: 9.3873 - rpn_class_loss: 0.2497 - rpn_bbox_loss: 1.3472 - mrcnn_class_loss: 0.7324 - mrcnn_bbox_loss: 1.3695 - mrcnn_mask_loss: 5.2296 - grasp_loss: 0.4589 - val_loss: 6.9669 - val_rpn_class_loss: 0.0787 - val_rpn_bbox_loss: 0.6607 - val_mrcnn_class_loss: 1.0485 - val_mrcnn_bbox_loss: 1.0396 - val_mrcnn_mask_loss: 4.1399 - val_grasp_loss: 0.4851
+Epoch 23/500
+300/300 [==============================] - 178s 594ms/step - loss: 9.3543 - rpn_class_loss: 0.2508 - rpn_bbox_loss: 1.3441 - mrcnn_class_loss: 0.7271 - mrcnn_bbox_loss: 1.3685 - mrcnn_mask_loss: 5.2064 - grasp_loss: 0.4574 - val_loss: 7.4836 - val_rpn_class_loss: 0.0801 - val_rpn_bbox_loss: 0.6539 - val_mrcnn_class_loss: 1.0442 - val_mrcnn_bbox_loss: 1.0300 - val_mrcnn_mask_loss: 4.0664 - val_grasp_loss: 0.4846
+Epoch 24/500
+300/300 [==============================] - 178s 595ms/step - loss: 9.4419 - rpn_class_loss: 0.2506 - rpn_bbox_loss: 1.3364 - mrcnn_class_loss: 0.7358 - mrcnn_bbox_loss: 1.3785 - mrcnn_mask_loss: 5.2758 - grasp_loss: 0.4649 - val_loss: 7.4108 - val_rpn_class_loss: 0.0791 - val_rpn_bbox_loss: 0.6728 - val_mrcnn_class_loss: 1.0397 - val_mrcnn_bbox_loss: 1.0474 - val_mrcnn_mask_loss: 4.1631 - val_grasp_loss: 0.4539
+Epoch 25/500
+300/300 [==============================] - 178s 593ms/step - loss: 9.4145 - rpn_class_loss: 0.2491 - rpn_bbox_loss: 1.3306 - mrcnn_class_loss: 0.7462 - mrcnn_bbox_loss: 1.3705 - mrcnn_mask_loss: 5.2504 - grasp_loss: 0.4677 - val_loss: 7.5699 - val_rpn_class_loss: 0.0791 - val_rpn_bbox_loss: 0.6634 - val_mrcnn_class_loss: 1.0834 - val_mrcnn_bbox_loss: 1.0333 - val_mrcnn_mask_loss: 4.0772 - val_grasp_loss: 0.5040
+Epoch 26/500
+300/300 [==============================] - 179s 596ms/step - loss: 9.4280 - rpn_class_loss: 0.2418 - rpn_bbox_loss: 1.3397 - mrcnn_class_loss: 0.7379 - mrcnn_bbox_loss: 1.3714 - mrcnn_mask_loss: 5.2723 - grasp_loss: 0.4649 - val_loss: 6.7965 - val_rpn_class_loss: 0.0798 - val_rpn_bbox_loss: 0.6556 - val_mrcnn_class_loss: 1.0443 - val_mrcnn_bbox_loss: 1.0342 - val_mrcnn_mask_loss: 4.0956 - val_grasp_loss: 0.4896
+Epoch 27/500
+300/300 [==============================] - 178s 594ms/step - loss: 9.3535 - rpn_class_loss: 0.2492 - rpn_bbox_loss: 1.3403 - mrcnn_class_loss: 0.7373 - mrcnn_bbox_loss: 1.3659 - mrcnn_mask_loss: 5.2124 - grasp_loss: 0.4484 - val_loss: 6.7419 - val_rpn_class_loss: 0.0788 - val_rpn_bbox_loss: 0.6747 - val_mrcnn_class_loss: 1.0403 - val_mrcnn_bbox_loss: 1.0397 - val_mrcnn_mask_loss: 4.1896 - val_grasp_loss: 0.4903
+Epoch 28/500
+300/300 [==============================] - 179s 598ms/step - loss: 9.3529 - rpn_class_loss: 0.2459 - rpn_bbox_loss: 1.3411 - mrcnn_class_loss: 0.7352 - mrcnn_bbox_loss: 1.3607 - mrcnn_mask_loss: 5.2246 - grasp_loss: 0.4453 - val_loss: 7.4624 - val_rpn_class_loss: 0.0797 - val_rpn_bbox_loss: 0.6667 - val_mrcnn_class_loss: 1.0826 - val_mrcnn_bbox_loss: 1.0479 - val_mrcnn_mask_loss: 4.1246 - val_grasp_loss: 0.4767
+Epoch 29/500
+300/300 [==============================] - 178s 594ms/step - loss: 9.4005 - rpn_class_loss: 0.2427 - rpn_bbox_loss: 1.3401 - mrcnn_class_loss: 0.7443 - mrcnn_bbox_loss: 1.3707 - mrcnn_mask_loss: 5.2514 - grasp_loss: 0.4512 - val_loss: 7.3592 - val_rpn_class_loss: 0.0797 - val_rpn_bbox_loss: 0.6621 - val_mrcnn_class_loss: 1.0263 - val_mrcnn_bbox_loss: 1.0328 - val_mrcnn_mask_loss: 4.1075 - val_grasp_loss: 0.4608
+Epoch 30/500
+300/300 [==============================] - 178s 593ms/step - loss: 9.4631 - rpn_class_loss: 0.2514 - rpn_bbox_loss: 1.3454 - mrcnn_class_loss: 0.7288 - mrcnn_bbox_loss: 1.3676 - mrcnn_mask_loss: 5.3059 - grasp_loss: 0.4639 - val_loss: 7.1181 - val_rpn_class_loss: 0.0807 - val_rpn_bbox_loss: 0.6577 - val_mrcnn_class_loss: 1.0549 - val_mrcnn_bbox_loss: 1.0314 - val_mrcnn_mask_loss: 4.0753 - val_grasp_loss: 0.4671
+Epoch 31/500
+300/300 [==============================] - 179s 597ms/step - loss: 9.4980 - rpn_class_loss: 0.2456 - rpn_bbox_loss: 1.3474 - mrcnn_class_loss: 0.7383 - mrcnn_bbox_loss: 1.3817 - mrcnn_mask_loss: 5.3295 - grasp_loss: 0.4555 - val_loss: 7.4125 - val_rpn_class_loss: 0.0789 - val_rpn_bbox_loss: 0.6707 - val_mrcnn_class_loss: 1.0674 - val_mrcnn_bbox_loss: 1.0459 - val_mrcnn_mask_loss: 4.1766 - val_grasp_loss: 0.4616
+Epoch 32/500
+300/300 [==============================] - 179s 597ms/step - loss: 9.4436 - rpn_class_loss: 0.2477 - rpn_bbox_loss: 1.3423 - mrcnn_class_loss: 0.7555 - mrcnn_bbox_loss: 1.3688 - mrcnn_mask_loss: 5.2771 - grasp_loss: 0.4521 - val_loss: 6.6184 - val_rpn_class_loss: 0.0790 - val_rpn_bbox_loss: 0.6687 - val_mrcnn_class_loss: 1.0490 - val_mrcnn_bbox_loss: 1.0412 - val_mrcnn_mask_loss: 4.1320 - val_grasp_loss: 0.4506
+Epoch 33/500
+300/300 [==============================] - 178s 594ms/step - loss: 9.4819 - rpn_class_loss: 0.2408 - rpn_bbox_loss: 1.3340 - mrcnn_class_loss: 0.7497 - mrcnn_bbox_loss: 1.3769 - mrcnn_mask_loss: 5.3234 - grasp_loss: 0.4572 - val_loss: 7.2307 - val_rpn_class_loss: 0.0795 - val_rpn_bbox_loss: 0.6609 - val_mrcnn_class_loss: 1.0530 - val_mrcnn_bbox_loss: 1.0305 - val_mrcnn_mask_loss: 4.0521 - val_grasp_loss: 0.4663
+Epoch 34/500
+300/300 [==============================] - 179s 595ms/step - loss: 9.3986 - rpn_class_loss: 0.2457 - rpn_bbox_loss: 1.3442 - mrcnn_class_loss: 0.7561 - mrcnn_bbox_loss: 1.3726 - mrcnn_mask_loss: 5.2534 - grasp_loss: 0.4267 - val_loss: 7.4044 - val_rpn_class_loss: 0.0798 - val_rpn_bbox_loss: 0.6660 - val_mrcnn_class_loss: 1.0502 - val_mrcnn_bbox_loss: 1.0391 - val_mrcnn_mask_loss: 4.1512 - val_grasp_loss: 0.4672
+Epoch 35/500
+300/300 [==============================] - 179s 597ms/step - loss: 9.3482 - rpn_class_loss: 0.2464 - rpn_bbox_loss: 1.3374 - mrcnn_class_loss: 0.7550 - mrcnn_bbox_loss: 1.3655 - mrcnn_mask_loss: 5.2028 - grasp_loss: 0.4411 - val_loss: 6.2900 - val_rpn_class_loss: 0.0797 - val_rpn_bbox_loss: 0.6628 - val_mrcnn_class_loss: 1.0533 - val_mrcnn_bbox_loss: 1.0423 - val_mrcnn_mask_loss: 4.1348 - val_grasp_loss: 0.4708
+Epoch 36/500
+300/300 [==============================] - 178s 594ms/step - loss: 9.5436 - rpn_class_loss: 0.2482 - rpn_bbox_loss: 1.3428 - mrcnn_class_loss: 0.7473 - mrcnn_bbox_loss: 1.3731 - mrcnn_mask_loss: 5.3720 - grasp_loss: 0.4602 - val_loss: 7.5350 - val_rpn_class_loss: 0.0794 - val_rpn_bbox_loss: 0.6677 - val_mrcnn_class_loss: 1.0561 - val_mrcnn_bbox_loss: 1.0396 - val_mrcnn_mask_loss: 4.1077 - val_grasp_loss: 0.4615
+Epoch 37/500
+300/300 [==============================] - 180s 599ms/step - loss: 9.4215 - rpn_class_loss: 0.2429 - rpn_bbox_loss: 1.3347 - mrcnn_class_loss: 0.7526 - mrcnn_bbox_loss: 1.3633 - mrcnn_mask_loss: 5.2689 - grasp_loss: 0.4591 - val_loss: 8.0542 - val_rpn_class_loss: 0.0792 - val_rpn_bbox_loss: 0.6606 - val_mrcnn_class_loss: 1.0555 - val_mrcnn_bbox_loss: 1.0396 - val_mrcnn_mask_loss: 4.1292 - val_grasp_loss: 0.4465
+Epoch 38/500
+300/300 [==============================] - 179s 598ms/step - loss: 9.4645 - rpn_class_loss: 0.2478 - rpn_bbox_loss: 1.3427 - mrcnn_class_loss: 0.7460 - mrcnn_bbox_loss: 1.3740 - mrcnn_mask_loss: 5.3107 - grasp_loss: 0.4434 - val_loss: 7.6058 - val_rpn_class_loss: 0.0797 - val_rpn_bbox_loss: 0.6630 - val_mrcnn_class_loss: 1.0444 - val_mrcnn_bbox_loss: 1.0314 - val_mrcnn_mask_loss: 4.0695 - val_grasp_loss: 0.4653
+Epoch 39/500
+300/300 [==============================] - 179s 596ms/step - loss: 9.3227 - rpn_class_loss: 0.2479 - rpn_bbox_loss: 1.3474 - mrcnn_class_loss: 0.7287 - mrcnn_bbox_loss: 1.3651 - mrcnn_mask_loss: 5.1985 - grasp_loss: 0.4350 - val_loss: 7.2574 - val_rpn_class_loss: 0.0795 - val_rpn_bbox_loss: 0.6641 - val_mrcnn_class_loss: 1.0574 - val_mrcnn_bbox_loss: 1.0411 - val_mrcnn_mask_loss: 4.1159 - val_grasp_loss: 0.4559
+Epoch 40/500
+300/300 [==============================] - 179s 595ms/step - loss: 9.3738 - rpn_class_loss: 0.2502 - rpn_bbox_loss: 1.3370 - mrcnn_class_loss: 0.7331 - mrcnn_bbox_loss: 1.3653 - mrcnn_mask_loss: 5.2377 - grasp_loss: 0.4505 - val_loss: 7.6621 - val_rpn_class_loss: 0.0793 - val_rpn_bbox_loss: 0.6615 - val_mrcnn_class_loss: 1.0550 - val_mrcnn_bbox_loss: 1.0455 - val_mrcnn_mask_loss: 4.2210 - val_grasp_loss: 0.4591
+Epoch 41/500
+300/300 [==============================] - 178s 593ms/step - loss: 9.3331 - rpn_class_loss: 0.2476 - rpn_bbox_loss: 1.3371 - mrcnn_class_loss: 0.7530 - mrcnn_bbox_loss: 1.3576 - mrcnn_mask_loss: 5.1883 - grasp_loss: 0.4496 - val_loss: 7.6277 - val_rpn_class_loss: 0.0793 - val_rpn_bbox_loss: 0.6670 - val_mrcnn_class_loss: 1.0454 - val_mrcnn_bbox_loss: 1.0269 - val_mrcnn_mask_loss: 4.0461 - val_grasp_loss: 0.4312
+Epoch 42/500
+300/300 [==============================] - 179s 597ms/step - loss: 9.5352 - rpn_class_loss: 0.2466 - rpn_bbox_loss: 1.3397 - mrcnn_class_loss: 0.7472 - mrcnn_bbox_loss: 1.3808 - mrcnn_mask_loss: 5.3801 - grasp_loss: 0.4407 - val_loss: 6.5824 - val_rpn_class_loss: 0.0801 - val_rpn_bbox_loss: 0.6615 - val_mrcnn_class_loss: 1.0568 - val_mrcnn_bbox_loss: 1.0470 - val_mrcnn_mask_loss: 4.1655 - val_grasp_loss: 0.4581
+Epoch 43/500
+300/300 [==============================] - 180s 599ms/step - loss: 9.3731 - rpn_class_loss: 0.2446 - rpn_bbox_loss: 1.3290 - mrcnn_class_loss: 0.7523 - mrcnn_bbox_loss: 1.3606 - mrcnn_mask_loss: 5.2376 - grasp_loss: 0.4489 - val_loss: 7.0894 - val_rpn_class_loss: 0.0785 - val_rpn_bbox_loss: 0.6696 - val_mrcnn_class_loss: 1.0707 - val_mrcnn_bbox_loss: 1.0398 - val_mrcnn_mask_loss: 4.1237 - val_grasp_loss: 0.4395
+Epoch 44/500
+300/300 [==============================] - 178s 594ms/step - loss: 9.2729 - rpn_class_loss: 0.2516 - rpn_bbox_loss: 1.3331 - mrcnn_class_loss: 0.7410 - mrcnn_bbox_loss: 1.3596 - mrcnn_mask_loss: 5.1486 - grasp_loss: 0.4390 - val_loss: 7.1438 - val_rpn_class_loss: 0.0791 - val_rpn_bbox_loss: 0.6613 - val_mrcnn_class_loss: 1.0458 - val_mrcnn_bbox_loss: 1.0344 - val_mrcnn_mask_loss: 4.1059 - val_grasp_loss: 0.4518
+Epoch 45/500
+300/300 [==============================] - 178s 592ms/step - loss: 9.3490 - rpn_class_loss: 0.2508 - rpn_bbox_loss: 1.3361 - mrcnn_class_loss: 0.7549 - mrcnn_bbox_loss: 1.3696 - mrcnn_mask_loss: 5.2118 - grasp_loss: 0.4259 - val_loss: 7.6645 - val_rpn_class_loss: 0.0786 - val_rpn_bbox_loss: 0.6645 - val_mrcnn_class_loss: 1.0464 - val_mrcnn_bbox_loss: 1.0361 - val_mrcnn_mask_loss: 4.0822 - val_grasp_loss: 0.4497
+Epoch 46/500
+300/300 [==============================] - 179s 596ms/step - loss: 9.3067 - rpn_class_loss: 0.2505 - rpn_bbox_loss: 1.3354 - mrcnn_class_loss: 0.7596 - mrcnn_bbox_loss: 1.3540 - mrcnn_mask_loss: 5.1795 - grasp_loss: 0.4277 - val_loss: 7.5997 - val_rpn_class_loss: 0.0788 - val_rpn_bbox_loss: 0.6653 - val_mrcnn_class_loss: 1.0551 - val_mrcnn_bbox_loss: 1.0384 - val_mrcnn_mask_loss: 4.1586 - val_grasp_loss: 0.4590
+Epoch 47/500
+300/300 [==============================] - 179s 597ms/step - loss: 9.4192 - rpn_class_loss: 0.2446 - rpn_bbox_loss: 1.3382 - mrcnn_class_loss: 0.7531 - mrcnn_bbox_loss: 1.3681 - mrcnn_mask_loss: 5.2665 - grasp_loss: 0.4486 - val_loss: 7.6489 - val_rpn_class_loss: 0.0800 - val_rpn_bbox_loss: 0.6703 - val_mrcnn_class_loss: 1.0565 - val_mrcnn_bbox_loss: 1.0418 - val_mrcnn_mask_loss: 4.1124 - val_grasp_loss: 0.4236
+Epoch 48/500
+300/300 [==============================] - 178s 595ms/step - loss: 9.4016 - rpn_class_loss: 0.2474 - rpn_bbox_loss: 1.3438 - mrcnn_class_loss: 0.7357 - mrcnn_bbox_loss: 1.3722 - mrcnn_mask_loss: 5.2652 - grasp_loss: 0.4372 - val_loss: 7.1758 - val_rpn_class_loss: 0.0793 - val_rpn_bbox_loss: 0.6615 - val_mrcnn_class_loss: 1.0516 - val_mrcnn_bbox_loss: 1.0391 - val_mrcnn_mask_loss: 4.1278 - val_grasp_loss: 0.4484
+Epoch 49/500
+300/300 [==============================] - 178s 593ms/step - loss: 9.4558 - rpn_class_loss: 0.2457 - rpn_bbox_loss: 1.3428 - mrcnn_class_loss: 0.7270 - mrcnn_bbox_loss: 1.3756 - mrcnn_mask_loss: 5.3214 - grasp_loss: 0.4434 - val_loss: 7.8629 - val_rpn_class_loss: 0.0788 - val_rpn_bbox_loss: 0.6689 - val_mrcnn_class_loss: 1.0549 - val_mrcnn_bbox_loss: 1.0428 - val_mrcnn_mask_loss: 4.1787 - val_grasp_loss: 0.4432
+Epoch 50/500
+300/300 [==============================] - 178s 594ms/step - loss: 9.3761 - rpn_class_loss: 0.2489 - rpn_bbox_loss: 1.3363 - mrcnn_class_loss: 0.7397 - mrcnn_bbox_loss: 1.3756 - mrcnn_mask_loss: 5.2349 - grasp_loss: 0.4408 - val_loss: 8.0349 - val_rpn_class_loss: 0.0800 - val_rpn_bbox_loss: 0.6620 - val_mrcnn_class_loss: 1.0508 - val_mrcnn_bbox_loss: 1.0372 - val_mrcnn_mask_loss: 4.0840 - val_grasp_loss: 0.4247
+Epoch 51/500
+300/300 [==============================] - 178s 594ms/step - loss: 9.4384 - rpn_class_loss: 0.2500 - rpn_bbox_loss: 1.3383 - mrcnn_class_loss: 0.7393 - mrcnn_bbox_loss: 1.3679 - mrcnn_mask_loss: 5.3036 - grasp_loss: 0.4394 - val_loss: 6.4861 - val_rpn_class_loss: 0.0798 - val_rpn_bbox_loss: 0.6630 - val_mrcnn_class_loss: 1.0554 - val_mrcnn_bbox_loss: 1.0370 - val_mrcnn_mask_loss: 4.1060 - val_grasp_loss: 0.4416
+Epoch 52/500
+300/300 [==============================] - 179s 596ms/step - loss: 9.3514 - rpn_class_loss: 0.2485 - rpn_bbox_loss: 1.3406 - mrcnn_class_loss: 0.7368 - mrcnn_bbox_loss: 1.3632 - mrcnn_mask_loss: 5.2194 - grasp_loss: 0.4428 - val_loss: 7.0062 - val_rpn_class_loss: 0.0796 - val_rpn_bbox_loss: 0.6626 - val_mrcnn_class_loss: 1.0487 - val_mrcnn_bbox_loss: 1.0351 - val_mrcnn_mask_loss: 4.0920 - val_grasp_loss: 0.4568
+Epoch 53/500
+300/300 [==============================] - 178s 593ms/step - loss: 9.3918 - rpn_class_loss: 0.2463 - rpn_bbox_loss: 1.3448 - mrcnn_class_loss: 0.7424 - mrcnn_bbox_loss: 1.3696 - mrcnn_mask_loss: 5.2502 - grasp_loss: 0.4385 - val_loss: 8.0756 - val_rpn_class_loss: 0.0790 - val_rpn_bbox_loss: 0.6674 - val_mrcnn_class_loss: 1.0579 - val_mrcnn_bbox_loss: 1.0453 - val_mrcnn_mask_loss: 4.1439 - val_grasp_loss: 0.4253
+Epoch 54/500
+300/300 [==============================] - 178s 594ms/step - loss: 9.4572 - rpn_class_loss: 0.2461 - rpn_bbox_loss: 1.3420 - mrcnn_class_loss: 0.7470 - mrcnn_bbox_loss: 1.3842 - mrcnn_mask_loss: 5.3185 - grasp_loss: 0.4193 - val_loss: 7.8346 - val_rpn_class_loss: 0.0790 - val_rpn_bbox_loss: 0.6640 - val_mrcnn_class_loss: 1.0438 - val_mrcnn_bbox_loss: 1.0341 - val_mrcnn_mask_loss: 4.0929 - val_grasp_loss: 0.4394
+Epoch 55/500
+300/300 [==============================] - 179s 598ms/step - loss: 9.4202 - rpn_class_loss: 0.2421 - rpn_bbox_loss: 1.3362 - mrcnn_class_loss: 0.7388 - mrcnn_bbox_loss: 1.3654 - mrcnn_mask_loss: 5.3086 - grasp_loss: 0.4292 - val_loss: 8.4528 - val_rpn_class_loss: 0.0800 - val_rpn_bbox_loss: 0.6617 - val_mrcnn_class_loss: 1.0620 - val_mrcnn_bbox_loss: 1.0424 - val_mrcnn_mask_loss: 4.1856 - val_grasp_loss: 0.4423
+Epoch 56/500
+300/300 [==============================] - 179s 597ms/step - loss: 9.3531 - rpn_class_loss: 0.2449 - rpn_bbox_loss: 1.3365 - mrcnn_class_loss: 0.7414 - mrcnn_bbox_loss: 1.3577 - mrcnn_mask_loss: 5.2480 - grasp_loss: 0.4247 - val_loss: 7.7460 - val_rpn_class_loss: 0.0789 - val_rpn_bbox_loss: 0.6616 - val_mrcnn_class_loss: 1.0535 - val_mrcnn_bbox_loss: 1.0318 - val_mrcnn_mask_loss: 4.0328 - val_grasp_loss: 0.4291
+Epoch 57/500
+300/300 [==============================] - 177s 590ms/step - loss: 9.3333 - rpn_class_loss: 0.2462 - rpn_bbox_loss: 1.3392 - mrcnn_class_loss: 0.7390 - mrcnn_bbox_loss: 1.3659 - mrcnn_mask_loss: 5.2193 - grasp_loss: 0.4237 - val_loss: 6.4181 - val_rpn_class_loss: 0.0788 - val_rpn_bbox_loss: 0.6712 - val_mrcnn_class_loss: 1.0541 - val_mrcnn_bbox_loss: 1.0333 - val_mrcnn_mask_loss: 4.0683 - val_grasp_loss: 0.4237
+Epoch 58/500
+300/300 [==============================] - 178s 594ms/step - loss: 9.3815 - rpn_class_loss: 0.2474 - rpn_bbox_loss: 1.3373 - mrcnn_class_loss: 0.7405 - mrcnn_bbox_loss: 1.3647 - mrcnn_mask_loss: 5.2605 - grasp_loss: 0.4313 - val_loss: 7.4904 - val_rpn_class_loss: 0.0787 - val_rpn_bbox_loss: 0.6652 - val_mrcnn_class_loss: 1.0490 - val_mrcnn_bbox_loss: 1.0461 - val_mrcnn_mask_loss: 4.1932 - val_grasp_loss: 0.4423
+Epoch 59/500
+300/300 [==============================] - 177s 591ms/step - loss: 9.4385 - rpn_class_loss: 0.2424 - rpn_bbox_loss: 1.3429 - mrcnn_class_loss: 0.7273 - mrcnn_bbox_loss: 1.3748 - mrcnn_mask_loss: 5.3254 - grasp_loss: 0.4256 - val_loss: 6.6044 - val_rpn_class_loss: 0.0807 - val_rpn_bbox_loss: 0.6565 - val_mrcnn_class_loss: 1.0579 - val_mrcnn_bbox_loss: 1.0362 - val_mrcnn_mask_loss: 4.1414 - val_grasp_loss: 0.4280
+Epoch 60/500
+300/300 [==============================] - 178s 592ms/step - loss: 9.2495 - rpn_class_loss: 0.2485 - rpn_bbox_loss: 1.3323 - mrcnn_class_loss: 0.7377 - mrcnn_bbox_loss: 1.3478 - mrcnn_mask_loss: 5.1467 - grasp_loss: 0.4365 - val_loss: 7.7517 - val_rpn_class_loss: 0.0792 - val_rpn_bbox_loss: 0.6668 - val_mrcnn_class_loss: 1.0528 - val_mrcnn_bbox_loss: 1.0413 - val_mrcnn_mask_loss: 4.1027 - val_grasp_loss: 0.4185
+Epoch 61/500
+300/300 [==============================] - 178s 593ms/step - loss: 9.4317 - rpn_class_loss: 0.2463 - rpn_bbox_loss: 1.3434 - mrcnn_class_loss: 0.7411 - mrcnn_bbox_loss: 1.3689 - mrcnn_mask_loss: 5.2942 - grasp_loss: 0.4377 - val_loss: 7.0178 - val_rpn_class_loss: 0.0783 - val_rpn_bbox_loss: 0.6692 - val_mrcnn_class_loss: 1.0530 - val_mrcnn_bbox_loss: 1.0364 - val_mrcnn_mask_loss: 4.1385 - val_grasp_loss: 0.4490
+Epoch 62/500
+300/300 [==============================] - 178s 593ms/step - loss: 9.5101 - rpn_class_loss: 0.2481 - rpn_bbox_loss: 1.3421 - mrcnn_class_loss: 0.7458 - mrcnn_bbox_loss: 1.3804 - mrcnn_mask_loss: 5.3597 - grasp_loss: 0.4340 - val_loss: 7.5446 - val_rpn_class_loss: 0.0791 - val_rpn_bbox_loss: 0.6652 - val_mrcnn_class_loss: 1.0504 - val_mrcnn_bbox_loss: 1.0456 - val_mrcnn_mask_loss: 4.1294 - val_grasp_loss: 0.4265
+Epoch 63/500
+300/300 [==============================] - 179s 596ms/step - loss: 9.4141 - rpn_class_loss: 0.2503 - rpn_bbox_loss: 1.3389 - mrcnn_class_loss: 0.7526 - mrcnn_bbox_loss: 1.3801 - mrcnn_mask_loss: 5.2571 - grasp_loss: 0.4351 - val_loss: 6.8106 - val_rpn_class_loss: 0.0795 - val_rpn_bbox_loss: 0.6586 - val_mrcnn_class_loss: 1.0485 - val_mrcnn_bbox_loss: 1.0292 - val_mrcnn_mask_loss: 4.1033 - val_grasp_loss: 0.4336
+Epoch 64/500
+300/300 [==============================] - 178s 593ms/step - loss: 9.3767 - rpn_class_loss: 0.2471 - rpn_bbox_loss: 1.3359 - mrcnn_class_loss: 0.7579 - mrcnn_bbox_loss: 1.3697 - mrcnn_mask_loss: 5.2406 - grasp_loss: 0.4255 - val_loss: 6.9347 - val_rpn_class_loss: 0.0790 - val_rpn_bbox_loss: 0.6708 - val_mrcnn_class_loss: 1.0676 - val_mrcnn_bbox_loss: 1.0439 - val_mrcnn_mask_loss: 4.1427 - val_grasp_loss: 0.4361
+Epoch 65/500
+300/300 [==============================] - 179s 596ms/step - loss: 9.4292 - rpn_class_loss: 0.2454 - rpn_bbox_loss: 1.3363 - mrcnn_class_loss: 0.7539 - mrcnn_bbox_loss: 1.3708 - mrcnn_mask_loss: 5.3055 - grasp_loss: 0.4174 - val_loss: 6.7579 - val_rpn_class_loss: 0.0792 - val_rpn_bbox_loss: 0.6659 - val_mrcnn_class_loss: 1.0486 - val_mrcnn_bbox_loss: 1.0404 - val_mrcnn_mask_loss: 4.1083 - val_grasp_loss: 0.4290
+Epoch 66/500
+300/300 [==============================] - 179s 596ms/step - loss: 9.3687 - rpn_class_loss: 0.2459 - rpn_bbox_loss: 1.3313 - mrcnn_class_loss: 0.7432 - mrcnn_bbox_loss: 1.3690 - mrcnn_mask_loss: 5.2523 - grasp_loss: 0.4271 - val_loss: 7.8648 - val_rpn_class_loss: 0.0797 - val_rpn_bbox_loss: 0.6617 - val_mrcnn_class_loss: 1.0536 - val_mrcnn_bbox_loss: 1.0379 - val_mrcnn_mask_loss: 4.1074 - val_grasp_loss: 0.4378
+Epoch 67/500
+300/300 [==============================] - 179s 595ms/step - loss: 9.1862 - rpn_class_loss: 0.2486 - rpn_bbox_loss: 1.3265 - mrcnn_class_loss: 0.7479 - mrcnn_bbox_loss: 1.3465 - mrcnn_mask_loss: 5.0865 - grasp_loss: 0.4301 - val_loss: 6.5859 - val_rpn_class_loss: 0.0797 - val_rpn_bbox_loss: 0.6645 - val_mrcnn_class_loss: 1.0584 - val_mrcnn_bbox_loss: 1.0356 - val_mrcnn_mask_loss: 4.1144 - val_grasp_loss: 0.4231
+Epoch 68/500
+300/300 [==============================] - 179s 597ms/step - loss: 9.4396 - rpn_class_loss: 0.2467 - rpn_bbox_loss: 1.3428 - mrcnn_class_loss: 0.7506 - mrcnn_bbox_loss: 1.3709 - mrcnn_mask_loss: 5.2982 - grasp_loss: 0.4304 - val_loss: 7.2345 - val_rpn_class_loss: 0.0799 - val_rpn_bbox_loss: 0.6580 - val_mrcnn_class_loss: 1.0572 - val_mrcnn_bbox_loss: 1.0350 - val_mrcnn_mask_loss: 4.1154 - val_grasp_loss: 0.4361
+Epoch 69/500
+300/300 [==============================] - 178s 595ms/step - loss: 9.4149 - rpn_class_loss: 0.2513 - rpn_bbox_loss: 1.3439 - mrcnn_class_loss: 0.7426 - mrcnn_bbox_loss: 1.3739 - mrcnn_mask_loss: 5.2699 - grasp_loss: 0.4332 - val_loss: 7.0986 - val_rpn_class_loss: 0.0786 - val_rpn_bbox_loss: 0.6671 - val_mrcnn_class_loss: 1.0547 - val_mrcnn_bbox_loss: 1.0367 - val_mrcnn_mask_loss: 4.1136 - val_grasp_loss: 0.4164
+Epoch 70/500
+300/300 [==============================] - 179s 596ms/step - loss: 9.3265 - rpn_class_loss: 0.2496 - rpn_bbox_loss: 1.3430 - mrcnn_class_loss: 0.7429 - mrcnn_bbox_loss: 1.3632 - mrcnn_mask_loss: 5.2095 - grasp_loss: 0.4184 - val_loss: 6.6698 - val_rpn_class_loss: 0.0794 - val_rpn_bbox_loss: 0.6662 - val_mrcnn_class_loss: 1.0428 - val_mrcnn_bbox_loss: 1.0375 - val_mrcnn_mask_loss: 4.1213 - val_grasp_loss: 0.4176
+Epoch 71/500
+300/300 [==============================] - 178s 593ms/step - loss: 9.3186 - rpn_class_loss: 0.2480 - rpn_bbox_loss: 1.3358 - mrcnn_class_loss: 0.7400 - mrcnn_bbox_loss: 1.3694 - mrcnn_mask_loss: 5.1990 - grasp_loss: 0.4263 - val_loss: 7.3685 - val_rpn_class_loss: 0.0797 - val_rpn_bbox_loss: 0.6592 - val_mrcnn_class_loss: 1.0532 - val_mrcnn_bbox_loss: 1.0338 - val_mrcnn_mask_loss: 4.1013 - val_grasp_loss: 0.4311
+Epoch 72/500
+300/300 [==============================] - 179s 597ms/step - loss: 9.2333 - rpn_class_loss: 0.2481 - rpn_bbox_loss: 1.3305 - mrcnn_class_loss: 0.7449 - mrcnn_bbox_loss: 1.3539 - mrcnn_mask_loss: 5.1380 - grasp_loss: 0.4179 - val_loss: 6.7987 - val_rpn_class_loss: 0.0791 - val_rpn_bbox_loss: 0.6713 - val_mrcnn_class_loss: 1.0569 - val_mrcnn_bbox_loss: 1.0416 - val_mrcnn_mask_loss: 4.0974 - val_grasp_loss: 0.4236
+Epoch 73/500
+300/300 [==============================] - 179s 596ms/step - loss: 9.2822 - rpn_class_loss: 0.2491 - rpn_bbox_loss: 1.3402 - mrcnn_class_loss: 0.7435 - mrcnn_bbox_loss: 1.3627 - mrcnn_mask_loss: 5.1683 - grasp_loss: 0.4185 - val_loss: 8.5850 - val_rpn_class_loss: 0.0805 - val_rpn_bbox_loss: 0.6574 - val_mrcnn_class_loss: 1.0518 - val_mrcnn_bbox_loss: 1.0421 - val_mrcnn_mask_loss: 4.1227 - val_grasp_loss: 0.4229
+Epoch 74/500
+300/300 [==============================] - 179s 598ms/step - loss: 9.3688 - rpn_class_loss: 0.2486 - rpn_bbox_loss: 1.3349 - mrcnn_class_loss: 0.7581 - mrcnn_bbox_loss: 1.3678 - mrcnn_mask_loss: 5.2414 - grasp_loss: 0.4179 - val_loss: 6.5780 - val_rpn_class_loss: 0.0789 - val_rpn_bbox_loss: 0.6644 - val_mrcnn_class_loss: 1.0632 - val_mrcnn_bbox_loss: 1.0313 - val_mrcnn_mask_loss: 4.1072 - val_grasp_loss: 0.4493
+Epoch 75/500
+300/300 [==============================] - 178s 593ms/step - loss: 9.2487 - rpn_class_loss: 0.2510 - rpn_bbox_loss: 1.3337 - mrcnn_class_loss: 0.7407 - mrcnn_bbox_loss: 1.3575 - mrcnn_mask_loss: 5.1427 - grasp_loss: 0.4232 - val_loss: 7.9569 - val_rpn_class_loss: 0.0799 - val_rpn_bbox_loss: 0.6641 - val_mrcnn_class_loss: 1.0320 - val_mrcnn_bbox_loss: 1.0401 - val_mrcnn_mask_loss: 4.1186 - val_grasp_loss: 0.4068
+Epoch 76/500
+300/300 [==============================] - 180s 599ms/step - loss: 9.4112 - rpn_class_loss: 0.2520 - rpn_bbox_loss: 1.3463 - mrcnn_class_loss: 0.7445 - mrcnn_bbox_loss: 1.3764 - mrcnn_mask_loss: 5.2712 - grasp_loss: 0.4207 - val_loss: 7.1086 - val_rpn_class_loss: 0.0789 - val_rpn_bbox_loss: 0.6746 - val_mrcnn_class_loss: 1.0654 - val_mrcnn_bbox_loss: 1.0467 - val_mrcnn_mask_loss: 4.1460 - val_grasp_loss: 0.4226
+Epoch 77/500
+300/300 [==============================] - 180s 599ms/step - loss: 9.3653 - rpn_class_loss: 0.2435 - rpn_bbox_loss: 1.3393 - mrcnn_class_loss: 0.7467 - mrcnn_bbox_loss: 1.3750 - mrcnn_mask_loss: 5.2551 - grasp_loss: 0.4057 - val_loss: 7.5123 - val_rpn_class_loss: 0.0802 - val_rpn_bbox_loss: 0.6528 - val_mrcnn_class_loss: 1.0600 - val_mrcnn_bbox_loss: 1.0353 - val_mrcnn_mask_loss: 4.1399 - val_grasp_loss: 0.4278
+Epoch 78/500
+300/300 [==============================] - 179s 597ms/step - loss: 9.2849 - rpn_class_loss: 0.2469 - rpn_bbox_loss: 1.3396 - mrcnn_class_loss: 0.7377 - mrcnn_bbox_loss: 1.3600 - mrcnn_mask_loss: 5.1914 - grasp_loss: 0.4093 - val_loss: 7.0369 - val_rpn_class_loss: 0.0787 - val_rpn_bbox_loss: 0.6719 - val_mrcnn_class_loss: 1.0384 - val_mrcnn_bbox_loss: 1.0321 - val_mrcnn_mask_loss: 4.0369 - val_grasp_loss: 0.4237
+Epoch 79/500
+300/300 [==============================] - 179s 598ms/step - loss: 9.3317 - rpn_class_loss: 0.2463 - rpn_bbox_loss: 1.3437 - mrcnn_class_loss: 0.7538 - mrcnn_bbox_loss: 1.3623 - mrcnn_mask_loss: 5.2136 - grasp_loss: 0.4120 - val_loss: 6.9494 - val_rpn_class_loss: 0.0794 - val_rpn_bbox_loss: 0.6604 - val_mrcnn_class_loss: 1.0659 - val_mrcnn_bbox_loss: 1.0472 - val_mrcnn_mask_loss: 4.2101 - val_grasp_loss: 0.4307
+Epoch 80/500
+300/300 [==============================] - 179s 598ms/step - loss: 9.3837 - rpn_class_loss: 0.2477 - rpn_bbox_loss: 1.3357 - mrcnn_class_loss: 0.7410 - mrcnn_bbox_loss: 1.3701 - mrcnn_mask_loss: 5.2718 - grasp_loss: 0.4174 - val_loss: 7.5846 - val_rpn_class_loss: 0.0778 - val_rpn_bbox_loss: 0.6778 - val_mrcnn_class_loss: 1.0544 - val_mrcnn_bbox_loss: 1.0430 - val_mrcnn_mask_loss: 4.1474 - val_grasp_loss: 0.4255
+Epoch 81/500
+300/300 [==============================] - 180s 600ms/step - loss: 9.3743 - rpn_class_loss: 0.2429 - rpn_bbox_loss: 1.3319 - mrcnn_class_loss: 0.7594 - mrcnn_bbox_loss: 1.3677 - mrcnn_mask_loss: 5.2484 - grasp_loss: 0.4240 - val_loss: 7.2410 - val_rpn_class_loss: 0.0805 - val_rpn_bbox_loss: 0.6543 - val_mrcnn_class_loss: 1.0502 - val_mrcnn_bbox_loss: 1.0322 - val_mrcnn_mask_loss: 4.0618 - val_grasp_loss: 0.4164
+Epoch 82/500
+300/300 [==============================] - 179s 597ms/step - loss: 9.2899 - rpn_class_loss: 0.2494 - rpn_bbox_loss: 1.3409 - mrcnn_class_loss: 0.7430 - mrcnn_bbox_loss: 1.3622 - mrcnn_mask_loss: 5.1750 - grasp_loss: 0.4194 - val_loss: 8.1492 - val_rpn_class_loss: 0.0793 - val_rpn_bbox_loss: 0.6610 - val_mrcnn_class_loss: 1.0466 - val_mrcnn_bbox_loss: 1.0338 - val_mrcnn_mask_loss: 4.1007 - val_grasp_loss: 0.4307
+Epoch 83/500
+300/300 [==============================] - 179s 598ms/step - loss: 9.4840 - rpn_class_loss: 0.2502 - rpn_bbox_loss: 1.3457 - mrcnn_class_loss: 0.7550 - mrcnn_bbox_loss: 1.3847 - mrcnn_mask_loss: 5.3439 - grasp_loss: 0.4044 - val_loss: 6.7687 - val_rpn_class_loss: 0.0783 - val_rpn_bbox_loss: 0.6687 - val_mrcnn_class_loss: 1.0573 - val_mrcnn_bbox_loss: 1.0429 - val_mrcnn_mask_loss: 4.1437 - val_grasp_loss: 0.4362
+Epoch 84/500
+300/300 [==============================] - 178s 595ms/step - loss: 9.3424 - rpn_class_loss: 0.2497 - rpn_bbox_loss: 1.3416 - mrcnn_class_loss: 0.7335 - mrcnn_bbox_loss: 1.3669 - mrcnn_mask_loss: 5.2346 - grasp_loss: 0.4161 - val_loss: 7.4647 - val_rpn_class_loss: 0.0794 - val_rpn_bbox_loss: 0.6660 - val_mrcnn_class_loss: 1.0553 - val_mrcnn_bbox_loss: 1.0439 - val_mrcnn_mask_loss: 4.1633 - val_grasp_loss: 0.4264
+Epoch 85/500
+300/300 [==============================] - 179s 596ms/step - loss: 9.3983 - rpn_class_loss: 0.2455 - rpn_bbox_loss: 1.3330 - mrcnn_class_loss: 0.7435 - mrcnn_bbox_loss: 1.3669 - mrcnn_mask_loss: 5.2934 - grasp_loss: 0.4160 - val_loss: 7.7292 - val_rpn_class_loss: 0.0797 - val_rpn_bbox_loss: 0.6631 - val_mrcnn_class_loss: 1.0475 - val_mrcnn_bbox_loss: 1.0323 - val_mrcnn_mask_loss: 4.0683 - val_grasp_loss: 0.4247
+Epoch 86/500
+300/300 [==============================] - 180s 599ms/step - loss: 9.4317 - rpn_class_loss: 0.2467 - rpn_bbox_loss: 1.3390 - mrcnn_class_loss: 0.7459 - mrcnn_bbox_loss: 1.3719 - mrcnn_mask_loss: 5.3085 - grasp_loss: 0.4197 - val_loss: 7.3921 - val_rpn_class_loss: 0.0791 - val_rpn_bbox_loss: 0.6654 - val_mrcnn_class_loss: 1.0655 - val_mrcnn_bbox_loss: 1.0396 - val_mrcnn_mask_loss: 4.1331 - val_grasp_loss: 0.4231
+Epoch 87/500
+300/300 [==============================] - 178s 595ms/step - loss: 9.3693 - rpn_class_loss: 0.2468 - rpn_bbox_loss: 1.3465 - mrcnn_class_loss: 0.7312 - mrcnn_bbox_loss: 1.3691 - mrcnn_mask_loss: 5.2469 - grasp_loss: 0.4287 - val_loss: 6.9588 - val_rpn_class_loss: 0.0788 - val_rpn_bbox_loss: 0.6687 - val_mrcnn_class_loss: 1.0491 - val_mrcnn_bbox_loss: 1.0399 - val_mrcnn_mask_loss: 4.1109 - val_grasp_loss: 0.4226
+Epoch 88/500
+300/300 [==============================] - 179s 598ms/step - loss: 9.3486 - rpn_class_loss: 0.2475 - rpn_bbox_loss: 1.3396 - mrcnn_class_loss: 0.7460 - mrcnn_bbox_loss: 1.3687 - mrcnn_mask_loss: 5.2294 - grasp_loss: 0.4174 - val_loss: 7.5551 - val_rpn_class_loss: 0.0799 - val_rpn_bbox_loss: 0.6557 - val_mrcnn_class_loss: 1.0520 - val_mrcnn_bbox_loss: 1.0358 - val_mrcnn_mask_loss: 4.1040 - val_grasp_loss: 0.4027
+Epoch 89/500
+300/300 [==============================] - 178s 594ms/step - loss: 9.3241 - rpn_class_loss: 0.2477 - rpn_bbox_loss: 1.3395 - mrcnn_class_loss: 0.7420 - mrcnn_bbox_loss: 1.3628 - mrcnn_mask_loss: 5.2181 - grasp_loss: 0.4139 - val_loss: 7.4198 - val_rpn_class_loss: 0.0796 - val_rpn_bbox_loss: 0.6619 - val_mrcnn_class_loss: 1.0479 - val_mrcnn_bbox_loss: 1.0410 - val_mrcnn_mask_loss: 4.1560 - val_grasp_loss: 0.4148
+Epoch 90/500
+300/300 [==============================] - 180s 599ms/step - loss: 9.3926 - rpn_class_loss: 0.2463 - rpn_bbox_loss: 1.3386 - mrcnn_class_loss: 0.7535 - mrcnn_bbox_loss: 1.3671 - mrcnn_mask_loss: 5.2666 - grasp_loss: 0.4205 - val_loss: 7.8738 - val_rpn_class_loss: 0.0786 - val_rpn_bbox_loss: 0.6706 - val_mrcnn_class_loss: 1.0635 - val_mrcnn_bbox_loss: 1.0353 - val_mrcnn_mask_loss: 4.1100 - val_grasp_loss: 0.4151
+Epoch 91/500
+300/300 [==============================] - 180s 599ms/step - loss: 9.3951 - rpn_class_loss: 0.2458 - rpn_bbox_loss: 1.3407 - mrcnn_class_loss: 0.7481 - mrcnn_bbox_loss: 1.3650 - mrcnn_mask_loss: 5.2728 - grasp_loss: 0.4227 - val_loss: 6.6254 - val_rpn_class_loss: 0.0788 - val_rpn_bbox_loss: 0.6658 - val_mrcnn_class_loss: 1.0559 - val_mrcnn_bbox_loss: 1.0347 - val_mrcnn_mask_loss: 4.0886 - val_grasp_loss: 0.4083
+Epoch 92/500
+300/300 [==============================] - 180s 600ms/step - loss: 9.3972 - rpn_class_loss: 0.2474 - rpn_bbox_loss: 1.3406 - mrcnn_class_loss: 0.7411 - mrcnn_bbox_loss: 1.3742 - mrcnn_mask_loss: 5.2724 - grasp_loss: 0.4214 - val_loss: 7.4969 - val_rpn_class_loss: 0.0795 - val_rpn_bbox_loss: 0.6592 - val_mrcnn_class_loss: 1.0466 - val_mrcnn_bbox_loss: 1.0425 - val_mrcnn_mask_loss: 4.1276 - val_grasp_loss: 0.4093
+Epoch 93/500
+300/300 [==============================] - 180s 599ms/step - loss: 9.3987 - rpn_class_loss: 0.2456 - rpn_bbox_loss: 1.3378 - mrcnn_class_loss: 0.7540 - mrcnn_bbox_loss: 1.3696 - mrcnn_mask_loss: 5.2687 - grasp_loss: 0.4231 - val_loss: 7.9732 - val_rpn_class_loss: 0.0788 - val_rpn_bbox_loss: 0.6688 - val_mrcnn_class_loss: 1.0595 - val_mrcnn_bbox_loss: 1.0365 - val_mrcnn_mask_loss: 4.1308 - val_grasp_loss: 0.4258
+Epoch 94/500
+300/300 [==============================] - 179s 597ms/step - loss: 9.3797 - rpn_class_loss: 0.2453 - rpn_bbox_loss: 1.3370 - mrcnn_class_loss: 0.7436 - mrcnn_bbox_loss: 1.3658 - mrcnn_mask_loss: 5.2696 - grasp_loss: 0.4184 - val_loss: 6.8298 - val_rpn_class_loss: 0.0799 - val_rpn_bbox_loss: 0.6632 - val_mrcnn_class_loss: 1.0484 - val_mrcnn_bbox_loss: 1.0371 - val_mrcnn_mask_loss: 4.0965 - val_grasp_loss: 0.4170
+Epoch 95/500
+300/300 [==============================] - 180s 600ms/step - loss: 9.3173 - rpn_class_loss: 0.2506 - rpn_bbox_loss: 1.3388 - mrcnn_class_loss: 0.7502 - mrcnn_bbox_loss: 1.3597 - mrcnn_mask_loss: 5.2035 - grasp_loss: 0.4144 - val_loss: 7.5940 - val_rpn_class_loss: 0.0785 - val_rpn_bbox_loss: 0.6671 - val_mrcnn_class_loss: 1.0532 - val_mrcnn_bbox_loss: 1.0430 - val_mrcnn_mask_loss: 4.1530 - val_grasp_loss: 0.4193
+Epoch 96/500
+300/300 [==============================] - 180s 601ms/step - loss: 9.3411 - rpn_class_loss: 0.2437 - rpn_bbox_loss: 1.3342 - mrcnn_class_loss: 0.7492 - mrcnn_bbox_loss: 1.3592 - mrcnn_mask_loss: 5.2319 - grasp_loss: 0.4229 - val_loss: 8.2334 - val_rpn_class_loss: 0.0797 - val_rpn_bbox_loss: 0.6592 - val_mrcnn_class_loss: 1.0580 - val_mrcnn_bbox_loss: 1.0406 - val_mrcnn_mask_loss: 4.1635 - val_grasp_loss: 0.4172
+Epoch 97/500
+300/300 [==============================] - 178s 595ms/step - loss: 9.3340 - rpn_class_loss: 0.2484 - rpn_bbox_loss: 1.3413 - mrcnn_class_loss: 0.7438 - mrcnn_bbox_loss: 1.3668 - mrcnn_mask_loss: 5.2155 - grasp_loss: 0.4183 - val_loss: 7.1119 - val_rpn_class_loss: 0.0793 - val_rpn_bbox_loss: 0.6689 - val_mrcnn_class_loss: 1.0518 - val_mrcnn_bbox_loss: 1.0344 - val_mrcnn_mask_loss: 4.0752 - val_grasp_loss: 0.4177
+Epoch 98/500
+300/300 [==============================] - 179s 598ms/step - loss: 9.3431 - rpn_class_loss: 0.2456 - rpn_bbox_loss: 1.3405 - mrcnn_class_loss: 0.7420 - mrcnn_bbox_loss: 1.3651 - mrcnn_mask_loss: 5.2305 - grasp_loss: 0.4193 - val_loss: 7.0538 - val_rpn_class_loss: 0.0795 - val_rpn_bbox_loss: 0.6659 - val_mrcnn_class_loss: 1.0516 - val_mrcnn_bbox_loss: 1.0377 - val_mrcnn_mask_loss: 4.1214 - val_grasp_loss: 0.4119
+Epoch 99/500
+300/300 [==============================] - 180s 598ms/step - loss: 9.3457 - rpn_class_loss: 0.2478 - rpn_bbox_loss: 1.3410 - mrcnn_class_loss: 0.7447 - mrcnn_bbox_loss: 1.3678 - mrcnn_mask_loss: 5.2363 - grasp_loss: 0.4080 - val_loss: 7.1142 - val_rpn_class_loss: 0.0792 - val_rpn_bbox_loss: 0.6647 - val_mrcnn_class_loss: 1.0501 - val_mrcnn_bbox_loss: 1.0351 - val_mrcnn_mask_loss: 4.0568 - val_grasp_loss: 0.4126
+Epoch 100/500
+300/300 [==============================] - 179s 598ms/step - loss: 9.3973 - rpn_class_loss: 0.2461 - rpn_bbox_loss: 1.3397 - mrcnn_class_loss: 0.7420 - mrcnn_bbox_loss: 1.3714 - mrcnn_mask_loss: 5.2860 - grasp_loss: 0.4121 - val_loss: 7.4223 - val_rpn_class_loss: 0.0801 - val_rpn_bbox_loss: 0.6658 - val_mrcnn_class_loss: 1.0478 - val_mrcnn_bbox_loss: 1.0362 - val_mrcnn_mask_loss: 4.1002 - val_grasp_loss: 0.4066
+Epoch 101/500
+300/300 [==============================] - 180s 601ms/step - loss: 9.3430 - rpn_class_loss: 0.2460 - rpn_bbox_loss: 1.3404 - mrcnn_class_loss: 0.7379 - mrcnn_bbox_loss: 1.3653 - mrcnn_mask_loss: 5.2380 - grasp_loss: 0.4152 - val_loss: 7.3810 - val_rpn_class_loss: 0.0790 - val_rpn_bbox_loss: 0.6661 - val_mrcnn_class_loss: 1.0603 - val_mrcnn_bbox_loss: 1.0445 - val_mrcnn_mask_loss: 4.1836 - val_grasp_loss: 0.4211
+Epoch 102/500
+300/300 [==============================] - 180s 600ms/step - loss: 9.3435 - rpn_class_loss: 0.2470 - rpn_bbox_loss: 1.3408 - mrcnn_class_loss: 0.7420 - mrcnn_bbox_loss: 1.3669 - mrcnn_mask_loss: 5.2357 - grasp_loss: 0.4110 - val_loss: 8.1145 - val_rpn_class_loss: 0.0790 - val_rpn_bbox_loss: 0.6597 - val_mrcnn_class_loss: 1.0556 - val_mrcnn_bbox_loss: 1.0364 - val_mrcnn_mask_loss: 4.1021 - val_grasp_loss: 0.4165
+Epoch 103/500
+300/300 [==============================] - 179s 597ms/step - loss: 9.3395 - rpn_class_loss: 0.2475 - rpn_bbox_loss: 1.3396 - mrcnn_class_loss: 0.7419 - mrcnn_bbox_loss: 1.3677 - mrcnn_mask_loss: 5.2323 - grasp_loss: 0.4106 - val_loss: 8.1775 - val_rpn_class_loss: 0.0788 - val_rpn_bbox_loss: 0.6659 - val_mrcnn_class_loss: 1.0562 - val_mrcnn_bbox_loss: 1.0397 - val_mrcnn_mask_loss: 4.1346 - val_grasp_loss: 0.4193
+Epoch 104/500
+300/300 [==============================] - 180s 598ms/step - loss: 9.3440 - rpn_class_loss: 0.2476 - rpn_bbox_loss: 1.3399 - mrcnn_class_loss: 0.7476 - mrcnn_bbox_loss: 1.3703 - mrcnn_mask_loss: 5.2241 - grasp_loss: 0.4145 - val_loss: 6.9014 - val_rpn_class_loss: 0.0797 - val_rpn_bbox_loss: 0.6636 - val_mrcnn_class_loss: 1.0445 - val_mrcnn_bbox_loss: 1.0355 - val_mrcnn_mask_loss: 4.1181 - val_grasp_loss: 0.4216
+Epoch 105/500
+300/300 [==============================] - 180s 600ms/step - loss: 9.3507 - rpn_class_loss: 0.2485 - rpn_bbox_loss: 1.3385 - mrcnn_class_loss: 0.7459 - mrcnn_bbox_loss: 1.3670 - mrcnn_mask_loss: 5.2392 - grasp_loss: 0.4115 - val_loss: 7.5287 - val_rpn_class_loss: 0.0792 - val_rpn_bbox_loss: 0.6644 - val_mrcnn_class_loss: 1.0467 - val_mrcnn_bbox_loss: 1.0391 - val_mrcnn_mask_loss: 4.1127 - val_grasp_loss: 0.3969
+Epoch 106/500
+300/300 [==============================] - 180s 599ms/step - loss: 9.2794 - rpn_class_loss: 0.2475 - rpn_bbox_loss: 1.3350 - mrcnn_class_loss: 0.7476 - mrcnn_bbox_loss: 1.3590 - mrcnn_mask_loss: 5.1737 - grasp_loss: 0.4166 - val_loss: 6.8712 - val_rpn_class_loss: 0.0793 - val_rpn_bbox_loss: 0.6594 - val_mrcnn_class_loss: 1.0609 - val_mrcnn_bbox_loss: 1.0362 - val_mrcnn_mask_loss: 4.0991 - val_grasp_loss: 0.4126
+Epoch 107/500
+300/300 [==============================] - 181s 602ms/step - loss: 9.3721 - rpn_class_loss: 0.2473 - rpn_bbox_loss: 1.3397 - mrcnn_class_loss: 0.7519 - mrcnn_bbox_loss: 1.3681 - mrcnn_mask_loss: 5.2518 - grasp_loss: 0.4133 - val_loss: 6.2986 - val_rpn_class_loss: 0.0800 - val_rpn_bbox_loss: 0.6674 - val_mrcnn_class_loss: 1.0492 - val_mrcnn_bbox_loss: 1.0409 - val_mrcnn_mask_loss: 4.1565 - val_grasp_loss: 0.4107
+Epoch 108/500
+300/300 [==============================] - 179s 598ms/step - loss: 9.3844 - rpn_class_loss: 0.2449 - rpn_bbox_loss: 1.3429 - mrcnn_class_loss: 0.7425 - mrcnn_bbox_loss: 1.3728 - mrcnn_mask_loss: 5.2750 - grasp_loss: 0.4063 - val_loss: 7.7176 - val_rpn_class_loss: 0.0790 - val_rpn_bbox_loss: 0.6657 - val_mrcnn_class_loss: 1.0615 - val_mrcnn_bbox_loss: 1.0358 - val_mrcnn_mask_loss: 4.0783 - val_grasp_loss: 0.4148
+Epoch 109/500
+300/300 [==============================] - 180s 601ms/step - loss: 9.3836 - rpn_class_loss: 0.2489 - rpn_bbox_loss: 1.3382 - mrcnn_class_loss: 0.7529 - mrcnn_bbox_loss: 1.3714 - mrcnn_mask_loss: 5.2641 - grasp_loss: 0.4082 - val_loss: 7.4372 - val_rpn_class_loss: 0.0790 - val_rpn_bbox_loss: 0.6620 - val_mrcnn_class_loss: 1.0521 - val_mrcnn_bbox_loss: 1.0389 - val_mrcnn_mask_loss: 4.1363 - val_grasp_loss: 0.4283
+Epoch 110/500
+300/300 [==============================] - 180s 599ms/step - loss: 9.4035 - rpn_class_loss: 0.2468 - rpn_bbox_loss: 1.3406 - mrcnn_class_loss: 0.7446 - mrcnn_bbox_loss: 1.3738 - mrcnn_mask_loss: 5.2800 - grasp_loss: 0.4178 - val_loss: 7.1473 - val_rpn_class_loss: 0.0788 - val_rpn_bbox_loss: 0.6664 - val_mrcnn_class_loss: 1.0486 - val_mrcnn_bbox_loss: 1.0381 - val_mrcnn_mask_loss: 4.1171 - val_grasp_loss: 0.4016
+Epoch 111/500
+300/300 [==============================] - 180s 601ms/step - loss: 9.3370 - rpn_class_loss: 0.2470 - rpn_bbox_loss: 1.3363 - mrcnn_class_loss: 0.7373 - mrcnn_bbox_loss: 1.3680 - mrcnn_mask_loss: 5.2402 - grasp_loss: 0.4081 - val_loss: 6.8665 - val_rpn_class_loss: 0.0787 - val_rpn_bbox_loss: 0.6675 - val_mrcnn_class_loss: 1.0649 - val_mrcnn_bbox_loss: 1.0414 - val_mrcnn_mask_loss: 4.1521 - val_grasp_loss: 0.4350
+Epoch 112/500
+300/300 [==============================] - 180s 600ms/step - loss: 9.3993 - rpn_class_loss: 0.2466 - rpn_bbox_loss: 1.3374 - mrcnn_class_loss: 0.7506 - mrcnn_bbox_loss: 1.3673 - mrcnn_mask_loss: 5.2816 - grasp_loss: 0.4158 - val_loss: 7.3214 - val_rpn_class_loss: 0.0800 - val_rpn_bbox_loss: 0.6592 - val_mrcnn_class_loss: 1.0517 - val_mrcnn_bbox_loss: 1.0359 - val_mrcnn_mask_loss: 4.0469 - val_grasp_loss: 0.4168
+Epoch 113/500
+300/300 [==============================] - 179s 597ms/step - loss: 9.3520 - rpn_class_loss: 0.2488 - rpn_bbox_loss: 1.3384 - mrcnn_class_loss: 0.7403 - mrcnn_bbox_loss: 1.3700 - mrcnn_mask_loss: 5.2451 - grasp_loss: 0.4094 - val_loss: 6.7536 - val_rpn_class_loss: 0.0801 - val_rpn_bbox_loss: 0.6591 - val_mrcnn_class_loss: 1.0495 - val_mrcnn_bbox_loss: 1.0467 - val_mrcnn_mask_loss: 4.1884 - val_grasp_loss: 0.4006
+Epoch 114/500
+300/300 [==============================] - 180s 600ms/step - loss: 9.3943 - rpn_class_loss: 0.2473 - rpn_bbox_loss: 1.3422 - mrcnn_class_loss: 0.7470 - mrcnn_bbox_loss: 1.3762 - mrcnn_mask_loss: 5.2733 - grasp_loss: 0.4084 - val_loss: 7.8628 - val_rpn_class_loss: 0.0781 - val_rpn_bbox_loss: 0.6714 - val_mrcnn_class_loss: 1.0525 - val_mrcnn_bbox_loss: 1.0318 - val_mrcnn_mask_loss: 4.0695 - val_grasp_loss: 0.4155
+Epoch 115/500
+300/300 [==============================] - 179s 598ms/step - loss: 9.3235 - rpn_class_loss: 0.2499 - rpn_bbox_loss: 1.3433 - mrcnn_class_loss: 0.7388 - mrcnn_bbox_loss: 1.3669 - mrcnn_mask_loss: 5.2160 - grasp_loss: 0.4085 - val_loss: 7.2804 - val_rpn_class_loss: 0.0792 - val_rpn_bbox_loss: 0.6651 - val_mrcnn_class_loss: 1.0615 - val_mrcnn_bbox_loss: 1.0425 - val_mrcnn_mask_loss: 4.1334 - val_grasp_loss: 0.4225
+Epoch 116/500
+300/300 [==============================] - 180s 601ms/step - loss: 9.3143 - rpn_class_loss: 0.2459 - rpn_bbox_loss: 1.3348 - mrcnn_class_loss: 0.7545 - mrcnn_bbox_loss: 1.3615 - mrcnn_mask_loss: 5.2106 - grasp_loss: 0.4071 - val_loss: 7.1996 - val_rpn_class_loss: 0.0797 - val_rpn_bbox_loss: 0.6658 - val_mrcnn_class_loss: 1.0467 - val_mrcnn_bbox_loss: 1.0372 - val_mrcnn_mask_loss: 4.1483 - val_grasp_loss: 0.4104
+Epoch 117/500
+300/300 [==============================] - 180s 600ms/step - loss: 9.3907 - rpn_class_loss: 0.2454 - rpn_bbox_loss: 1.3417 - mrcnn_class_loss: 0.7418 - mrcnn_bbox_loss: 1.3721 - mrcnn_mask_loss: 5.2772 - grasp_loss: 0.4125 - val_loss: 7.9650 - val_rpn_class_loss: 0.0791 - val_rpn_bbox_loss: 0.6660 - val_mrcnn_class_loss: 1.0596 - val_mrcnn_bbox_loss: 1.0371 - val_mrcnn_mask_loss: 4.1046 - val_grasp_loss: 0.4030
+Epoch 118/500
+300/300 [==============================] - 180s 599ms/step - loss: 9.3856 - rpn_class_loss: 0.2457 - rpn_bbox_loss: 1.3456 - mrcnn_class_loss: 0.7410 - mrcnn_bbox_loss: 1.3748 - mrcnn_mask_loss: 5.2691 - grasp_loss: 0.4095 - val_loss: 6.4602 - val_rpn_class_loss: 0.0797 - val_rpn_bbox_loss: 0.6603 - val_mrcnn_class_loss: 1.0495 - val_mrcnn_bbox_loss: 1.0331 - val_mrcnn_mask_loss: 4.0719 - val_grasp_loss: 0.4024
+Epoch 119/500
+300/300 [==============================] - 180s 599ms/step - loss: 9.3571 - rpn_class_loss: 0.2465 - rpn_bbox_loss: 1.3397 - mrcnn_class_loss: 0.7520 - mrcnn_bbox_loss: 1.3672 - mrcnn_mask_loss: 5.2438 - grasp_loss: 0.4078 - val_loss: 7.2154 - val_rpn_class_loss: 0.0800 - val_rpn_bbox_loss: 0.6651 - val_mrcnn_class_loss: 1.0530 - val_mrcnn_bbox_loss: 1.0401 - val_mrcnn_mask_loss: 4.1130 - val_grasp_loss: 0.4049
+Epoch 120/500
+300/300 [==============================] - 179s 597ms/step - loss: 9.4028 - rpn_class_loss: 0.2495 - rpn_bbox_loss: 1.3406 - mrcnn_class_loss: 0.7479 - mrcnn_bbox_loss: 1.3738 - mrcnn_mask_loss: 5.2827 - grasp_loss: 0.4082 - val_loss: 6.9140 - val_rpn_class_loss: 0.0794 - val_rpn_bbox_loss: 0.6638 - val_mrcnn_class_loss: 1.0519 - val_mrcnn_bbox_loss: 1.0386 - val_mrcnn_mask_loss: 4.1267 - val_grasp_loss: 0.4067
+Epoch 121/500
+300/300 [==============================] - 180s 598ms/step - loss: 9.3407 - rpn_class_loss: 0.2473 - rpn_bbox_loss: 1.3379 - mrcnn_class_loss: 0.7533 - mrcnn_bbox_loss: 1.3651 - mrcnn_mask_loss: 5.2322 - grasp_loss: 0.4050 - val_loss: 7.1677 - val_rpn_class_loss: 0.0790 - val_rpn_bbox_loss: 0.6678 - val_mrcnn_class_loss: 1.0580 - val_mrcnn_bbox_loss: 1.0413 - val_mrcnn_mask_loss: 4.1296 - val_grasp_loss: 0.4099
+Epoch 122/500
+300/300 [==============================] - 179s 598ms/step - loss: 9.3578 - rpn_class_loss: 0.2489 - rpn_bbox_loss: 1.3426 - mrcnn_class_loss: 0.7339 - mrcnn_bbox_loss: 1.3667 - mrcnn_mask_loss: 5.2553 - grasp_loss: 0.4104 - val_loss: 6.7171 - val_rpn_class_loss: 0.0797 - val_rpn_bbox_loss: 0.6613 - val_mrcnn_class_loss: 1.0597 - val_mrcnn_bbox_loss: 1.0397 - val_mrcnn_mask_loss: 4.1518 - val_grasp_loss: 0.4104
+Epoch 123/500
+300/300 [==============================] - 180s 598ms/step - loss: 9.3330 - rpn_class_loss: 0.2480 - rpn_bbox_loss: 1.3333 - mrcnn_class_loss: 0.7552 - mrcnn_bbox_loss: 1.3621 - mrcnn_mask_loss: 5.2270 - grasp_loss: 0.4074 - val_loss: 7.4341 - val_rpn_class_loss: 0.0791 - val_rpn_bbox_loss: 0.6662 - val_mrcnn_class_loss: 1.0418 - val_mrcnn_bbox_loss: 1.0376 - val_mrcnn_mask_loss: 4.0792 - val_grasp_loss: 0.4023
+Epoch 124/500
+300/300 [==============================] - 179s 598ms/step - loss: 9.2472 - rpn_class_loss: 0.2489 - rpn_bbox_loss: 1.3313 - mrcnn_class_loss: 0.7456 - mrcnn_bbox_loss: 1.3599 - mrcnn_mask_loss: 5.1594 - grasp_loss: 0.4020 - val_loss: 7.1204 - val_rpn_class_loss: 0.0792 - val_rpn_bbox_loss: 0.6650 - val_mrcnn_class_loss: 1.0465 - val_mrcnn_bbox_loss: 1.0397 - val_mrcnn_mask_loss: 4.1325 - val_grasp_loss: 0.4072
+Epoch 125/500
+300/300 [==============================] - 180s 600ms/step - loss: 9.3901 - rpn_class_loss: 0.2464 - rpn_bbox_loss: 1.3357 - mrcnn_class_loss: 0.7453 - mrcnn_bbox_loss: 1.3732 - mrcnn_mask_loss: 5.2718 - grasp_loss: 0.4178 - val_loss: 6.5533 - val_rpn_class_loss: 0.0795 - val_rpn_bbox_loss: 0.6612 - val_mrcnn_class_loss: 1.0499 - val_mrcnn_bbox_loss: 1.0345 - val_mrcnn_mask_loss: 4.0981 - val_grasp_loss: 0.4031
+Epoch 126/500
+300/300 [==============================] - 179s 598ms/step - loss: 9.3929 - rpn_class_loss: 0.2463 - rpn_bbox_loss: 1.3390 - mrcnn_class_loss: 0.7481 - mrcnn_bbox_loss: 1.3737 - mrcnn_mask_loss: 5.2793 - grasp_loss: 0.4064 - val_loss: 7.4083 - val_rpn_class_loss: 0.0789 - val_rpn_bbox_loss: 0.6681 - val_mrcnn_class_loss: 1.0616 - val_mrcnn_bbox_loss: 1.0383 - val_mrcnn_mask_loss: 4.1162 - val_grasp_loss: 0.4060
+Epoch 127/500
+300/300 [==============================] - 181s 602ms/step - loss: 9.3909 - rpn_class_loss: 0.2447 - rpn_bbox_loss: 1.3444 - mrcnn_class_loss: 0.7382 - mrcnn_bbox_loss: 1.3753 - mrcnn_mask_loss: 5.2766 - grasp_loss: 0.4116 - val_loss: 6.5835 - val_rpn_class_loss: 0.0791 - val_rpn_bbox_loss: 0.6634 - val_mrcnn_class_loss: 1.0690 - val_mrcnn_bbox_loss: 1.0363 - val_mrcnn_mask_loss: 4.1109 - val_grasp_loss: 0.3985
+Epoch 128/500
+300/300 [==============================] - 178s 595ms/step - loss: 9.2895 - rpn_class_loss: 0.2491 - rpn_bbox_loss: 1.3380 - mrcnn_class_loss: 0.7422 - mrcnn_bbox_loss: 1.3586 - mrcnn_mask_loss: 5.1954 - grasp_loss: 0.4062 - val_loss: 7.2234 - val_rpn_class_loss: 0.0789 - val_rpn_bbox_loss: 0.6666 - val_mrcnn_class_loss: 1.0521 - val_mrcnn_bbox_loss: 1.0445 - val_mrcnn_mask_loss: 4.1622 - val_grasp_loss: 0.4268
+Epoch 129/500
+300/300 [==============================] - 179s 597ms/step - loss: 9.3682 - rpn_class_loss: 0.2480 - rpn_bbox_loss: 1.3363 - mrcnn_class_loss: 0.7430 - mrcnn_bbox_loss: 1.3678 - mrcnn_mask_loss: 5.2650 - grasp_loss: 0.4080 - val_loss: 8.8499 - val_rpn_class_loss: 0.0793 - val_rpn_bbox_loss: 0.6660 - val_mrcnn_class_loss: 1.0520 - val_mrcnn_bbox_loss: 1.0348 - val_mrcnn_mask_loss: 4.1182 - val_grasp_loss: 0.4148
+Epoch 130/500
+300/300 [==============================] - 181s 603ms/step - loss: 9.4048 - rpn_class_loss: 0.2470 - rpn_bbox_loss: 1.3416 - mrcnn_class_loss: 0.7566 - mrcnn_bbox_loss: 1.3755 - mrcnn_mask_loss: 5.2787 - grasp_loss: 0.4054 - val_loss: 6.7148 - val_rpn_class_loss: 0.0798 - val_rpn_bbox_loss: 0.6580 - val_mrcnn_class_loss: 1.0441 - val_mrcnn_bbox_loss: 1.0376 - val_mrcnn_mask_loss: 4.0942 - val_grasp_loss: 0.4020
+Epoch 131/500
+300/300 [==============================] - 178s 595ms/step - loss: 9.3566 - rpn_class_loss: 0.2495 - rpn_bbox_loss: 1.3403 - mrcnn_class_loss: 0.7348 - mrcnn_bbox_loss: 1.3763 - mrcnn_mask_loss: 5.2471 - grasp_loss: 0.4087 - val_loss: 7.1013 - val_rpn_class_loss: 0.0790 - val_rpn_bbox_loss: 0.6610 - val_mrcnn_class_loss: 1.0683 - val_mrcnn_bbox_loss: 1.0343 - val_mrcnn_mask_loss: 4.1369 - val_grasp_loss: 0.4093
+Epoch 132/500
+300/300 [==============================] - 181s 603ms/step - loss: 9.3479 - rpn_class_loss: 0.2458 - rpn_bbox_loss: 1.3341 - mrcnn_class_loss: 0.7449 - mrcnn_bbox_loss: 1.3676 - mrcnn_mask_loss: 5.2473 - grasp_loss: 0.4081 - val_loss: 7.5932 - val_rpn_class_loss: 0.0779 - val_rpn_bbox_loss: 0.6725 - val_mrcnn_class_loss: 1.0524 - val_mrcnn_bbox_loss: 1.0387 - val_mrcnn_mask_loss: 4.1248 - val_grasp_loss: 0.4213
+Epoch 133/500
+300/300 [==============================] - 180s 599ms/step - loss: 9.3710 - rpn_class_loss: 0.2484 - rpn_bbox_loss: 1.3413 - mrcnn_class_loss: 0.7476 - mrcnn_bbox_loss: 1.3651 - mrcnn_mask_loss: 5.2642 - grasp_loss: 0.4045 - val_loss: 7.0166 - val_rpn_class_loss: 0.0779 - val_rpn_bbox_loss: 0.6758 - val_mrcnn_class_loss: 1.0489 - val_mrcnn_bbox_loss: 1.0467 - val_mrcnn_mask_loss: 4.1278 - val_grasp_loss: 0.3975
+Epoch 134/500
+300/300 [==============================] - 180s 600ms/step - loss: 9.3224 - rpn_class_loss: 0.2491 - rpn_bbox_loss: 1.3414 - mrcnn_class_loss: 0.7384 - mrcnn_bbox_loss: 1.3685 - mrcnn_mask_loss: 5.2194 - grasp_loss: 0.4056 - val_loss: 7.3444 - val_rpn_class_loss: 0.0804 - val_rpn_bbox_loss: 0.6544 - val_mrcnn_class_loss: 1.0544 - val_mrcnn_bbox_loss: 1.0390 - val_mrcnn_mask_loss: 4.1043 - val_grasp_loss: 0.4018
+Epoch 135/500
+300/300 [==============================] - 180s 599ms/step - loss: 9.3659 - rpn_class_loss: 0.2443 - rpn_bbox_loss: 1.3376 - mrcnn_class_loss: 0.7461 - mrcnn_bbox_loss: 1.3643 - mrcnn_mask_loss: 5.2649 - grasp_loss: 0.4088 - val_loss: 7.3145 - val_rpn_class_loss: 0.0798 - val_rpn_bbox_loss: 0.6643 - val_mrcnn_class_loss: 1.0521 - val_mrcnn_bbox_loss: 1.0394 - val_mrcnn_mask_loss: 4.1236 - val_grasp_loss: 0.4219
+Epoch 136/500
+300/300 [==============================] - 179s 597ms/step - loss: 9.3332 - rpn_class_loss: 0.2469 - rpn_bbox_loss: 1.3366 - mrcnn_class_loss: 0.7373 - mrcnn_bbox_loss: 1.3633 - mrcnn_mask_loss: 5.2428 - grasp_loss: 0.4063 - val_loss: 7.3866 - val_rpn_class_loss: 0.0795 - val_rpn_bbox_loss: 0.6646 - val_mrcnn_class_loss: 1.0455 - val_mrcnn_bbox_loss: 1.0350 - val_mrcnn_mask_loss: 4.1147 - val_grasp_loss: 0.4130
+Epoch 137/500
+300/300 [==============================] - 178s 594ms/step - loss: 9.3692 - rpn_class_loss: 0.2480 - rpn_bbox_loss: 1.3407 - mrcnn_class_loss: 0.7361 - mrcnn_bbox_loss: 1.3714 - mrcnn_mask_loss: 5.2673 - grasp_loss: 0.4057 - val_loss: 7.7457 - val_rpn_class_loss: 0.0800 - val_rpn_bbox_loss: 0.6591 - val_mrcnn_class_loss: 1.0610 - val_mrcnn_bbox_loss: 1.0370 - val_mrcnn_mask_loss: 4.1122 - val_grasp_loss: 0.3983
+Epoch 138/500
+300/300 [==============================] - 179s 597ms/step - loss: 9.3468 - rpn_class_loss: 0.2493 - rpn_bbox_loss: 1.3432 - mrcnn_class_loss: 0.7407 - mrcnn_bbox_loss: 1.3692 - mrcnn_mask_loss: 5.2406 - grasp_loss: 0.4039 - val_loss: 6.9642 - val_rpn_class_loss: 0.0790 - val_rpn_bbox_loss: 0.6677 - val_mrcnn_class_loss: 1.0416 - val_mrcnn_bbox_loss: 1.0354 - val_mrcnn_mask_loss: 4.0953 - val_grasp_loss: 0.4076
+Epoch 139/500
+300/300 [==============================] - 180s 599ms/step - loss: 9.3664 - rpn_class_loss: 0.2462 - rpn_bbox_loss: 1.3375 - mrcnn_class_loss: 0.7344 - mrcnn_bbox_loss: 1.3730 - mrcnn_mask_loss: 5.2716 - grasp_loss: 0.4038 - val_loss: 7.4047 - val_rpn_class_loss: 0.0792 - val_rpn_bbox_loss: 0.6627 - val_mrcnn_class_loss: 1.0605 - val_mrcnn_bbox_loss: 1.0417 - val_mrcnn_mask_loss: 4.1601 - val_grasp_loss: 0.4107
+Epoch 140/500
+300/300 [==============================] - 180s 601ms/step - loss: 9.3750 - rpn_class_loss: 0.2455 - rpn_bbox_loss: 1.3397 - mrcnn_class_loss: 0.7497 - mrcnn_bbox_loss: 1.3640 - mrcnn_mask_loss: 5.2734 - grasp_loss: 0.4028 - val_loss: 6.9435 - val_rpn_class_loss: 0.0800 - val_rpn_bbox_loss: 0.6640 - val_mrcnn_class_loss: 1.0509 - val_mrcnn_bbox_loss: 1.0401 - val_mrcnn_mask_loss: 4.1284 - val_grasp_loss: 0.3999
+Epoch 141/500
+300/300 [==============================] - 179s 595ms/step - loss: 9.3417 - rpn_class_loss: 0.2491 - rpn_bbox_loss: 1.3437 - mrcnn_class_loss: 0.7415 - mrcnn_bbox_loss: 1.3698 - mrcnn_mask_loss: 5.2320 - grasp_loss: 0.4056 - val_loss: 7.0003 - val_rpn_class_loss: 0.0801 - val_rpn_bbox_loss: 0.6622 - val_mrcnn_class_loss: 1.0548 - val_mrcnn_bbox_loss: 1.0306 - val_mrcnn_mask_loss: 4.0613 - val_grasp_loss: 0.4000
+Epoch 142/500
+300/300 [==============================] - 180s 600ms/step - loss: 9.3295 - rpn_class_loss: 0.2484 - rpn_bbox_loss: 1.3389 - mrcnn_class_loss: 0.7403 - mrcnn_bbox_loss: 1.3683 - mrcnn_mask_loss: 5.2314 - grasp_loss: 0.4023 - val_loss: 7.4206 - val_rpn_class_loss: 0.0789 - val_rpn_bbox_loss: 0.6655 - val_mrcnn_class_loss: 1.0500 - val_mrcnn_bbox_loss: 1.0440 - val_mrcnn_mask_loss: 4.1404 - val_grasp_loss: 0.3990
+Epoch 143/500
+299/300 [============================>.] - ETA: 0s - loss: 9.3775 - rpn_class_loss: 0.2453 - rpn_bbox_loss: 1.3425 - mrcnn_class_loss: 0.7377 - mrcnn_bbox_loss: 1.3704 - mrcnn_mask_loss: 5.2777 - grasp_loss: 0.4039

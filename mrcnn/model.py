@@ -713,7 +713,7 @@ def generate_grasp_training_targets(grasping_anchors, gt_grasp_boxes, config):
     angle_difference = tf_rad2deg(angle_difference)
     matching_by_angles = tf.less(tf.abs(angle_difference), 30)
 
-    sensitivity = 0.75
+    sensitivity = 0.5
     radius = (((anchor_w / 2) ** 2 + (anchor_h / 2) ** 2) ** 0.5) * sensitivity
     matching_grasp_boxes = tf.less(gt_x, anchor_x + radius)
     matching_grasp_boxes = tf.logical_and(matching_grasp_boxes, tf.greater(gt_x, anchor_x - radius))
@@ -747,9 +747,6 @@ def generate_grasp_training_targets(grasping_anchors, gt_grasp_boxes, config):
     gt_grasp_boxes_filtered = tf.tensor_scatter_nd_update(grasp_bbox, tf.concat([roi_ix, anchor_ix], axis=-1), updates)
     grasp_deltas = utils.grasp_box_refinement_graph(grasping_anchors, gt_grasp_boxes_filtered, config)
     grasp_deltas /= config.GRASP_BBOX_STD_DEV
-
-
-
     return grasping_anchors, grasp_anchor_match, grasp_deltas
 
 def generate_grasping_targets(grasp_overlaps, grasping_anchors, final_roi_gt_grasp_boxes, config):
@@ -923,9 +920,12 @@ def generate_grasping_anchors_graph(inputs):
 
     # Adaptive anchor sizes with overlap factor
     overlap_factor = 1.5
-
-    anchor_width = (roi_widths / feature_map_shape[1]) * overlap_factor
-    anchor_height = (roi_heights / feature_map_shape[0]) * overlap_factor
+    #
+    # anchor_width = (roi_widths / feature_map_shape[1]) * overlap_factor
+    # anchor_height = (roi_heights / feature_map_shape[0]) * overlap_factor
+    max_size = tf.maximum(roi_widths, roi_heights)
+    anchor_width = (max_size / feature_map_shape[1]) * overlap_factor
+    anchor_height = (max_size / feature_map_shape[0]) * overlap_factor
 
     # Enumerate shifts in feature space
     shifts_y = tf.cast(tf.range(0, feature_map_shape[0], delta=GRASP_ANCHOR_STRIDE), dtype=tf.float32)
@@ -1213,25 +1213,25 @@ def detection_targets_graph(proposals, gt_class_ids, gt_boxes, gt_masks, anchors
     # Computing overlaps between the grasping anchors and the final_roi_gt_grasp_boxes
     # grasp_overlaps [NUM_INSTANCES, 196(number of anchors) * number of grasping boxes]
     # grasp_overlaps has the shape [num_instances, num_grasp_instances, num_anchors]
-
-    grasp_overlaps = tf.cond(
-        tf.greater(tf.shape(grasping_anchors)[0], 0),
-        true_fn=lambda: grasping_overlaps_graph(grasping_anchors, final_roi_gt_grasp_boxes),
-        false_fn=lambda: tf.cast(tf.constant([]), tf.float32)
-    )
-
-    grasping_anchors, grasp_anchor_match, grasp_deltas = tf.cond(
-        tf.greater(tf.shape(grasp_overlaps)[0], 0),
-        true_fn=lambda: generate_grasping_targets(grasp_overlaps, grasping_anchors,
-                                                    final_roi_gt_grasp_boxes, config),
-        false_fn=lambda: generate_zero_targets(grasping_anchors, config)
-    )
+    #
+    # grasp_overlaps = tf.cond(
+    #     tf.greater(tf.shape(grasping_anchors)[0], 0),
+    #     true_fn=lambda: grasping_overlaps_graph(grasping_anchors, final_roi_gt_grasp_boxes),
+    #     false_fn=lambda: tf.cast(tf.constant([]), tf.float32)
+    # )
 
     # grasping_anchors, grasp_anchor_match, grasp_deltas = tf.cond(
-    #     tf.greater(tf.shape(grasping_anchors)[0], 0),
-    #     true_fn=lambda: generate_grasp_training_targets(grasping_anchors, final_roi_gt_grasp_boxes, config),
+    #     tf.greater(tf.shape(grasp_overlaps)[0], 0),
+    #     true_fn=lambda: generate_grasping_targets(grasp_overlaps, grasping_anchors,
+    #                                                 final_roi_gt_grasp_boxes, config),
     #     false_fn=lambda: generate_zero_targets(grasping_anchors, config)
     # )
+
+    grasping_anchors, grasp_anchor_match, grasp_deltas = tf.cond(
+        tf.greater(tf.shape(grasping_anchors)[0], 0),
+        true_fn=lambda: generate_grasp_training_targets(grasping_anchors, final_roi_gt_grasp_boxes, config),
+        false_fn=lambda: generate_zero_targets(grasping_anchors, config)
+    )
 
 
     # grasping_anchors, grasp_anchor_match, grasp_deltas = generate_grasping_targets(grasp_overlaps, grasping_anchors,
@@ -2805,7 +2805,7 @@ def load_image_gt(dataset, config, image_id, augment=False, augmentation=None, o
         else:
             mask, class_ids = dataset.load_mask(image_id, augmentations)
 
-        if crop_image:
+        if True:
             x_dim_crop = config.IMAGE_SHAPE[1]
             y_dim_crop = config.IMAGE_SHAPE[0]
             y_dim, x_dim = image.shape[:2]

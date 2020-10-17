@@ -5,8 +5,9 @@ import matplotlib.patches as patches
 import matplotlib.pyplot as plt
 import numpy as np
 import tensorflow as tf
-
+import matplotlib as mpl
 import mrcnn.utils as utils
+import math
 
 tf.enable_eager_execution()
 # loss = np.arange(60)
@@ -121,7 +122,7 @@ def generate_grasping_anchors_graph(inputs):
     stride_y, stride_x, y1, x1, y2, x2 = tf.split(inputs, num_or_size_splits=6)
 
     # To be replaced with config reference
-    GRASP_POOL_SIZE = 14
+    GRASP_POOL_SIZE = 7
     GRASP_ANCHOR_RATIOS = [1]
     GRASP_ANCHOR_ANGLES = [-67.5, -22.5, 22.5, 67.5]
     GRASP_ANCHOR_SIZE = [48]
@@ -141,8 +142,12 @@ def generate_grasping_anchors_graph(inputs):
     # Adaptive anchor sizes with overlap factor
     overlap_factor = 1.5
 
-    anchor_width = (roi_widths / feature_map_shape[1]) * overlap_factor
-    anchor_height = (roi_heights / feature_map_shape[0]) * overlap_factor
+    max_size = np.maximum(roi_widths, roi_heights)
+    # anchor_width = (roi_widths / feature_map_shape[1]) * overlap_factor
+    # anchor_height = (roi_heights / feature_map_shape[0]) * overlap_factor
+
+    anchor_width = (max_size / feature_map_shape[1]) * overlap_factor
+    anchor_height = (max_size / feature_map_shape[0]) * overlap_factor
 
     # Enumerate shifts in feature space
     shifts_y = tf.cast(tf.range(0, feature_map_shape[0], delta=GRASP_ANCHOR_STRIDE), dtype=tf.float32)
@@ -153,7 +158,7 @@ def generate_grasping_anchors_graph(inputs):
 
     # Creating anchors
     boxes = tf.reshape(tf.transpose(tf.meshgrid(shifts_x, shifts_y, GRASP_ANCHOR_ANGLES)), (-1, 3))
-    box_sizes = tf.concat([anchor_height, anchor_width / 2], axis=-1)
+    box_sizes = tf.concat([anchor_height, anchor_width], axis=-1)
     box_sizes = tf.expand_dims(box_sizes, axis=-1)
 
     anchor_heights, anchor_widths = tf.split(K.repeat(box_sizes, n=GRASP_ANCHORS_PER_ROI), num_or_size_splits=2, axis=0)
@@ -384,12 +389,13 @@ def generate_grasp_training_targets(grasping_anchors, gt_grasp_boxes):
     angle_difference = tf_rad2deg(angle_difference)
     matching_by_angles = tf.less(tf.abs(angle_difference), 30)
 
-    sensitivity = 0.75
+    sensitivity = 0.5
     radius = (((anchor_w / 2) ** 2 + (anchor_h / 2) ** 2) ** 0.5) * sensitivity
     matching_grasp_boxes = tf.less(gt_x, anchor_x + radius)
     matching_grasp_boxes = tf.logical_and(matching_grasp_boxes, tf.greater(gt_x, anchor_x - radius))
     matching_grasp_boxes = tf.logical_and(matching_grasp_boxes, tf.less(gt_y, anchor_y + radius))
     matching_grasp_boxes = tf.logical_and(matching_grasp_boxes, tf.greater(gt_y, anchor_y - radius))
+
 
     matching_pairs = tf.logical_and(matching_by_angles, matching_grasp_boxes)
 
@@ -428,9 +434,9 @@ def generate_grasp_training_targets(grasping_anchors, gt_grasp_boxes):
 
 
 positive_rois = [[ 0, 0, 384, 384],
-                 [0, 0, 384, 384]]
+                 [220, 182, 350, 240]]
 
-roi_gt_grasp_boxes = np.array([[[215, 272.5, 14.86606875, 28.31952463,-42.27368901],
+roi_gt_grasp_boxes = np.array([[[215, 272.5, 100, 28.31952463, 42.27368901],
                                      [240.5, 140.5,  36.05551275,   4.10478145,-70.55996517],
                                      [267, 253, 15.62049935, 29.06437174,-39.80557109],
                                      [100, 250, 5, 5,-39.80557109],
@@ -440,14 +446,14 @@ roi_gt_grasp_boxes = np.array([[[215, 272.5, 14.86606875, 28.31952463,-42.273689
                                      [242, 306,  11.66190379,  18.86484437,-30.96375653],
                                      [0, 0, 0, 0, 0],
                                      [153, 138.5,   4.47213595,   9.39148551,63.43494882]],
-                               [[215, 272.5, 14.86606875, 28.31952463, -42.27368901],
-                                [240.5, 140.5, 36.05551275, 4.10478145, -70.55996517],
+                               [[215, 272.5, 100, 28.3, 42.27368901],
+                                [215, 300, 100, 28.3, 42.27368901],
                                 [267, 253, 15.62049935, 29.06437174, -39.80557109],
                                 [0, 0, 0, 0, 0],
                                 [50, 50,  5, 25,15],
                                 [280, 268.5, 12.80624847, 18.58467766, -38.65980825],
-                                [242, 141, 37.48332963, 3.52156549, -43.91907581],
-                                [242, 306, 11.66190379, 18.86484437, -30.96375653],
+                                [242, 141, 80, 15, -43.91907581],
+                                [242, 306, 80, 18.86484437, -30.96375653],
                                 [0, 0, 0, 0, 0],
                                 [159, 138.5, 4.47213595, 9.39148551, 63.43494882]]
                                ])
@@ -486,7 +492,7 @@ proposal_x2 = positive_rois[:, 3]
 proposal_widths = tf.expand_dims(proposal_x2 - proposal_x1, axis=-1)
 proposal_heights = tf.expand_dims(proposal_y2 - proposal_y1, axis=-1)
 
-sensitivity = 0.7
+sensitivity = 0
 radius = (((gt_grasp_box_w/2)**2 + (gt_grasp_box_h/2)**2)**0.5) * sensitivity
 proposal_y1_reshaped = K.repeat(tf.expand_dims(proposal_y1, axis=-1), n=radius.shape[1])
 proposal_x1_reshaped = K.repeat(tf.expand_dims(proposal_x1, axis=-1), n=radius.shape[1])
@@ -503,7 +509,7 @@ valid_grasp_boxes = tf.logical_and(valid_grasp_boxes, tf.greater(gt_grasp_box_y 
 # valid_grasp_boxes = K.variable(value=valid_grasp_boxes)
 final_roi_gt_grasp_boxes = referenced_grasp_boxes * tf.cast(valid_grasp_boxes, dtype='float32')
 
-GRASP_POOL_SIZE = 14
+GRASP_POOL_SIZE = 7
 IMAGE_SHAPE = [384, 384, 3]
 pooled_feature_stride = tf.concat([proposal_heights, proposal_widths], axis = -1) /GRASP_POOL_SIZE
 pooled_feature_stride = tf.cast(pooled_feature_stride, tf.float32)
@@ -645,12 +651,32 @@ grasping_anchors_np = denorm_grasp_boxes_graph(grasping_anchors, [384, 384])
 
 
 for i in range(grasping_anchors_np.shape[1]):
-    rect_1 = utils.bbox_convert_to_four_vertices([grasping_anchors_np[0, i]])[0]
-    p = patches.Polygon(rect_1, linewidth=0.25, edgecolor='c', facecolor='none')
-    ax1.add_patch(p)
+    # rect_1 = utils.bbox_convert_to_four_vertices([grasping_anchors_np[0, i]])[0]
+    # p = patches.Polygon(rect_1, linewidth=0.25, edgecolor='c', facecolor='none')
+    # ax1.add_patch(p)
 
-    rect_2 = utils.bbox_convert_to_four_vertices([grasping_anchors_np[1, i]])[0]
-    p = patches.Polygon(rect_2, linewidth=0.25, edgecolor='c', facecolor='none')
+    x, y, w, h, theta = grasping_anchors_np[0, i].numpy()
+    x1 = x - w / 2
+    y1 = y - h / 2
+    theta %= 360
+    p = patches.Rectangle((x1, y1), w, h, angle=0, edgecolor='c',
+                          linewidth=0.25, facecolor='none')
+    t = mpl.transforms.Affine2D().rotate_deg_around(x, y, theta) + ax1.transData
+    p.set_transform(t)
+    ax1.add_patch(p)
+    #
+    # rect_2 = utils.bbox_convert_to_four_vertices([grasping_anchors_np[1, i]])[0]
+    # p = patches.Polygon(rect_2, linewidth=0.25, edgecolor='c', facecolor='none')
+    # ax2.add_patch(p)
+
+    x, y, w, h, theta = grasping_anchors_np[1, i].numpy()
+    x1 = x - w / 2
+    y1 = y - h / 2
+    theta %= 360
+    p = patches.Rectangle((x1, y1), w, h, angle=0, edgecolor='c',
+                          linewidth=0.25, facecolor='none')
+    t = mpl.transforms.Affine2D().rotate_deg_around(x, y, theta) + ax2.transData
+    p.set_transform(t)
     ax2.add_patch(p)
 
 for i in range(gt_boxes_np.shape[0]):
@@ -660,18 +686,39 @@ for i in range(gt_boxes_np.shape[0]):
     p = patches.Rectangle((x1, y1), w, h, facecolor=None, fill=False, color='k', linewidth=2)
     fig.axes[i].add_patch(p)
     for j in gt_grasp_points_np[i]:
-        rect = utils.bbox_convert_to_four_vertices([j])[0]
-        q = patches.Polygon(rect, linewidth=1.5, edgecolor='r', facecolor='none')
-        fig.axes[i].add_patch(q)
+        x, y, w, h, theta = j
+        x1 = x - w / 2
+        y1 = y - h / 2
+        theta %= 360
+        p = patches.Rectangle((x1, y1), w, h, angle=0, edgecolor='g',
+                               linewidth=1.5, facecolor='none')
+        t = mpl.transforms.Affine2D().rotate_deg_around(x, y, theta) + fig.axes[i].transData
+        p.set_transform(t)
+        fig.axes[i].add_patch(p)
+        # find the end point
+        endy = (w / 2) * math.sin(math.radians(theta))
+        endx = (w / 2) * math.cos(math.radians(theta))
+        fig.axes[i].plot([x, endx + x], [y, endy + y], color='g')
     # [number_of_anchors, number of gt_grasp_boxes]
     # anchor_overlaps = grasp_overlaps_reshaped_np[i]
 
     # grasp_anchors_np[i, np.where(anchor_overlaps > 0.01)[1]]
     for matching_anchors in grasp_anchors_np[i, np.where(grasp_anchor_match[i] > 0)][0]:
         matching_anchors = denorm_grasp_boxes_graph(matching_anchors, [384, 384])
-        rect = utils.bbox_convert_to_four_vertices([matching_anchors])[0]
-        p = patches.Polygon(rect, linewidth=2,edgecolor='g',facecolor='none')
+        x, y, w, h, theta = matching_anchors.numpy()
+        x1 = x - w / 2
+        y1 = y - h / 2
+        theta %= 360
+        p = patches.Rectangle((x1, y1), w, h, angle=0, edgecolor='r',
+                              linewidth=0.5, facecolor='none')
+        t = mpl.transforms.Affine2D().rotate_deg_around(x, y, theta) + fig.axes[i].transData
+        p.set_transform(t)
         fig.axes[i].add_patch(p)
+
+        # find the end point
+        endy = (w/2)* math.sin(math.radians(theta))
+        endx = (w/2) * math.cos(math.radians(theta))
+        fig.axes[i].plot([x, endx+x], [y, endy+y], color='c')
 
     # GRASP_ANCHOR_ANGLES = [-67.5, -22.5, 22.5, 67.5]
     # # Choose positive_anchors
