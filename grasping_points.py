@@ -88,7 +88,7 @@ class GraspingPointsDataset(Dataset):
                 self.add_image("grasping_points", image_id=id, path=rgb_path,
                                 depth_path=depth_path, positive_points=positive_grasp_points, augmentation = [])
 
-                if augmentation:
+                if augmentatMEion:
                     # Augmentation will create hypothetical paths that load_image_gt() uses to construct the different
                     # image variants
                     # image_name = image.split('\\')[-1].strip('_RGB.png')
