@@ -145,10 +145,15 @@ def generate_grasping_anchors_graph(inputs):
     max_size = np.maximum(roi_widths, roi_heights)
     # anchor_width = (roi_widths / feature_map_shape[1]) * overlap_factor
     # anchor_height = (roi_heights / feature_map_shape[0]) * overlap_factor
-
+    # #
     anchor_width = (max_size / feature_map_shape[1]) * overlap_factor
     anchor_height = (max_size / feature_map_shape[0]) * overlap_factor
-
+    # import code;
+    # code.interact(local=dict(globals(), **locals()))
+    # anchor_width = np.array([55], dtype='float32')* overlap_factor
+    # anchor_height = np.array([55], dtype='float32')* overlap_factor
+    # anchor_height = [24]
+    # anchor_width = [24]
     # Enumerate shifts in feature space
     shifts_y = tf.cast(tf.range(0, feature_map_shape[0], delta=GRASP_ANCHOR_STRIDE), dtype=tf.float32)
     shifts_y = (shifts_y*stride_y) + stride_y/2 + y1
@@ -422,11 +427,19 @@ def generate_grasp_training_targets(grasping_anchors, gt_grasp_boxes):
     updates = tf.gather_nd(gt_grasp_boxes, tf.concat([roi_ix, tf.expand_dims(grasp_box_ids, axis=-1)], axis=-1))
 
     gt_grasp_boxes_filtered = tf.tensor_scatter_nd_update(grasp_bbox, tf.concat([roi_ix, anchor_ix], axis=-1), updates)
-    grasp_deltas = grasp_box_refinement_graph(grasping_anchors, gt_grasp_boxes_filtered)
+
+    ax, ay, aw, ah, atheta = tf.split(grasping_anchors, num_or_size_splits=5, axis=-1)
+    new_width = tf.ones(tf.shape(aw)) * (24.0/IMAGE_SHAPE[1])
+    new_height = tf.ones(tf.shape(ah)) * (24.0/IMAGE_SHAPE[0])
+
+    resized_anchors = tf.concat([ax, ay, new_width, new_height, atheta], axis=-1)
+
+
+    grasp_deltas = grasp_box_refinement_graph(resized_anchors, gt_grasp_boxes_filtered)
     GRASP_BBOX_STD_DEV = np.array([0.1, 0.1, 0.2, 0.2, 1])
     grasp_deltas /= GRASP_BBOX_STD_DEV
 
-    return grasping_anchors, grasp_anchor_match, grasp_deltas
+    return resized_anchors, grasp_anchor_match, grasp_deltas
 
 
 
@@ -720,16 +733,28 @@ for i in range(gt_boxes_np.shape[0]):
         endx = (w/2) * math.cos(math.radians(theta))
         fig.axes[i].plot([x, endx+x], [y, endy+y], color='c')
 
-    # GRASP_ANCHOR_ANGLES = [-67.5, -22.5, 22.5, 67.5]
+    GRASP_ANCHOR_ANGLES = [-67.5, -22.5, 22.5, 67.5]
     # # Choose positive_anchors
     # anchors = grasp_anchors_np[i]
-    # positive_anchors_mask = (grasp_anchor_match[i]>0).numpy()
-    # deltas = grasp_deltas[i] * GRASP_BBOX_STD_DEV
-    # refined_anchors = utils.apply_box_deltas(anchors[positive_anchors_mask], deltas[positive_anchors_mask], 'mask_grasp_rcnn', len(GRASP_ANCHOR_ANGLES))
-    # for refined_anchor in refined_anchors:
-    #     rect = utils.bbox_convert_to_four_vertices([refined_anchor])[0]
-    #     p = patches.Polygon(rect, linewidth=0.5,edgecolor='k',facecolor='none')
-    #     fig.axes[i].add_patch(p)
+    positive_anchors_mask = (grasp_anchor_match[i]>0).numpy()
+    GRASP_BBOX_STD_DEV = np.array([0.1, 0.1, 0.2, 0.2, 1])
+    deltas = grasp_deltas[i] * GRASP_BBOX_STD_DEV
+    refined_anchors = utils.apply_box_deltas(grasping_anchors[i].numpy(), deltas.numpy(), 'mask_grasp_rcnn', len(GRASP_ANCHOR_ANGLES))
+    refined_anchors[:, -1] /= 360
+    for j, refined_anchor in enumerate(refined_anchors):
+        if np.sum(deltas[j]) ==0:
+            continue
+
+        matching_anchors = denorm_grasp_boxes_graph(refined_anchor, [384, 384])
+        x, y, w, h, theta = matching_anchors.numpy()
+        x1 = x - w / 2
+        y1 = y - h / 2
+        theta %= 360
+        p = patches.Rectangle((x1, y1), w, h, angle=0, edgecolor='r',
+                              linewidth=0.5, facecolor='none')
+        t = mpl.transforms.Affine2D().rotate_deg_around(x, y, theta) + fig.axes[i].transData
+        p.set_transform(t)
+        fig.axes[i].add_patch(p)
 
 
 plt.show()

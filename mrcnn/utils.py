@@ -501,6 +501,13 @@ def tf_rad2deg(angle):
     pi_over_180 = pi /180
     return angle / pi_over_180
 
+def resize_anchors(anchors, width, height, image_shape):
+    ax, ay, aw, ah, atheta = np.split(anchors, indices_or_sections=5, axis=-1)
+    new_width = np.ones(aw.shape) * (width/image_shape[1])
+    new_height = np.ones(ah.shape) * (height/image_shape[0])
+    resized_anchors = np.concatenate([ax, ay, new_width, new_height, atheta], axis=-1)
+    return resized_anchors
+
 def grasp_box_refinement_graph(box, gt_box, config):
     # Need to create a mask to keep valid refinements, ie: where the grasp box is not all zeros
     box_flattened = tf.reshape(box, [-1, 5])

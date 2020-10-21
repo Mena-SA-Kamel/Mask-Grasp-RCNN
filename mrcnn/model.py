@@ -293,6 +293,7 @@ def resnet_graph(input_image, architecture, stage5=False, train_bn=True):
         C5 = x = identity_block(x, 3, [512, 512, 2048], stage=5, block='c', train_bn=train_bn)
     else:
         C5 = None
+
     return [C1, C2, C3, C4, C5]
 
 
@@ -769,6 +770,13 @@ def generate_zero_targets(grasping_anchors, config):
     deltas = tf.zeros([0, config.GRASP_ANCHORS_PER_ROI, 5])
     return grasping_anchors, grasp_anchor_match, deltas
 
+def resize_anchors(anchors, width, height, image_shape):
+    ax, ay, aw, ah, atheta = tf.split(anchors, num_or_size_splits=5, axis=-1)
+    new_width = tf.ones(tf.shape(aw)) * (width/image_shape[1])
+    new_height = tf.ones(tf.shape(ah)) * (height/image_shape[0])
+    resized_anchors = tf.concat([ax, ay, new_width, new_height, atheta], axis=-1)
+    return resized_anchors
+
 def generate_grasp_training_targets(grasping_anchors, gt_grasp_boxes, config):
     ### This method replaces original methods: grasping_overlaps_graph and generate_grasping_targets. It does not use
     # ArIOU to match anchors to the GT grasp boxes. It uses a version of the matching sr=trategy covered in Yanan Songs
@@ -826,6 +834,9 @@ def generate_grasp_training_targets(grasping_anchors, gt_grasp_boxes, config):
     updates = tf.gather_nd(gt_grasp_boxes, tf.concat([roi_ix, tf.expand_dims(grasp_box_ids, axis=-1)], axis=-1))
 
     gt_grasp_boxes_filtered = tf.tensor_scatter_nd_update(grasp_bbox, tf.concat([roi_ix, anchor_ix], axis=-1), updates)
+    if not config.ADAPTIVE_GRASP_ANCHORS:
+        grasping_anchors = resize_anchors(grasping_anchors, config.GRASP_ANCHOR_SIZE, config.GRASP_ANCHOR_SIZE,
+                                          config.IMAGE_SHAPE)
     grasp_deltas = utils.grasp_box_refinement_graph(grasping_anchors, gt_grasp_boxes_filtered, config)
     grasp_deltas /= config.GRASP_BBOX_STD_DEV
     return grasping_anchors, grasp_anchor_match, grasp_deltas
@@ -1777,40 +1788,45 @@ def build_new_grasping_graph(rois, feature_maps, image_meta,
     x = PyramidROIAlign([pool_size, pool_size],
                         name="roi_align_grasp")([rois_to_use, image_meta] + feature_maps)
     # Conv layers
-    # x = KL.TimeDistributed(KL.Conv2D(512, (3, 3), padding="same"),
-    #                        name="grasp_conv1")(x)
-    # x = KL.TimeDistributed(BatchNorm(),
-    #                        name='grasp_bn1')(x, training=train_bn)
-    # x = KL.Activation('relu')(x)
+    x = KL.TimeDistributed(KL.Conv2D(512, (3, 3), padding="same"),
+                           name="grasp_conv1")(x)
+    x = KL.TimeDistributed(BatchNorm(),
+                           name='grasp_bn1')(x, training=train_bn)
+    x = KL.Activation('relu')(x)
+
+    x = KL.TimeDistributed(KL.Conv2D(512, (3, 3), padding="same"),
+                           name="grasp_conv2")(x)
+    x = KL.TimeDistributed(BatchNorm(),
+                           name='grasp_bn2')(x, training=train_bn)
+    x = KL.Activation('relu')(x)
+
+    x = KL.TimeDistributed(KL.Conv2D(512, (3, 3), padding="same"),
+                           name="grasp_conv3")(x)
+    x = KL.TimeDistributed(BatchNorm(),
+                           name='grasp_bn3')(x, training=train_bn)
+    x = KL.Activation('relu')(x)
+
+    x = KL.TimeDistributed(KL.Conv2D(512, (3, 3), padding="same"),
+                           name="grasp_conv4")(x)
+    x = KL.TimeDistributed(BatchNorm(),
+                           name='grasp_bn4')(x, training=train_bn)
+    shared = KL.Activation('relu')(x)
     #
-    # x = KL.TimeDistributed(KL.Conv2D(512, (3, 3), padding="same"),
-    #                        name="grasp_conv2")(x)
-    # x = KL.TimeDistributed(BatchNorm(),
-    #                        name='grasp_bn2')(x, training=train_bn)
-    # x = KL.Activation('relu')(x)
+    # x = conv_block_time_distributed(x, 3, [256, 256, 1024], stage=3, block='a', train_bn=train_bn)
+    # x = identity_block_time_distributed(x, 3, [256, 256, 1024], stage=3, block='b', train_bn=train_bn)
+    # stage_1_output =  identity_block_time_distributed(x, 3, [256, 256, 1024], stage=3, block='c', train_bn=train_bn)
     #
-    # x = KL.TimeDistributed(KL.Conv2D(512, (3, 3), padding="same"),
-    #                        name="grasp_conv3")(x)
-    # x = KL.TimeDistributed(BatchNorm(),
-    #                        name='grasp_bn3')(x, training=train_bn)
-    # x = KL.Activation('relu')(x)
+    # x = conv_block_time_distributed(stage_1_output, 3, [512, 512, 2048], stage=4, block='a', train_bn=train_bn)
+    # x = identity_block_time_distributed(x, 3, [512, 512, 2048], stage=4, block='b', train_bn=train_bn)
+    # stage_2_output = identity_block_time_distributed(x, 3, [512, 512, 2048], stage=4, block='c', train_bn=train_bn)
+
     #
-    # x = KL.TimeDistributed(KL.Conv2D(512, (3, 3), padding="same"),
-    #                        name="grasp_conv4")(x)
-    # x = KL.TimeDistributed(BatchNorm(),
-    #                        name='grasp_bn4')(x, training=train_bn)
+    # x = conv_block_time_distributed(x, 3, [256, 256, 1024], stage=3, block='a', train_bn=train_bn)
+    # stage_1_output = identity_block_time_distributed(x, 3, [256, 256, 1024], stage=3, block='c', train_bn=train_bn)
+    #
+    # shared = stage_1_output
 
-    x = conv_block_time_distributed(x, 3, [256, 256, 1024], stage=3, block='a', train_bn=train_bn)
-    x = identity_block_time_distributed(x, 3, [256, 256, 1024], stage=3, block='b', train_bn=train_bn)
-    stage_1_output =  identity_block_time_distributed(x, 3, [256, 256, 1024], stage=3, block='c', train_bn=train_bn)
-
-    x = conv_block_time_distributed(stage_1_output, 3, [512, 512, 2048], stage=4, block='a', train_bn=train_bn)
-    x = identity_block_time_distributed(x, 3, [512, 512, 2048], stage=4, block='b', train_bn=train_bn)
-    stage_2_output = identity_block_time_distributed(x, 3, [512, 512, 2048], stage=4, block='c', train_bn=train_bn)
-
-    shared = stage_2_output
-
-    classification_1 = KL.TimeDistributed(KL.Conv2D(2048, (3, 3), padding="same"),
+    classification_1 = KL.TimeDistributed(KL.Conv2D(1024, (3, 3), padding="same"),
                            name="grasp_class_conv")(shared)
     classification_1 = KL.TimeDistributed(BatchNorm(),
                            name='grasp_class_bn')(classification_1, training=train_bn)
@@ -1828,7 +1844,7 @@ def build_new_grasping_graph(rois, feature_maps, image_meta,
     grasp_probs = KL.Activation(
         "softmax", name="grasp_class_xxx")(grasp_class_logits)
 
-    regression_1 = KL.TimeDistributed(KL.Conv2D(2048, (3, 3), padding="same"),
+    regression_1 = KL.TimeDistributed(KL.Conv2D(1024, (3, 3), padding="same"),
                                           name="grasp_reg_conv")(shared)
     regression_1 = KL.TimeDistributed(BatchNorm(),
                                           name='grasp_reg_bn')(regression_1, training=train_bn)
@@ -1956,6 +1972,7 @@ def fpn_classifier_graph(rois, feature_maps, image_meta,
                            name="mrcnn_class_conv1")(x)
     x = KL.TimeDistributed(BatchNorm(), name='mrcnn_class_bn1')(x, training=train_bn)
     x = KL.Activation('relu')(x)
+
     x = KL.TimeDistributed(KL.Conv2D(fc_layers_size, (1, 1)),
                            name="mrcnn_class_conv2")(x)
     x = KL.TimeDistributed(BatchNorm(), name='mrcnn_class_bn2')(x, training=train_bn)
@@ -2933,7 +2950,7 @@ def load_image_gt(dataset, config, image_id, augment=False, augmentation=None, o
                 mode=config.IMAGE_RESIZE_MODE)
             mask = utils.resize_mask(mask, scale, padding, crop)
             bbox_resize_5_dimensional = utils.resize_grasp_box(window, grasp_bbox_5_dimensional, original_shape)
-        #
+
         # fig, axs = plt.subplots()  # figsize=(25, 5))
         # axs.imshow(np.array(image[:, :, :3]).astype('uint8'))
         # for i, rect in enumerate(bbox_resize_5_dimensional):
@@ -5547,7 +5564,6 @@ class MaskRCNN():
     def get_anchors(self, image_shape, mode='', angles=[]):
         """Returns anchor pyramid for the given image size."""
         backbone_shapes = compute_backbone_shapes(self.config, image_shape)
-
         # Cache anchors and reuse if image shape is the same
         if not hasattr(self, "_anchor_cache"):
             self._anchor_cache = {}
