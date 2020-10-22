@@ -1202,6 +1202,8 @@ def detection_targets_graph(proposals, gt_class_ids, gt_boxes, gt_masks, anchors
         false_fn=lambda: tf.reshape(tf.argmax(roi_iou_max), [1])
     )
 
+
+
     # positive_indices = tf.where(positive_roi_bool)[:, 0]
     # 2. Negative ROIs are those with < 0.5 with every GT box. Skip crowds.
     negative_indices = tf.where(tf.logical_and(roi_iou_max < 0.5, no_crowd_bool))[:, 0]
@@ -1785,6 +1787,41 @@ def build_new_grasping_graph(rois, feature_maps, image_meta,
     else:
         rois_to_use = rois
 
+    # x = PyramidROIAlign([pool_size, pool_size],
+    #                     name="roi_align_grasp")([rois_to_use, image_meta] + feature_maps)
+    # # Conv layers
+    # x = KL.TimeDistributed(KL.Conv2D(1024, (pool_size, pool_size), padding="same"),
+    #                        name="grasp_conv1")(x)
+    # x = KL.TimeDistributed(BatchNorm(),
+    #                        name='grasp_bn1')(x, training=train_bn)
+    # x = KL.Activation('relu')(x)
+    #
+    # x = KL.TimeDistributed(KL.Conv2D(1024, (1, 1), padding="same"),
+    #                        name="grasp_conv2")(x)
+    # x = KL.TimeDistributed(BatchNorm(),
+    #                        name='grasp_bn2')(x, training=train_bn)
+    # # x = KL.Activation('relu')(x)
+    #
+    # shared = KL.Activation('relu')(x)
+    #
+    # anchors_per_location = len(angles)
+    # classification = KL.TimeDistributed(KL.Conv2D(2 * anchors_per_location, (1, 1), padding='valid',
+    #                                               activation='linear'), name='grasp_class_raw')(shared)
+    #
+    # # Reshape to [batch, num_rois, anchors, 2]
+    # grasp_class_logits = KL.TimeDistributed(
+    #     KL.Lambda(lambda t: tf.reshape(t, [tf.shape(t)[0], num_grasp_anchors, 2])))(classification)
+    #
+    # # Softmax on last dimension of BG/FG.
+    # grasp_probs = KL.Activation(
+    #     "softmax", name="grasp_class_xxx")(grasp_class_logits)
+    #
+    # regression = KL.TimeDistributed(KL.Conv2D(anchors_per_location * 5, (1, 1), padding="valid",
+    #                                           activation='linear'), name='grasp_bbox_pred')(shared)
+    #
+    # # Reshape to [batch, anchors, 5]
+    # grasp_bbox = KL.TimeDistributed(
+    #     KL.Lambda(lambda t: tf.reshape(t, [tf.shape(t)[0], num_grasp_anchors, 5])))(regression)
     x = PyramidROIAlign([pool_size, pool_size],
                         name="roi_align_grasp")([rois_to_use, image_meta] + feature_maps)
     # Conv layers

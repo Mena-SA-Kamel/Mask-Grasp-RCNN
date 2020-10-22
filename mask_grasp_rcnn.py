@@ -37,10 +37,10 @@ class GraspMaskRCNNConfig(Config):
     GPU_COUNT = 1
     IMAGES_PER_GPU = 1
     NUM_CLASSES = 1 + 1 # Object and background classes
-    # IMAGE_MIN_DIM = 288
-    # IMAGE_MAX_DIM = 384
-    IMAGE_MIN_DIM = 480
-    IMAGE_MAX_DIM = 640
+    IMAGE_MIN_DIM = 288
+    IMAGE_MAX_DIM = 384
+    # IMAGE_MIN_DIM = 480
+    # IMAGE_MAX_DIM = 640
     RPN_ANCHOR_SCALES = (16, 32, 64, 128, 256) # To modify based on image size
     TRAIN_ROIS_PER_IMAGE = 200 # Default (Paper uses 512)
     RPN_NMS_THRESHOLD = 0.7 # Default Value. Update to increase the number of proposals out of the RPN
@@ -97,7 +97,7 @@ class GraspMaskRCNNConfig(Config):
     ANGLE_BETA_FACTOR = 10
     GRASP_MIN_CONFIDENCE = 0.9
     ADAPTIVE_GRASP_ANCHORS = True
-    GRASP_ANCHOR_SIZE = 24
+    GRASP_ANCHOR_SIZE = 15
 
 class GraspMaskRCNNInferenceConfig(GraspMaskRCNNConfig):
     GPU_COUNT = 1
@@ -1116,7 +1116,7 @@ mode = "mask_grasp_rcnn"
 # mask_grasp_model_path = 'models/colab_result_id#1/mask_rcnn_grasp_and_mask_0344.h5'
 # mask_grasp_model_path = 'models/colab_result_id#1/attempt#26c_weights.h5'
 
-mask_grasp_model_path = 'models/colab_result_id#1/attempt#32f_weights.h5'
+mask_grasp_model_path = 'models/colab_result_id#1/mask_rcnn_grasp_and_mask_0128.h5'
 
 
 mask_grasp_model = modellib.MaskRCNN(mode="inference",
@@ -1187,6 +1187,9 @@ for image_id in image_ids:
              p = patches.Rectangle((x1, y1), (x2 - x1), (y2 - y1), angle=0, edgecolor=dataset.generate_random_color(),
                                    linewidth=2, facecolor='none')
              axs[0, 0].add_patch(p)
+             p = patches.Rectangle((x1, y1), (x2 - x1), (y2 - y1), angle=0, edgecolor=(1, 0, 0),
+                                   linewidth=2, facecolor='none')
+             axs[0, 2].add_patch(p)
              expanded_rect_normalized = utils.norm_boxes(rect, config.IMAGE_SHAPE[:2])
 
              y1, x1, y2, x2 = expanded_rect_normalized
@@ -1246,6 +1249,8 @@ for image_id in image_ids:
                                         linewidth=0.5, facecolor='none')
                  t2 = mpl.transforms.Affine2D().rotate_deg_around(x, y, theta) + axs[0, 2].transData
                  p3.set_transform(t2)
+
+
                  axs[0, 2].add_patch(p3)
 
          for roi_instance in gt_grasp_boxes:
@@ -1277,7 +1282,7 @@ code.interact(local=dict(globals(), **locals()))
 # # mask_grasp_model_path = 'models/grasp_and_mask20200905T1322/mask_rcnn_grasp_and_mask_0400.h5'
 # # mask_grasp_model_path = 'models/mask_grasp_rcnn_attempt#1b/mask_rcnn_grasp_and_mask_0108.h5'
 # # mask_grasp_model_path = 'models/colab_result_id#1/mask_rcnn_grasp_and_mask_0288.h5'
-# mask_grasp_model_path = 'models/colab_result_id#1/attempt#32f_weights.h5'
+# mask_grasp_model_path = 'models/colab_result_id#1/mask_rcnn_grasp_and_mask_0128.h5'
 #
 # mask_grasp_model = modellib.MaskRCNN(mode="inference",
 #                            config=inference_config,
@@ -1342,53 +1347,53 @@ code.interact(local=dict(globals(), **locals()))
 #              num_positive_samples += 1
 #              break
 #      print(num_positive_samples / counter)
-#      # if not true_positive:
-#      #     fig, ax = plt.subplots()
-#      #     ax.imshow(original_image[:, :, :3])
-#      #     for i, rect in enumerate(gt_grasp_boxes[0]):
-#      #         x, y, w, h, theta = rect
-#      #         x1 = x - w / 2
-#      #         y1 = y - h / 2
-#      #         theta %= 360
-#      #         theta = dataset.wrap_angle_around_90(np.array([theta]))[0]
-#      #         # if theta != 0:
-#      #         #    print('GT theta: ', theta)
-#      #         p = patches.Rectangle((x1, y1), w, h, angle=0, edgecolor=(1, 0, 1),
-#      #                               linewidth=1, facecolor='none')
-#      #         t2 = mpl.transforms.Affine2D().rotate_deg_around(x, y, theta) + ax.transData
-#      #         p.set_transform(t2)
-#      #         ax.add_patch(p)
-#      #         endy = (w / 2) * math.sin(math.radians(theta))
-#      #         endx = (w / 2) * math.cos(math.radians(theta))
-#      #         ax.plot([x, endx + x], [y, endy + y], color=(1, 0, 1))
-#      #         # if theta != 0:
-#      #         #     import code;
-#      #         #
-#      #         #     code.interact(local=dict(globals(), **locals()))
-#      #         #     angle = dataset.deg2rad(theta)
-#      #         #     angle_difference = np.arctan2(np.sin(angle), np.cos(angle))
-#      #         #     angle_difference = dataset.rad2deg(angle_difference)
-#      #     for i, rect in enumerate(top_image_rois):
-#      #         x, y, w, h, theta = rect
-#      #         x1 = x - w / 2
-#      #         y1 = y - h / 2
-#      #         theta %= 360
-#      #         theta = dataset.wrap_angle_around_90(np.array([theta]))[0]
-#      #         # print('Predicted theta: ', theta)
-#      #         p = patches.Rectangle((x1, y1), w, h, angle=0, edgecolor=(0, 0, 0),
-#      #                               linewidth=1, facecolor='none')
-#      #         t2 = mpl.transforms.Affine2D().rotate_deg_around(x, y, theta) + ax.transData
-#      #         p.set_transform(t2)
-#      #         ax.add_patch(p)
-#      #         endy = (w / 2) * math.sin(math.radians(theta))
-#      #         endx = (w / 2) * math.cos(math.radians(theta))
-#      #         ax.plot([x, endx + x], [y, endy + y], color=(0,0,0))
-#      #
-#      #     plt.show()
+#      if not true_positive:
+#          fig, ax = plt.subplots()
+#          ax.imshow(original_image[:, :, :3])
+#          for i, rect in enumerate(gt_grasp_boxes[0]):
+#              x, y, w, h, theta = rect
+#              x1 = x - w / 2
+#              y1 = y - h / 2
+#              theta %= 360
+#              theta = dataset.wrap_angle_around_90(np.array([theta]))[0]
+#              # if theta != 0:
+#              #    print('GT theta: ', theta)
+#              p = patches.Rectangle((x1, y1), w, h, angle=0, edgecolor=(1, 0, 1),
+#                                    linewidth=1, facecolor='none')
+#              t2 = mpl.transforms.Affine2D().rotate_deg_around(x, y, theta) + ax.transData
+#              p.set_transform(t2)
+#              ax.add_patch(p)
+#              endy = (w / 2) * math.sin(math.radians(theta))
+#              endx = (w / 2) * math.cos(math.radians(theta))
+#              ax.plot([x, endx + x], [y, endy + y], color=(1, 0, 1))
+#              # if theta != 0:
+#              #     import code;
+#              #
+#              #     code.interact(local=dict(globals(), **locals()))
+#              #     angle = dataset.deg2rad(theta)
+#              #     angle_difference = np.arctan2(np.sin(angle), np.cos(angle))
+#              #     angle_difference = dataset.rad2deg(angle_difference)
+#          for i, rect in enumerate(top_image_rois):
+#              x, y, w, h, theta = rect
+#              x1 = x - w / 2
+#              y1 = y - h / 2
+#              theta %= 360
+#              theta = dataset.wrap_angle_around_90(np.array([theta]))[0]
+#              # print('Predicted theta: ', theta)
+#              p = patches.Rectangle((x1, y1), w, h, angle=0, edgecolor=(0, 0, 0),
+#                                    linewidth=1, facecolor='none')
+#              t2 = mpl.transforms.Affine2D().rotate_deg_around(x, y, theta) + ax.transData
+#              p.set_transform(t2)
+#              ax.add_patch(p)
+#              endy = (w / 2) * math.sin(math.radians(theta))
+#              endx = (w / 2) * math.cos(math.radians(theta))
+#              ax.plot([x, endx + x], [y, endy + y], color=(0,0,0))
+#
+#          plt.show()
 #      #     print('####################$$$$$$$$$$#####################')
-
-
-
+#
+#
+#
 # import code;
 #
 # code.interact(local=dict(globals(), **locals()))
