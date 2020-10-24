@@ -394,53 +394,71 @@ inference_config = InferenceConfig()
 
 
 # # ##### TRAINING #####
+# #
+# MODEL_DIR = "models"
+# # COCO_MODEL_PATH = os.path.join("models", "mask_rcnn_object_vs_background_100_heads_50_all.h5")
+# COCO_MODEL_PATH = os.path.join("models", "mask_rcnn_object_vs_background_HYBRID-50_head_50_all.h5")
+# model = modellib.MaskRCNN(mode="training", config=config,
+#                              model_dir=MODEL_DIR)
 #
-MODEL_DIR = "models"
-# COCO_MODEL_PATH = os.path.join("models", "mask_rcnn_object_vs_background_100_heads_50_all.h5")
-COCO_MODEL_PATH = os.path.join("models", "mask_rcnn_object_vs_background_HYBRID-50_head_50_all.h5")
-model = modellib.MaskRCNN(mode="training", config=config,
-                             model_dir=MODEL_DIR)
-
-# model.load_weights(COCO_MODEL_PATH, by_name=True,
-#                       exclude=["conv1", "mrcnn_class_logits", "mrcnn_bbox_fc",
-#                                "mrcnn_bbox", "mrcnn_mask"])
-model.load_weights(COCO_MODEL_PATH, by_name=True)
-
-model.train(training_dataset, validating_dataset,
-               learning_rate=config.LEARNING_RATE,
-               epochs=50,
-               layers=r"(conv1)|(mrcnn\_.*)|(rpn\_.*)|(fpn\_.*)")
-
-
+# # model.load_weights(COCO_MODEL_PATH, by_name=True,
+# #                       exclude=["conv1", "mrcnn_class_logits", "mrcnn_bbox_fc",
+# #                                "mrcnn_bbox", "mrcnn_mask"])
+# model.load_weights(COCO_MODEL_PATH, by_name=True)
+#
 # model.train(training_dataset, validating_dataset,
-#                 learning_rate=config.LEARNING_RATE/10,
-#                 epochs=250,
-#                 layers="all")
-
-model_path = os.path.join(MODEL_DIR, "mask_rcnn_object_vs_background_HYBRID-Weights_SAMS-50_head_50_all.h5")
-model.keras_model.save_weights(model_path)
+#                learning_rate=config.LEARNING_RATE,
+#                epochs=50,
+#                layers=r"(conv1)|(mrcnn\_.*)|(rpn\_.*)|(fpn\_.*)")
+#
+#
+# # model.train(training_dataset, validating_dataset,
+# #                 learning_rate=config.LEARNING_RATE/10,
+# #                 epochs=250,
+# #                 layers="all")
+#
+# model_path = os.path.join(MODEL_DIR, "mask_rcnn_object_vs_background_HYBRID-Weights_SAMS-50_head_50_all.h5")
+# model.keras_model.save_weights(model_path)
 
 # # # # ##### TESTING #####
-#
-# MODEL_DIR = "models"
-# model_path = os.path.join(MODEL_DIR, "mask_rcnn_object_vs_background_0020.h5")
-# model = modellib.MaskRCNN(mode="inference",
-#                            config=inference_config,
-#                            model_dir=MODEL_DIR)
-# model.load_weights(model_path, by_name=True)
-# image_ids = random.choices(testing_dataset.image_ids, k=15)
-# for image_id in image_ids:
-#      original_image, image_meta, gt_class_id, gt_bbox, gt_mask =\
-#          modellib.load_image_gt(testing_dataset, inference_config,
-#                                 image_id, use_mini_mask=False)
-#      visualize.display_instances(original_image, gt_bbox, gt_mask, gt_class_id,
-#                             validating_dataset.class_names, figsize=(8, 8))
+
+MODEL_DIR = "models"
+model_path = os.path.join(MODEL_DIR, "mask_rcnn_object_vs_background_0020.h5")
+model_path = "models/Good_models/Training_SAMS_dataset_LR-same-div-2-HYBRID-weights/SAMS_DATASET_TRAINING_REFERENCE.h5"
+
+model = modellib.MaskRCNN(mode="inference",
+                           config=inference_config,
+                           model_dir=MODEL_DIR)
+model.load_weights(model_path, by_name=True)
+
+image_ids = random.choices(testing_dataset.image_ids, k=15)
+for image_id in image_ids:
+     original_image, image_meta, gt_class_id, gt_bbox, gt_mask =\
+         modellib.load_image_gt(testing_dataset, inference_config,
+                                image_id, use_mini_mask=False)
+     # visualize.display_instances(original_image, gt_bbox, gt_mask, gt_class_id,
+     #                        validating_dataset.class_names, figsize=(8, 8))
+
+
+
 
      # print(testing_dataset.image_info[image_id]['label_path'])
-     # results = model.detect([original_image], verbose=1)
-     # r = results[0]
-     # # image = testing_dataset.get_mask_overlay(original_image[:,:,0:3], r['masks'], r['scores'], 0.96)
-     # # # plt.imshow(image)
-     # # # plt.show()
-     # visualize.display_instances(original_image, r['rois'], r['masks'], r['class_ids'],
-     #                            testing_dataset.class_names, r['scores'],show_bbox=True, thresh = 0.95)
+     results = model.detect([original_image], verbose=1)
+     r = results[0]
+     # image = testing_dataset.get_mask_overlay(original_image[:,:,0:3], r['masks'], r['scores'], 0.96)
+     # # plt.imshow(image)
+     # # plt.show()
+     visualize.display_instances(original_image, r['rois'], r['masks'], r['class_ids'],
+                                testing_dataset.class_names, r['scores'],show_bbox=True, thresh = 0.95)
+
+
+     pred_box = r['rois']
+     pred_class_id = r['class_ids']
+     pred_score = r['scores']
+     pred_mask = r['masks']
+     mAP = utils.compute_ap_range(gt_bbox, gt_class_id, gt_mask,
+                          pred_box, pred_class_id, pred_score, pred_mask,
+                          iou_thresholds=None, verbose=1)
+     import code;
+
+     code.interact(local=dict(globals(), **locals()))
