@@ -772,6 +772,7 @@ def generate_zero_targets(grasping_anchors, config):
 
 def resize_anchors(anchors, width, height, image_shape):
     ax, ay, aw, ah, atheta = tf.split(anchors, num_or_size_splits=5, axis=-1)
+
     new_width = tf.ones(tf.shape(aw)) * (width/image_shape[1])
     new_height = tf.ones(tf.shape(ah)) * (height/image_shape[0])
     resized_anchors = tf.concat([ax, ay, new_width, new_height, atheta], axis=-1)
@@ -1158,6 +1159,8 @@ def detection_targets_graph(proposals, gt_class_ids, gt_boxes, gt_masks, anchors
     # Remove zero padding
     proposals, _ = trim_zeros_graph(proposals, name="trim_proposals")
     gt_boxes, non_zeros = trim_zeros_graph(gt_boxes, name="trim_gt_boxes")
+
+    # proposals = tf.concat([proposals, gt_boxes], axis=0) ############## TOP REMOVE WHEN TRANINING MASKS
     gt_class_ids = tf.boolean_mask(gt_class_ids, non_zeros,
                                    name="trim_gt_class_ids")
     gt_masks = tf.gather(gt_masks, tf.where(non_zeros)[:, 0], axis=2,
@@ -1201,8 +1204,6 @@ def detection_targets_graph(proposals, gt_class_ids, gt_boxes, gt_masks, anchors
         true_fn=lambda: tf.where(positive_roi_bool)[:, 0],
         false_fn=lambda: tf.reshape(tf.argmax(roi_iou_max), [1])
     )
-
-
 
     # positive_indices = tf.where(positive_roi_bool)[:, 0]
     # 2. Negative ROIs are those with < 0.5 with every GT box. Skip crowds.
@@ -1304,6 +1305,7 @@ def detection_targets_graph(proposals, gt_class_ids, gt_boxes, gt_masks, anchors
         false_fn=lambda: tf.cast(tf.zeros([0, config.GRASP_ANCHORS_PER_ROI, 5]), tf.float32)
     )
 
+
     # Computing overlaps between the grasping anchors and the final_roi_gt_grasp_boxes
     # grasp_overlaps [NUM_INSTANCES, 196(number of anchors) * number of grasping boxes]
     # grasp_overlaps has the shape [num_instances, num_grasp_instances, num_anchors]
@@ -1320,6 +1322,7 @@ def detection_targets_graph(proposals, gt_class_ids, gt_boxes, gt_masks, anchors
     #                                                 final_roi_gt_grasp_boxes, config),
     #     false_fn=lambda: generate_zero_targets(grasping_anchors, config)
     # )
+
 
     grasping_anchors, grasp_anchor_match, grasp_deltas = tf.cond(
         tf.greater(tf.shape(grasping_anchors)[0], 0),
@@ -2327,7 +2330,7 @@ def grasp_smooth_l1_loss(y_true, y_pred, config):
 
 def cumpute_top_negative_losses_graph(inputs):
     negative_anchor_losses, N = tf.split(inputs, num_or_size_splits=2, axis=-1)
-    N = tf.squeeze(N[0]) # N is just repeated to have the same shape as negative_anchor_losses, so just pich the first entry
+    N = tf.squeeze(N[0]) # N is just repeated to have the same shape as negative_anchor_losses, so just pick the first entry
     num_anchors = tf.cast(tf.shape(negative_anchor_losses)[0], dtype=tf.float32)
     num_negatives = K.minimum(N * 3, num_anchors - N)
     num_negatives = tf.dtypes.cast(num_negatives, tf.int32)
@@ -2343,14 +2346,15 @@ def grasp_loss_graph(config, target_bbox, target_class, bbox, class_logits, roi_
     # positive_roi_mask = tf.squeeze(positive_roi_mask, axis=-1)
     total_grasp_loss = K.variable(value=0)
     for i in range(config.BATCH_SIZE):
-        batch_target_bbox = target_bbox[i]
-        batch_target_class = target_class[i]
-        batch_bbox = bbox[i]
-        batch_class_logits = class_logits[i]
-        batch_roi_class_ids = roi_class_ids[i]
+        batch_target_bbox = target_bbox[i] #Those are the GT refinements
+        batch_target_class = target_class[i] #GT anchor classes
+        batch_bbox = bbox[i] #Prediction of the network on the refinements
+        batch_class_logits = class_logits[i] #Prediction of the network on the anchor class, in logits
+        batch_roi_class_ids = roi_class_ids[i] #The class of each ROI
         # batch_positive_roi_mask = positive_roi_mask[i]
         # Only positive ROIs contribute to the loss. And only
         # the class specific mask of each ROI.
+
         positive_roi_ix = tf.where(batch_roi_class_ids > 0)[:, 0]
         positive_class_ids = tf.cast(tf.gather(batch_roi_class_ids, positive_roi_ix), tf.int64)
         indices = tf.stack([positive_roi_ix, positive_class_ids], axis=1)
@@ -2358,9 +2362,7 @@ def grasp_loss_graph(config, target_bbox, target_class, bbox, class_logits, roi_
         # Only select the class logits and box refinements for the positive ROIs,
         batch_class_logits_filtered = tf.gather(batch_class_logits, positive_roi_ix)
         batch_bbox_filtered = tf.gather(batch_bbox, positive_roi_ix)
-
-        # Squeeze last dim to simplify
-        batch_target_class = tf.squeeze(batch_target_class, -1)
+        batch_target_class = tf.squeeze(batch_target_class, -1) # Squeeze last dim to simplify
         batch_target_class_filtered = tf.gather(batch_target_class, positive_roi_ix)
         batch_target_bbox_filtered = tf.gather(batch_target_bbox, positive_roi_ix)
 
@@ -2377,16 +2379,13 @@ def grasp_loss_graph(config, target_bbox, target_class, bbox, class_logits, roi_
                                                                 output=batch_class_logits_filtered,
                                                                 from_logits=True)
 
+        classification_loss = tf.reduce_sum(classification_loss)
+
         # Need to find the number of positive samples (N) in each ROI and select the top 3N negative samples with the highest loss
-
-
         N = tf.count_nonzero(positive_anchor_mask, axis=-1)
         N = K.cast(N, tf.int32)
         N = tf.expand_dims(N, axis=-1)
-        #
-        # N = tf.Print(N, [N],
-        #                             message="N=",
-        #                             summarize=-1)
+
 
         # Gather the negative anchor losses
         negative_indices = tf.where(K.equal(negative_anchor_mask, 1))
@@ -2397,11 +2396,8 @@ def grasp_loss_graph(config, target_bbox, target_class, bbox, class_logits, roi_
 
         # Summing the top 3N negative elements in each ROI
         negative_anchor_losses = tf.expand_dims(negative_anchor_losses, axis=-1)
-
         N_repeats = tf.cast(tf.tile(N, [1, config.GRASP_ANCHORS_PER_ROI]), dtype=tf.float32)
         N_repeats = tf.expand_dims(N_repeats, axis=-1)
-
-
         top_negative_losses_sum = tf.cond(
             tf.greater(tf.shape(N)[0], 0),
             true_fn=lambda: tf.map_fn(cumpute_top_negative_losses_graph, tf.concat([negative_anchor_losses, N_repeats], axis=-1)),
@@ -2409,15 +2405,14 @@ def grasp_loss_graph(config, target_bbox, target_class, bbox, class_logits, roi_
         )
 
         # top_negative_losses_sum = tf.map_fn(cumpute_top_negative_losses_graph, tf.concat([negative_anchor_losses, N_repeats], axis=-1))
-
         total_negative_loss = K.sum(top_negative_losses_sum)
 
         # Summing the positive elements
-
         total_positive_loss = K.sum(tf.gather_nd(classification_loss, positive_indices))
 
         # Classification Loss
         classification_loss = total_negative_loss + total_positive_loss
+
 
         # Regression Loss
         regression_loss = grasp_smooth_l1_loss(batch_target_bbox_filtered, batch_bbox_filtered, config)
@@ -2433,6 +2428,22 @@ def grasp_loss_graph(config, target_bbox, target_class, bbox, class_logits, roi_
         # Combined Loss
         num_positive_samples = tf.maximum(num_positive_samples, 1.0)
         combined_loss = (((1/beta)*classification_loss) + total_regression_loss) / (4 * num_positive_samples)
+
+        #
+        # total_number_samples = tf.cast(tf.shape(positive_roi_ix)[0] * tf.shape(positive_anchor_mask)[1], tf.float32)
+        # # total_number_samples = tf.Print(total_number_samples, [total_number_samples],
+        # #                             message="total_number_samples=",
+        # #                             summarize=-1)
+        # #
+        # # num_positive_samples = tf.Print(num_positive_samples, [num_positive_samples],
+        # #                                 message="num_positive_samples=",
+        # #                                 summarize=-1)
+        #
+        # classification_loss/= total_number_samples
+        # total_regression_loss/= num_positive_samples
+
+        # combined_loss = ((classification_loss) + (beta*total_regression_loss))
+        # combined_loss = (((1/beta)*classification_loss) + total_regression_loss) / (4 * num_positive_samples)
         total_grasp_loss = tf.add(total_grasp_loss, combined_loss)
 
     # return total_grasp_loss
@@ -3088,6 +3099,8 @@ def load_image_gt(dataset, config, image_id, augment=False, augmentation=None, o
                                     window, scale, active_class_ids)
 
     if mode == 'mask_grasp_rcnn':
+        import code;
+        code.interact(local=dict(globals(), **locals()))
         grasp_bbox = bbox_resize_5_dimensional
         return image, image_meta, class_ids, bbox, mask, grasp_bbox, grasp_class_ids
 

@@ -1095,8 +1095,6 @@ def generate_grasping_anchors(scales, ratios, shape, feature_stride, anchor_stri
     anchor_height = np.array([max_size / shape[0]])* overlap_factor
 
     # Enumerate shifts in feature space
-    import code;
-    code.interact(local=dict(globals(), **locals()))
     shifts_y = (np.arange(0, shape[0], anchor_stride) * feature_stride[0]) + feature_stride[0]/2 + y1
     shifts_x = (np.arange(0, shape[1], anchor_stride) * feature_stride[1]) + feature_stride[1]/2 + x1
 
