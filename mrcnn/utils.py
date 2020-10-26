@@ -1058,9 +1058,7 @@ def generate_anchors(scales, ratios, shape, feature_stride, anchor_stride, mode=
                                 box_centers + 0.5 * box_sizes], axis=1)
     return boxes
 
-
-
-def generate_grasping_anchors(scales, ratios, shape, feature_stride, anchor_stride, thetas, roi_boundaries):
+def generate_grasping_anchors(scales, ratios, shape, feature_stride, anchor_stride, thetas, roi_boundaries, config):
     """
     scales: 1D array of anchor sizes in pixels. Example: [32, 64, 128]
     ratios: 1D array of anchor ratios of width/height. Example: [0.5, 1, 2]
@@ -1109,6 +1107,9 @@ def generate_grasping_anchors(scales, ratios, shape, feature_stride, anchor_stri
     anchor_thetas /= 360
     anchors = np.stack([anchor_x, anchor_y, anchor_widths, anchor_heights, anchor_thetas], axis=-1)
     anchors = np.reshape(anchors, [-1, 5])
+    if not config.ADAPTIVE_GRASP_ANCHORS:
+        anchors = resize_anchors(anchors, config.GRASP_ANCHOR_SIZE, config.GRASP_ANCHOR_SIZE,
+                                          config.IMAGE_SHAPE)
 
     return anchors
 

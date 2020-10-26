@@ -3099,8 +3099,6 @@ def load_image_gt(dataset, config, image_id, augment=False, augmentation=None, o
                                     window, scale, active_class_ids)
 
     if mode == 'mask_grasp_rcnn':
-        import code;
-        code.interact(local=dict(globals(), **locals()))
         grasp_bbox = bbox_resize_5_dimensional
         return image, image_meta, class_ids, bbox, mask, grasp_bbox, grasp_class_ids
 
