@@ -235,4 +235,20 @@ Epoch 57/500
 Epoch 58/500
 300/300 [==============================] - 230s 766ms/step - loss: 2.1571 - rpn_class_loss: 0.0041 - rpn_bbox_loss: 0.3566 - mrcnn_class_loss: 0.0380 - mrcnn_bbox_loss: 0.1791 - mrcnn_mask_loss: 1.1694 - grasp_loss: 0.4099 - val_loss: 1.4149 - val_rpn_class_loss: 0.0050 - val_rpn_bbox_loss: 0.4261 - val_mrcnn_class_loss: 0.0361 - val_mrcnn_bbox_loss: 0.1961 - val_mrcnn_mask_loss: 1.1211 - val_grasp_loss: 0.4192
 Epoch 59/500
-178/300 [================>.............] - ETA: 1:24 - loss: 2.0154 - rpn_class_loss: 0.0015 - rpn_bbox_loss: 0.2439 - mrcnn_class_loss: 0.0410 - mrcnn_bbox_loss: 0.2007 - mrcnn_mask_loss: 1.1284 - grasp_loss: 0.3998
+300/300 [==============================] - 230s 767ms/step - loss: 2.0211 - rpn_class_loss: 0.0015 - rpn_bbox_loss: 0.2459 - mrcnn_class_loss: 0.0421 - mrcnn_bbox_loss: 0.1963 - mrcnn_mask_loss: 1.1289 - grasp_loss: 0.4065 - val_loss: 2.1584 - val_rpn_class_loss: 0.0052 - val_rpn_bbox_loss: 0.4151 - val_mrcnn_class_loss: 0.0244 - val_mrcnn_bbox_loss: 0.1829 - val_mrcnn_mask_loss: 1.1386 - val_grasp_loss: 0.4041
+Epoch 60/500
+300/300 [==============================] - 229s 762ms/step - loss: 2.0342 - rpn_class_loss: 0.0021 - rpn_bbox_loss: 0.2527 - mrcnn_class_loss: 0.0413 - mrcnn_bbox_loss: 0.1923 - mrcnn_mask_loss: 1.1295 - grasp_loss: 0.4163 - val_loss: 2.0505 - val_rpn_class_loss: 0.0010 - val_rpn_bbox_loss: 0.1745 - val_mrcnn_class_loss: 0.0293 - val_mrcnn_bbox_loss: 0.2031 - val_mrcnn_mask_loss: 0.9131 - val_grasp_loss: 0.4289
+Epoch 61/500
+300/300 [==============================] - 225s 751ms/step - loss: 1.9844 - rpn_class_loss: 0.0019 - rpn_bbox_loss: 0.2965 - mrcnn_class_loss: 0.0271 - mrcnn_bbox_loss: 0.1659 - mrcnn_mask_loss: 1.0857 - grasp_loss: 0.4073 - val_loss: 1.2836 - val_rpn_class_loss: 0.0040 - val_rpn_bbox_loss: 0.3384 - val_mrcnn_class_loss: 0.0290 - val_mrcnn_bbox_loss: 0.1984 - val_mrcnn_mask_loss: 0.9945 - val_grasp_loss: 0.4038
+Epoch 62/500
+300/300 [==============================] - 228s 761ms/step - loss: 2.0992 - rpn_class_loss: 0.0032 - rpn_bbox_loss: 0.3682 - mrcnn_class_loss: 0.0433 - mrcnn_bbox_loss: 0.1964 - mrcnn_mask_loss: 1.0796 - grasp_loss: 0.4085 - val_loss: 3.7423 - val_rpn_class_loss: 0.0073 - val_rpn_bbox_loss: 0.5703 - val_mrcnn_class_loss: 0.0296 - val_mrcnn_bbox_loss: 0.2050 - val_mrcnn_mask_loss: 1.0871 - val_grasp_loss: 0.3918
+Epoch 63/500
+300/300 [==============================] - 227s 758ms/step - loss: 2.0836 - rpn_class_loss: 0.0030 - rpn_bbox_loss: 0.3291 - mrcnn_class_loss: 0.0362 - mrcnn_bbox_loss: 0.1833 - mrcnn_mask_loss: 1.1341 - grasp_loss: 0.3980 - val_loss: 2.0092 - val_rpn_class_loss: 0.0038 - val_rpn_bbox_loss: 0.3789 - val_mrcnn_class_loss: 0.0266 - val_mrcnn_bbox_loss: 0.1911 - val_mrcnn_mask_loss: 0.9955 - val_grasp_loss: 0.4092
+Epoch 64/500
+300/300 [==============================] - 229s 763ms/step - loss: 2.1053 - rpn_class_loss: 0.0021 - rpn_bbox_loss: 0.2763 - mrcnn_class_loss: 0.0279 - mrcnn_bbox_loss: 0.1646 - mrcnn_mask_loss: 1.2346 - grasp_loss: 0.3999 - val_loss: 1.3980 - val_rpn_class_loss: 0.0039 - val_rpn_bbox_loss: 0.3392 - val_mrcnn_class_loss: 0.0320 - val_mrcnn_bbox_loss: 0.2080 - val_mrcnn_mask_loss: 0.9868 - val_grasp_loss: 0.4120
+Epoch 65/500
+300/300 [==============================] - 228s 760ms/step - loss: 2.0603 - rpn_class_loss: 0.0031 - rpn_bbox_loss: 0.3173 - mrcnn_class_loss: 0.0331 - mrcnn_bbox_loss: 0.1769 - mrcnn_mask_loss: 1.1352 - grasp_loss: 0.3948 - val_loss: 2.0349 - val_rpn_class_loss: 0.0094 - val_rpn_bbox_loss: 0.6505 - val_mrcnn_class_loss: 0.0206 - val_mrcnn_bbox_loss: 0.1906 - val_mrcnn_mask_loss: 1.0301 - val_grasp_loss: 0.3901
+Epoch 66/500
+300/300 [==============================] - 228s 761ms/step - loss: 2.0798 - rpn_class_loss: 0.0023 - rpn_bbox_loss: 0.2722 - mrcnn_class_loss: 0.0449 - mrcnn_bbox_loss: 0.1994 - mrcnn_mask_loss: 1.1632 - grasp_loss: 0.3978 - val_loss: 1.2425 - val_rpn_class_loss: 0.0018 - val_rpn_bbox_loss: 0.2053 - val_mrcnn_class_loss: 0.0383 - val_mrcnn_bbox_loss: 0.2329 - val_mrcnn_mask_loss: 1.1111 - val_grasp_loss: 0.4291
+Epoch 67/500
+229/300 [=====================>........] - ETA: 48s - loss: 2.0760 - rpn_class_loss: 0.0023 - rpn_bbox_loss: 0.2319 - mrcnn_class_loss: 0.0357 - mrcnn_bbox_loss: 0.1981 - mrcnn_mask_loss: 1.1998 - grasp_loss: 0.4081

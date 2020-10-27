@@ -1790,20 +1790,20 @@ def build_grasp_regressor_and_classifier_graph(rois, feature_maps, image_meta,
     else:
         rois_to_use = rois
 
-    x = PyramidROIAlign([pool_size, pool_size],
+    shared = PyramidROIAlign([pool_size, pool_size],
                         name="roi_align_grasp")([rois_to_use, image_meta] + feature_maps)
+
+    # CLASSIFICATION
     # Conv layers
     x = KL.TimeDistributed(KL.Conv2D(512, (3, 3), padding="same"),
-                           name="grasp_conv1")(x)
+                           name="grasp_conv1")(shared)
     x = KL.TimeDistributed(BatchNorm(),
                            name='grasp_bn1')(x, training=train_bn)
-    shared = KL.Activation('relu')(x)
+    x = KL.Activation('relu')(x)
 
     anchors_per_location = len(angles)
     x = KL.TimeDistributed(KL.Conv2D(num_classes * anchors_per_location, (1, 1), padding='valid',
-                                                  activation='linear'), name='grasp_class_raw')(shared)
-
-
+                                                  activation='linear'), name='grasp_class_raw')(x)
     # Reshape to [batch, num_rois, anchors, 2]
     grasp_class_logits = KL.TimeDistributed(
         KL.Lambda(lambda t: tf.reshape(t, [tf.shape(t)[0], num_grasp_anchors, num_classes])))(x)
@@ -1813,8 +1813,16 @@ def build_grasp_regressor_and_classifier_graph(rois, feature_maps, image_meta,
         "softmax", name="grasp_class_xxx")(grasp_class_logits)
 
 
+    # REGRESSION
+    # Conv layers
+    x = KL.TimeDistributed(KL.Conv2D(512, (3, 3), padding="same"),
+                           name="grasp_conv_reg_branch")(shared)
+    x = KL.TimeDistributed(BatchNorm(),
+                           name='grasp_bn_reg_branch')(x, training=train_bn)
+    x = KL.Activation('relu')(x)
+
     x = KL.TimeDistributed(KL.Conv2D(anchors_per_location * 5, (1, 1), padding="valid",
-                             activation='linear'), name='grasp_bbox_pred')(shared)
+                             activation='linear'), name='grasp_bbox_pred')(x)
 
     # Reshape to [batch, anchors, 5]
     grasp_bbox = KL.TimeDistributed(
