@@ -375,15 +375,19 @@ sess = tf.Session(config=config)
 
 training_dataset = ObjectVsBackgroundDataset()
 # training_dataset.construct_dataset(dataset_dir = '../../../Datasets/SAMS-Dataset')
-training_dataset.load_dataset('train_set', dataset_dir='ocid_dataset')
+# training_dataset.load_dataset('train_set', dataset_dir='ocid_dataset')
+training_dataset.load_dataset('train_set', dataset_dir='sams_dataset')
 training_dataset.prepare()
 
 validating_dataset = ObjectVsBackgroundDataset()
-validating_dataset.load_dataset('val_set', dataset_dir='ocid_dataset')
+# validating_dataset.load_dataset('val_set', dataset_dir='ocid_dataset')
+validating_dataset.load_dataset('val_set', dataset_dir='sams_dataset')
 validating_dataset.prepare()
 
 testing_dataset = ObjectVsBackgroundDataset()
-testing_dataset.load_dataset('test_set', dataset_dir='ocid_dataset')
+# testing_dataset.load_dataset('test_set', dataset_dir='ocid_dataset')
+testing_dataset.load_dataset('test_set', dataset_dir='wisdom_dataset')
+# testing_dataset.load_dataset('test_set', dataset_dir='sams_dataset')
 testing_dataset.prepare()
 
 config = ObjectVsBackgroundConfig()
@@ -423,7 +427,7 @@ inference_config = InferenceConfig()
 # # # # ##### TESTING #####
 
 MODEL_DIR = "models"
-model_path = os.path.join(MODEL_DIR, "mask_rcnn_object_vs_background_0020.h5")
+# model_path = os.path.join(MODEL_DIR, "mask_rcnn_object_vs_background_0020.h5")
 model_path = "models/Good_models/Training_SAMS_dataset_LR-same-div-2-HYBRID-weights/SAMS_DATASET_TRAINING_REFERENCE.h5"
 
 model = modellib.MaskRCNN(mode="inference",
@@ -431,7 +435,10 @@ model = modellib.MaskRCNN(mode="inference",
                            model_dir=MODEL_DIR)
 model.load_weights(model_path, by_name=True)
 
-image_ids = random.choices(testing_dataset.image_ids, k=15)
+AP_sum = np.zeros(10)
+# image_ids = random.choices(testing_dataset.image_ids, k=15)
+image_ids = testing_dataset.image_ids
+counter = 0
 for image_id in image_ids:
      original_image, image_meta, gt_class_id, gt_bbox, gt_mask =\
          modellib.load_image_gt(testing_dataset, inference_config,
@@ -456,9 +463,16 @@ for image_id in image_ids:
      pred_class_id = r['class_ids']
      pred_score = r['scores']
      pred_mask = r['masks']
-     mAP = utils.compute_ap_range(gt_bbox, gt_class_id, gt_mask,
+
+     mAP, AP = utils.compute_ap_range(gt_bbox, gt_class_id, gt_mask,
                           pred_box, pred_class_id, pred_score, pred_mask,
                           iou_thresholds=None, verbose=1)
-     import code;
+     # if np.any(np.isnan(AP)):
+     #     continue
+     counter+=1
+     # AP_sum += AP
 
-     code.interact(local=dict(globals(), **locals()))
+print ('######################### MEAN AP at different IOUs')
+print (AP_sum/len(image_ids))
+import code;
+code.interact(local=dict(globals(), **locals()))

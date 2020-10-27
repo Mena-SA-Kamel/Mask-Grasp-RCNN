@@ -793,11 +793,11 @@ def compute_ap_range(gt_box, gt_class_id, gt_mask,
         if verbose:
             print("AP @{:.2f}:\t {:.3f}".format(iou_threshold, ap))
         AP.append(ap)
-    AP = np.array(AP).mean()
+    AP_mean = np.array(AP).mean()
     if verbose:
         print("AP @{:.2f}-{:.2f}:\t {:.3f}".format(
-            iou_thresholds[0], iou_thresholds[-1], AP))
-    return AP
+            iou_thresholds[0], iou_thresholds[-1], AP_mean))
+    return AP_mean, np.array(AP),
 
 
 def compute_recall(pred_boxes, gt_boxes, iou):
