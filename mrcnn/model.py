@@ -1160,7 +1160,7 @@ def detection_targets_graph(proposals, gt_class_ids, gt_boxes, gt_masks, anchors
     proposals, _ = trim_zeros_graph(proposals, name="trim_proposals")
     gt_boxes, non_zeros = trim_zeros_graph(gt_boxes, name="trim_gt_boxes")
 
-    # proposals = tf.concat([proposals, gt_boxes], axis=0) ############## TOP REMOVE WHEN TRANINING MASKS
+    proposals = tf.concat([proposals, gt_boxes], axis=0) ############## TOP REMOVE WHEN TRANINING MASKS
     gt_class_ids = tf.boolean_mask(gt_class_ids, non_zeros,
                                    name="trim_gt_class_ids")
     gt_masks = tf.gather(gt_masks, tf.where(non_zeros)[:, 0], axis=2,
@@ -2947,11 +2947,11 @@ def load_image_gt(dataset, config, image_id, augment=False, augmentation=None, o
         # Datasets like cornell don't encode any information regarding the mask or location of the object, so we
         # initiate a placeholder for the masks
         image_path = dataset.image_info[image_id]['label_path']
-        # if ('cornell' in image_path) or ('multi_grasp' in image_path):
-        #     mask = np.ones([original_shape[0], original_shape[1], 1])
-        #     class_ids = np.array([1])
-        # else:
-        mask, class_ids = dataset.load_mask(image_id, augmentations)
+        if ('multi_grasp' in image_path):
+            mask = np.ones([original_shape[0], original_shape[1], 1])
+            class_ids = np.array([1])
+        else:
+            mask, class_ids = dataset.load_mask(image_id, augmentations)
 
         if True:
             x_dim_crop = config.IMAGE_SHAPE[1]

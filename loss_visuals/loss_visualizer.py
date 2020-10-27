@@ -77,8 +77,8 @@ ax1.plot(epoch_numbers, val_grasp_losses, label='Validation Grasp loss')
 # ax1.set_ylim([0.6, 1.2])
 
 
-# # ########################## REFERENCE PART####################################
-# results_file = open("attempt_#38-October22_2020.txt", "r")
+# ########################## REFERENCE PART####################################
+# results_file = open("attempt_#42-October26_2020-Train-on-Cornell - bug.txt", "r")
 # epochs = results_file.read().splitlines()
 # epochs = np.array(epochs)
 #
@@ -137,13 +137,13 @@ ax1.plot(epoch_numbers, val_grasp_losses, label='Validation Grasp loss')
 # epoch_numbers = np.arange(val_grasp_losses.shape[0])
 #
 # # ax1.plot(epoch_numbers, grasp_losses, label='Grasp loss - Attempt 32')
-# ax1.plot(epoch_numbers, val_grasp_losses, label='Validation Grasp loss - Attempt 32')
+# ax1.plot(epoch_numbers, val_grasp_losses, label='Validation Grasp loss - ROI bug')
 # ##############################################################
 
 ax1.set(xlabel='Epochs', ylabel='Loss')
 ax1.legend()
-# ax1.set_xlim([-5, 400])
-# ax1.set_ylim([1, 1.9])
+ax1.set_xlim([-5, 400])
+ax1.set_ylim([0.3, 0.70])
 # ax2.set(xlabel='Epochs', ylabel='Loss')
 
 fig.tight_layout(pad=1.0)
