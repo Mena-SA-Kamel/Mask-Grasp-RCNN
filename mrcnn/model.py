@@ -1777,6 +1777,52 @@ def rpn_graph(feature_map, anchors_per_location, anchor_stride):
 
     return [rpn_class_logits, rpn_probs, rpn_bbox]
 
+def build_grasp_regressor_and_classifier_graph(rois, feature_maps, image_meta,
+                         pool_size, num_classes, use_expanded_rois, rois_expand_factor, anchor_stride=1,
+                         train_bn=True, num_grasp_anchors=196,
+                             angles=[]):
+    # ROI Pooling
+    # Shape: [batch, num_rois, GRASP_POOL_SIZE, GRASP_POOL_SIZE, channels]
+
+    # Expanding ROIs to allow network learn the features associated with the background
+    if use_expanded_rois:
+        rois_to_use = KL.Lambda(expand_roi_by_percent, name="expand_rois", arguments={'percentage': rois_expand_factor})(rois)
+    else:
+        rois_to_use = rois
+
+    x = PyramidROIAlign([pool_size, pool_size],
+                        name="roi_align_grasp")([rois_to_use, image_meta] + feature_maps)
+    # Conv layers
+    x = KL.TimeDistributed(KL.Conv2D(512, (3, 3), padding="same"),
+                           name="grasp_conv1")(x)
+    x = KL.TimeDistributed(BatchNorm(),
+                           name='grasp_bn1')(x, training=train_bn)
+    shared = KL.Activation('relu')(x)
+
+    anchors_per_location = len(angles)
+    x = KL.TimeDistributed(KL.Conv2D(num_classes * anchors_per_location, (1, 1), padding='valid',
+                                                  activation='linear'), name='grasp_class_raw')(shared)
+
+
+    # Reshape to [batch, num_rois, anchors, 2]
+    grasp_class_logits = KL.TimeDistributed(
+        KL.Lambda(lambda t: tf.reshape(t, [tf.shape(t)[0], num_grasp_anchors, num_classes])))(x)
+
+    # Softmax on last dimension of BG/FG.
+    grasp_probs = KL.Activation(
+        "softmax", name="grasp_class_xxx")(grasp_class_logits)
+
+
+    x = KL.TimeDistributed(KL.Conv2D(anchors_per_location * 5, (1, 1), padding="valid",
+                             activation='linear'), name='grasp_bbox_pred')(shared)
+
+    # Reshape to [batch, anchors, 5]
+    grasp_bbox = KL.TimeDistributed(
+        KL.Lambda(lambda t: tf.reshape(t, [tf.shape(t)[0], num_grasp_anchors, 5])))(x)
+
+    return [grasp_class_logits, grasp_probs, grasp_bbox]
+
+
 def build_new_grasping_graph(rois, feature_maps, image_meta,
                          pool_size, num_classes, use_expanded_rois, rois_expand_factor, anchor_stride=1,
                          train_bn=True, num_grasp_anchors=196,
@@ -4666,7 +4712,7 @@ class MaskRCNN():
                                      num_grasp_anchors=config.GRASP_ANCHORS_PER_ROI,
                                      angles=config.GRASP_ANCHOR_ANGLES)
 
-            grasp_class_logits, grasp_probs, grasp_bbox = build_new_grasping_graph(rois, mrcnn_feature_maps, input_image_meta,
+            grasp_class_logits, grasp_probs, grasp_bbox = build_grasp_regressor_and_classifier_graph(rois, mrcnn_feature_maps, input_image_meta,
                                                                                    config.GRASP_POOL_SIZE, config.NUM_CLASSES,
                                                                                    use_expanded_rois=config.USE_EXPANDED_ROIS,
                                                                                    rois_expand_factor=config.GRASP_ROI_EXPAND_FACTOR,
@@ -4991,12 +5037,12 @@ class MaskRCNN():
         metrics. Then calls the Keras compile() function.
         """
         # Optimizer object
-        # optimizer = keras.optimizers.SGD(
-        #     lr=learning_rate, momentum=momentum,
-        #     clipnorm=self.config.GRADIENT_CLIP_NORM)
         optimizer = keras.optimizers.SGD(
             lr=learning_rate, momentum=momentum,
-            clipvalue=self.config.GRADIENT_CLIP_VALUE)
+            clipnorm=self.config.GRADIENT_CLIP_NORM)
+        # optimizer = keras.optimizers.SGD(
+        #     lr=learning_rate, momentum=momentum,
+        #     clipvalue=self.config.GRADIENT_CLIP_VALUE)
         # Add Losses
         # First, clear previously set losses to avoid duplication
         self.keras_model._losses = []
