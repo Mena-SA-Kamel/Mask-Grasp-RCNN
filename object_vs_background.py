@@ -373,16 +373,16 @@ config = tf.ConfigProto()
 config.gpu_options.allow_growth = True
 sess = tf.Session(config=config)
 
-training_dataset = ObjectVsBackgroundDataset()
-# training_dataset.construct_dataset(dataset_dir = '../../../Datasets/SAMS-Dataset')
-# training_dataset.load_dataset('train_set', dataset_dir='ocid_dataset')
-training_dataset.load_dataset('train_set', dataset_dir='sams_dataset')
-training_dataset.prepare()
-
-validating_dataset = ObjectVsBackgroundDataset()
-# validating_dataset.load_dataset('val_set', dataset_dir='ocid_dataset')
-validating_dataset.load_dataset('val_set', dataset_dir='sams_dataset')
-validating_dataset.prepare()
+# training_dataset = ObjectVsBackgroundDataset()
+# # training_dataset.construct_dataset(dataset_dir = '../../../Datasets/SAMS-Dataset')
+# # training_dataset.load_dataset('train_set', dataset_dir='ocid_dataset')
+# training_dataset.load_dataset('train_set', dataset_dir='sams_dataset')
+# training_dataset.prepare()
+#
+# validating_dataset = ObjectVsBackgroundDataset()
+# # validating_dataset.load_dataset('val_set', dataset_dir='ocid_dataset')
+# validating_dataset.load_dataset('val_set', dataset_dir='sams_dataset')
+# validating_dataset.prepare()
 
 testing_dataset = ObjectVsBackgroundDataset()
 # testing_dataset.load_dataset('test_set', dataset_dir='ocid_dataset')
@@ -391,9 +391,9 @@ testing_dataset.load_dataset('test_set', dataset_dir='wisdom_dataset')
 testing_dataset.prepare()
 
 config = ObjectVsBackgroundConfig()
-channel_means = np.array(training_dataset.get_channel_means())
-config.MEAN_PIXEL = np.around(channel_means, decimals = 1)
-config.display()
+# channel_means = np.array(testing_.get_channel_means())
+# config.MEAN_PIXEL = np.around(channel_means, decimals = 1)
+# config.display()
 inference_config = InferenceConfig()
 
 
@@ -425,54 +425,93 @@ inference_config = InferenceConfig()
 # model.keras_model.save_weights(model_path)
 
 # # # # ##### TESTING #####
-
+#
 MODEL_DIR = "models"
-# model_path = os.path.join(MODEL_DIR, "mask_rcnn_object_vs_background_0020.h5")
-model_path = "models/Good_models/Training_SAMS_dataset_LR-same-div-2-HYBRID-weights/SAMS_DATASET_TRAINING_REFERENCE.h5"
+# # model_path = os.path.join(MODEL_DIR, "mask_rcnn_object_vs_background_0020.h5")
+# model_path = "models/Good_models/Training_SAMS_dataset_LR-same-div-2-HYBRID-weights/SAMS_DATASET_TRAINING_REFERENCE.h5"
+#
+# model = modellib.MaskRCNN(mode="inference",
+#                            config=inference_config,
+#                            model_dir=MODEL_DIR)
+# model.load_weights(model_path, by_name=True)
+#
+# AP_sum = np.zeros(10)
+# # image_ids = random.choices(testing_dataset.image_ids, k=15)
+# image_ids = testing_dataset.image_ids
+# counter = 0
+# for image_id in image_ids:
+#      original_image, image_meta, gt_class_id, gt_bbox, gt_mask =\
+#          modellib.load_image_gt(testing_dataset, inference_config,
+#                                 image_id, use_mini_mask=False)
+#      # visualize.display_instances(original_image, gt_bbox, gt_mask, gt_class_id,
+#      #                        validating_dataset.class_names, figsize=(8, 8))
+#
+#
+#
+#
+#      # print(testing_dataset.image_info[image_id]['label_path'])
+#      results = model.detect([original_image], verbose=1)
+#      r = results[0]
+#      # image = testing_dataset.get_mask_overlay(original_image[:,:,0:3], r['masks'], r['scores'], 0.96)
+#      # # plt.imshow(image)
+#      # # plt.show()
+#      visualize.display_instances(original_image, r['rois'], r['masks'], r['class_ids'],
+#                                 testing_dataset.class_names, r['scores'],show_bbox=True, thresh = 0.95)
+#
+#
+#      pred_box = r['rois']
+#      pred_class_id = r['class_ids']
+#      pred_score = r['scores']
+#      pred_mask = r['masks']
+#
+#      mAP, AP = utils.compute_ap_range(gt_bbox, gt_class_id, gt_mask,
+#                           pred_box, pred_class_id, pred_score, pred_mask,
+#                           iou_thresholds=None, verbose=1)
+#      # if np.any(np.isnan(AP)):
+#      #     continue
+#      counter+=1
+#      # AP_sum += AP
+#
+# print ('######################### MEAN AP at different IOUs')
+# print (AP_sum/len(image_ids))
+# import code;
+# code.interact(local=dict(globals(), **locals()))
 
+import time
+from skimage.transform import rescale, resize
+mask_grasp_model_path = "models/Good_models/Training_SAMS_dataset_LR-same-div-2-HYBRID-weights/SAMS_DATASET_TRAINING_REFERENCE.h5"
 model = modellib.MaskRCNN(mode="inference",
                            config=inference_config,
                            model_dir=MODEL_DIR)
-model.load_weights(model_path, by_name=True)
+model.load_weights(mask_grasp_model_path, by_name=True)
 
-AP_sum = np.zeros(10)
-# image_ids = random.choices(testing_dataset.image_ids, k=15)
-image_ids = testing_dataset.image_ids
+dataset = testing_dataset
+image_directory = 'images_for_testing'
+image_list = os.listdir('images_for_testing')
 counter = 0
-for image_id in image_ids:
-     original_image, image_meta, gt_class_id, gt_bbox, gt_mask =\
-         modellib.load_image_gt(testing_dataset, inference_config,
-                                image_id, use_mini_mask=False)
-     # visualize.display_instances(original_image, gt_bbox, gt_mask, gt_class_id,
-     #                        validating_dataset.class_names, figsize=(8, 8))
+times = []
 
+for image in image_list:
+    if image == 'depth' or image =='results':
+        continue
+    image_path = os.path.join(image_directory, image)
+    depth_path = os.path.join(image_directory, 'depth', image.replace('rgb', 'depth').replace('.jpg', '.png'))
 
+    depth_image = skimage.io.imread(depth_path)
+    depth_scaled = np.interp(depth_image, (depth_image.min(), depth_image.max()), (0, 1)) * 255
+    original_image = np.zeros([480, 640, 4])
+    original_image[:, :, 0:3] = skimage.io.imread(image_path)
+    original_image[:, :, 3] = depth_scaled
+    original_image = original_image.astype('uint8')
 
+    original_image = (resize(original_image, [384, 384])*255).astype('uint8')
+    start = time.time()
+    results = model.detect([original_image], verbose=0)
+    end = time.time()
+    time_elapsed = end - start
+    if counter > 0:
+        times.append(time_elapsed)
+    counter +=1
 
-     # print(testing_dataset.image_info[image_id]['label_path'])
-     results = model.detect([original_image], verbose=1)
-     r = results[0]
-     # image = testing_dataset.get_mask_overlay(original_image[:,:,0:3], r['masks'], r['scores'], 0.96)
-     # # plt.imshow(image)
-     # # plt.show()
-     visualize.display_instances(original_image, r['rois'], r['masks'], r['class_ids'],
-                                testing_dataset.class_names, r['scores'],show_bbox=True, thresh = 0.95)
-
-
-     pred_box = r['rois']
-     pred_class_id = r['class_ids']
-     pred_score = r['scores']
-     pred_mask = r['masks']
-
-     mAP, AP = utils.compute_ap_range(gt_bbox, gt_class_id, gt_mask,
-                          pred_box, pred_class_id, pred_score, pred_mask,
-                          iou_thresholds=None, verbose=1)
-     # if np.any(np.isnan(AP)):
-     #     continue
-     counter+=1
-     # AP_sum += AP
-
-print ('######################### MEAN AP at different IOUs')
-print (AP_sum/len(image_ids))
-import code;
-code.interact(local=dict(globals(), **locals()))
+print ('Seconds per frame = ', np.mean(np.array(times)))
+import code; code.interact(local=dict(globals(), **locals()))
