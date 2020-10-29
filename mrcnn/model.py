@@ -4720,7 +4720,7 @@ class MaskRCNN():
                                      num_grasp_anchors=config.GRASP_ANCHORS_PER_ROI,
                                      angles=config.GRASP_ANCHOR_ANGLES)
 
-            grasp_class_logits, grasp_probs, grasp_bbox = build_grasp_regressor_and_classifier_graph(rois, mrcnn_feature_maps, input_image_meta,
+            grasp_class_logits, grasp_probs, grasp_bbox = build_new_grasping_graph(rois, mrcnn_feature_maps, input_image_meta,
                                                                                    config.GRASP_POOL_SIZE, config.NUM_CLASSES,
                                                                                    use_expanded_rois=config.USE_EXPANDED_ROIS,
                                                                                    rois_expand_factor=config.GRASP_ROI_EXPAND_FACTOR,
@@ -4792,6 +4792,7 @@ class MaskRCNN():
                                               config.NUM_CLASSES,
                                               train_bn=config.TRAIN_BN)
 
+            # build_grasp_regressor_and_classifier_graph
             grasp_class_logits, grasp_probs, grasp_bbox = build_new_grasping_graph(detection_boxes, mrcnn_feature_maps,
                                                                                    input_image_meta,
                                                                                    config.GRASP_POOL_SIZE,
