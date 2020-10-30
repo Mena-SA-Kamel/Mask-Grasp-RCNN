@@ -143,8 +143,8 @@ ax1.plot(epoch_numbers, val_grasp_losses, label='Validation Grasp loss')
 
 ax1.set(xlabel='Epochs', ylabel='Loss')
 ax1.legend()
-# ax1.set_xlim([-5, 500])
-# ax1.set_ylim([0.3, 0.70])
+ax1.set_xlim([-5, 500])
+ax1.set_ylim([0.65, 0.9])
 # ax1.axvspan(353, 600, color='g', alpha=0.5)
 # ax2.set(xlabel='Epochs', ylabel='Loss')
 

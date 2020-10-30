@@ -2386,7 +2386,7 @@ def cumpute_top_negative_losses_graph(inputs):
     negative_anchor_losses, N = tf.split(inputs, num_or_size_splits=2, axis=-1)
     N = tf.squeeze(N[0]) # N is just repeated to have the same shape as negative_anchor_losses, so just pick the first entry
     num_anchors = tf.cast(tf.shape(negative_anchor_losses)[0], dtype=tf.float32)
-    num_negatives = K.minimum(N * 3, num_anchors - N)
+    num_negatives = K.minimum(N * 1, num_anchors - N)
     num_negatives = tf.dtypes.cast(num_negatives, tf.int32)
     top_loss_per_row, top_loss_locations = tf.math.top_k(tf.squeeze(negative_anchor_losses), tf.squeeze(num_negatives), sorted=True)
     top_loss_per_row = tf.expand_dims(top_loss_per_row, axis=-1)
@@ -2435,7 +2435,6 @@ def grasp_loss_graph(config, target_bbox, target_class, bbox, class_logits, roi_
                                                                 from_logits=True)
 
         # Need to find the number of positive samples (N) in each ROI and select the top 3N negative samples with the highest loss
-
 
         N = tf.count_nonzero(positive_anchor_mask, axis=-1)
         N = K.cast(N, tf.int32)
@@ -2489,7 +2488,7 @@ def grasp_loss_graph(config, target_bbox, target_class, bbox, class_logits, roi_
 
         # Combined Loss
         num_positive_samples = tf.maximum(num_positive_samples, 1.0)
-        combined_loss = (((1/beta)*classification_loss) + total_regression_loss) / (4 * num_positive_samples)
+        combined_loss = (((1/beta)*classification_loss) + total_regression_loss) / (2 * num_positive_samples)
         total_grasp_loss = tf.add(total_grasp_loss, combined_loss)
 
     # return total_grasp_loss
