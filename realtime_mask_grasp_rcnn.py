@@ -61,8 +61,9 @@ inference_config = GraspMaskRCNNInferenceConfig()
 MODEL_DIR = "models"
 # mask_grasp_model_path = 'models/colab_result_id#1/mask_rcnn_grasp_and_mask_0152.h5'
 # mask_grasp_model_path = 'models/colab_result_id#1/mask_rcnn_grasp_and_mask_0040.h5'
-mask_grasp_model_path = 'models/colab_result_id#1/mask_rcnn_grasp_and_mask_0288.h5'
-
+# mask_grasp_model_path = 'models/colab_result_id#1/mask_rcnn_grasp_and_mask_0288.h5'
+# mask_grasp_model_path = 'models/colab_result_id#1/mask_rcnn_grasp_and_mask_0088.h5'
+mask_grasp_model_path = 'models/colab_result_id#1/attempt#32h_weights.h5'
 
 mask_grasp_model = modellib.MaskRCNN(mode="inference",
                            config=inference_config,
@@ -109,6 +110,7 @@ try:
         rgbd_image_resized = resize_frame(rgbd_image)
         results = mask_grasp_model.detect([rgbd_image_resized], verbose=0, task = mode)
         r = results[0]
+        print(r['scores'])
 
         # post_nms_predictions, pre_nms_predictions = dataset_object.refine_results(r, mask_grasp_model.anchors, model.config)
         color_image_to_display = depth_3_channel = cv2.cvtColor(rgbd_image_resized[:, :, 0:3].astype('uint8'),
@@ -126,12 +128,8 @@ try:
             # color = generate_random_color()
             color = (np.array(colors[j])*255).astype('uint8')
             color = (int(color[0]), int(color[1]), int(color[2]))
-            # centroid_color = np.array((int(centroid_color[0]), int(centroid_color[1]), int(centroid_color[2])))
 
-            expanded_rect = utils.expand_roi_by_percent(rect, percentage=inference_config.GRASP_ROI_EXPAND_FACTOR,
-                                                        image_shape=inference_config.IMAGE_SHAPE[:2])
-
-            expanded_rect_normalized = utils.norm_boxes(expanded_rect, inference_config.IMAGE_SHAPE[:2])
+            expanded_rect_normalized = utils.norm_boxes(rect, inference_config.IMAGE_SHAPE[:2])
             y1, x1, y2, x2 = expanded_rect_normalized
             w = abs(x2 - x1)
             h = abs(y2 - y1)
@@ -143,15 +141,18 @@ try:
                                                                pooled_feature_stride,
                                                                1,
                                                                inference_config.GRASP_ANCHOR_ANGLES,
-                                                               expanded_rect_normalized)
-            #
-            # post_nms_predictions, pre_nms_predictions = dataset_object.refine_results(probabilities=grasping_probs[j], deltas=grasping_deltas[j],anchors=grasping_anchors, config=inference_config)
+                                                               expanded_rect_normalized,
+                                                               inference_config)
             post_nms_predictions, top_box_probabilities, pre_nms_predictions, pre_nms_scores = dataset_object.refine_results(
-                grasping_probs[j], grasping_deltas[j], grasping_anchors, inference_config, filter_mode='prob')
+                grasping_probs[j], grasping_deltas[j],
+                grasping_anchors, inference_config, filter_mode='prob', nms=False)
             for i, rect in enumerate(pre_nms_predictions):
                 # rect = dataset_object.bbox_convert_to_four_vertices([rect])
                 rect = cv2.boxPoints(((rect[0], rect[1]), (rect[2], rect[3]), rect[4]))
-                grasp_rectangles_image = cv2.drawContours(color_image_to_display, [np.int0(rect)], 0, color, 2)
+                grasp_rectangles_image = cv2.drawContours(color_image_to_display, [np.int0(rect)], 0, (0,0,0), 1)
+                grasp_rectangles_image = cv2.drawContours(grasp_rectangles_image, [np.int0(rect[:2])], 0, color, 1)
+                grasp_rectangles_image = cv2.drawContours(grasp_rectangles_image, [np.int0(rect[2:])], 0, color, 1)
+
 
         depth_3_channel = cv2.cvtColor(rgbd_image_resized[:, :, 3].astype('uint8'), cv2.COLOR_GRAY2BGR)
         if plot_boxes:

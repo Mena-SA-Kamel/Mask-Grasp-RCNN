@@ -2386,7 +2386,7 @@ def cumpute_top_negative_losses_graph(inputs):
     negative_anchor_losses, N = tf.split(inputs, num_or_size_splits=2, axis=-1)
     N = tf.squeeze(N[0]) # N is just repeated to have the same shape as negative_anchor_losses, so just pick the first entry
     num_anchors = tf.cast(tf.shape(negative_anchor_losses)[0], dtype=tf.float32)
-    num_negatives = K.minimum(N * 1, num_anchors - N)
+    num_negatives = K.minimum(N * 3, num_anchors - N)
     num_negatives = tf.dtypes.cast(num_negatives, tf.int32)
     top_loss_per_row, top_loss_locations = tf.math.top_k(tf.squeeze(negative_anchor_losses), tf.squeeze(num_negatives), sorted=True)
     top_loss_per_row = tf.expand_dims(top_loss_per_row, axis=-1)
@@ -2439,10 +2439,6 @@ def grasp_loss_graph(config, target_bbox, target_class, bbox, class_logits, roi_
         N = tf.count_nonzero(positive_anchor_mask, axis=-1)
         N = K.cast(N, tf.int32)
         N = tf.expand_dims(N, axis=-1)
-        #
-        # N = tf.Print(N, [N],
-        #                             message="N=",
-        #                             summarize=-1)
 
         # Gather the negative anchor losses
         negative_indices = tf.where(K.equal(negative_anchor_mask, 1))
@@ -2456,7 +2452,6 @@ def grasp_loss_graph(config, target_bbox, target_class, bbox, class_logits, roi_
 
         N_repeats = tf.cast(tf.tile(N, [1, config.GRASP_ANCHORS_PER_ROI]), dtype=tf.float32)
         N_repeats = tf.expand_dims(N_repeats, axis=-1)
-
 
         top_negative_losses_sum = tf.cond(
             tf.greater(tf.shape(N)[0], 0),
@@ -2488,7 +2483,11 @@ def grasp_loss_graph(config, target_bbox, target_class, bbox, class_logits, roi_
 
         # Combined Loss
         num_positive_samples = tf.maximum(num_positive_samples, 1.0)
-        combined_loss = (((1/beta)*classification_loss) + total_regression_loss) / (2 * num_positive_samples)
+        # total_regression_loss/=num_positive_samples
+        # classification_loss/= num_positive_samples
+        # combined_loss = (((1/beta)*classification_loss) + total_regression_loss)
+        # change line in cumpute_top_negative_losses_graph
+        combined_loss = (((1/beta)*classification_loss) + total_regression_loss) / (4 * num_positive_samples)
         total_grasp_loss = tf.add(total_grasp_loss, combined_loss)
 
     # return total_grasp_loss
@@ -5260,8 +5259,8 @@ class MaskRCNN():
 
         if self.config.CYCLIC_LR:
             #Callbacks
-            clr_triangular = CyclicLR(base_lr=self.config.LEARNING_RATE / 15, max_lr=self.config.LEARNING_RATE*15,
-                                      step_size=self.config.STEPS_PER_EPOCH * 4, mode='triangular',
+            clr_triangular = CyclicLR(base_lr=self.config.LEARNING_RATE / 15, max_lr=self.config.LEARNING_RATE,
+                                      step_size=self.config.STEPS_PER_EPOCH * 8, mode='triangular',
                                       gamma=1., scale_fn=None, scale_mode='cycle')
             callbacks = [
                 clr_triangular,
