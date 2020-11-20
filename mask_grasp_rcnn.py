@@ -1276,8 +1276,7 @@ config = tf.ConfigProto()
 config.gpu_options.allow_growth = True
 sess = tf.Session(config=config)
 
-training_dataset = GraspMaskRCNNDataset()
-training_dataset.load_dataset(dataset_dir='cornell_grasping_dataset', augmentation=True)
+training_dataset = GraspMaskRCNNDataset()training_dataset.load_dataset(dataset_dir='cornell_grasping_dataset', augmentation=True)
 training_dataset.prepare()
 
 validating_dataset = GraspMaskRCNNDataset()
