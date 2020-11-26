@@ -46,6 +46,7 @@ def select_ROI(mouseX, mouseY, r):
     grasping_probs = r['grasp_probs']
     masks = r['masks']
     roi_scores = r['scores']
+    selection_success = False
     if mouseY + mouseX != 0:
         print('x = %d, y = %d' % (mouseX, mouseY))
         # Here we need to find the detected BBOX that contains <mouseX, mouseY>. then pass those bbox coords to
@@ -55,6 +56,7 @@ def select_ROI(mouseX, mouseY, r):
         x_condition = np.logical_and(x1 < mouseX, x2 > mouseX)
         selected_roi_ix = np.where(np.logical_and(x_condition, y_condition))[0]
         if selected_roi_ix.shape[0] > 0:
+            selection_success = True
             selected_roi = rois[selected_roi_ix[0]]
             # Case when the coordinates of the cursor lies in two bounding boxes, if that is the case, we choose the
             # box with the smaller area
@@ -71,7 +73,7 @@ def select_ROI(mouseX, mouseY, r):
             roi_scores = roi_scores[selected_roi_ix]
             print (masks.shape, roi_scores.shape, selected_roi_ix)
 
-    return rois, grasping_deltas, grasping_probs, masks, roi_scores
+    return rois, grasping_deltas, grasping_probs, masks, roi_scores, selection_success
 
 # Create a pipeline
 pipeline = rs.pipeline()
@@ -99,11 +101,9 @@ print("Depth Scale is: ", depth_scale)
 align_to = rs.stream.color
 align = rs.align(align_to)
 colorizer = rs.colorizer()
-frame_count = 0
+
 mode = "mask_grasp_rcnn"
-
 inference_config = GraspMaskRCNNInferenceConfig()
-
 MODEL_DIR = "models"
 mask_grasp_model_path = 'models/colab_result_id#1/MASK_GRASP_RCNN_MODEL.h5'
 mask_grasp_model = modellib.MaskRCNN(mode="inference",
@@ -114,11 +114,17 @@ dataset_object = GraspMaskRCNNDataset()
 
 start_seconds = 0
 current_seconds = 0
-
-for i in list(range(20)):
-    frames = pipeline.wait_for_frames()
+frame_count = 0
+detection_period = 120 # Detecting using Mask-Grasp R-CNN every 120 frames, ie every 2 seconds when running at 60 fps
+start_tracking = False
+tracking_bbox = []
+mode = 'initialization'
+num_tracked_frames = 0
+num_detected_frames = 0
 
 # Streaming loop
+for i in list(range(20)):
+    frames = pipeline.wait_for_frames()
 cv2.namedWindow('MASK-GRASP RCNN OUTPUT', cv2.WINDOW_AUTOSIZE)
 cv2.setMouseCallback('MASK-GRASP RCNN OUTPUT', onMouse)
 try:
@@ -139,59 +145,52 @@ try:
         rgb_image_resized = rgbd_image_resized[:, :, 0:3].astype('uint8')
         color_image_to_display = cv2.cvtColor(rgb_image_resized, cv2.COLOR_RGB2BGR)
 
-        # Running Mask-Grasp R-CNN on a frame
-        results = mask_grasp_model.detect([rgbd_image_resized], verbose=0, task = mode)[0]
-
-        # Capture input from the user about which object to interact with
-        rois, grasping_deltas, grasping_probs, masks, roi_scores = select_ROI(mouseX, mouseY, results)
-
-        masked_image, colors = dataset_object.get_mask_overlay(color_image_to_display, masks, roi_scores, threshold=0)
-
-        if mouseY + mouseX != 0:
+        # If tracking did not start, then display detections of the network to the user
+        if not start_tracking and num_detected_frames == 0:
+            # Running Mask-Grasp R-CNN on a frame
+            results = mask_grasp_model.detect([rgbd_image_resized], verbose=0, task = mode)[0]
+            # Capture input from the user about which object to interact with. If selection is successful, then we
+            # start tracking
+            rois, grasping_deltas, grasping_probs, masks, roi_scores, start_tracking = select_ROI(mouseX, mouseY, results)
+            masked_image, colors = dataset_object.get_mask_overlay(color_image_to_display, masks, roi_scores, threshold=0)
+            tracking_bbox = rois
             mouseX, mouseY = [0, 0]
-            # Plotting the selected ROI
-            for roi in rois:
-                y1, x1, y2, x2 = np.split(roi, indices_or_sections=4, axis=-1)
-                w = x2 - x1
-                h = y2 - y1
-                rect = cv2.boxPoints(((x1+ w/2, y1 + h/2), (w, h), 0))
-                cv2.drawContours(masked_image, [np.int0(rect)], 0, (0, 0, 0), 1)
-            # Since we are only using a single object tracker, we only initiate the tracker if there is 1 ROI selected
-            if rois.shape[0] == 1:
-                y1, x1, y2, x2 = np.split(rois, indices_or_sections=4, axis=-1)
-                # Tracker takes bbox in the form [x, y, w, h]
-                bbox_to_track = (x1, y1, x2 - x1, y2 - y1)
-                ok = tracker.init(color_image_to_display, bbox_to_track)
 
-        # Processing output from Mask Grasp R-CNN and plotting the results for the ROIs
-        for j, rect in enumerate(rois):
-            color = (np.array(colors[j])*255).astype('uint8')
-            color = (int(color[0]), int(color[1]), int(color[2]))
-            expanded_rect_normalized = utils.norm_boxes(rect, inference_config.IMAGE_SHAPE[:2])
-            y1, x1, y2, x2 = expanded_rect_normalized
-            w = abs(x2 - x1)
-            h = abs(y2 - y1)
-            ROI_shape = np.array([h, w])
-            pooled_feature_stride = np.array(ROI_shape/inference_config.GRASP_POOL_SIZE)#.astype('uint8')
-            grasping_anchors = utils.generate_grasping_anchors(inference_config.GRASP_ANCHOR_SIZE,
-                                                               inference_config.GRASP_ANCHOR_RATIOS,
-                                                               [inference_config.GRASP_POOL_SIZE, inference_config.GRASP_POOL_SIZE],
-                                                               pooled_feature_stride,
-                                                               1,
-                                                               inference_config.GRASP_ANCHOR_ANGLES,
-                                                               expanded_rect_normalized,
-                                                               inference_config)
-            post_nms_predictions, top_box_probabilities, pre_nms_predictions, pre_nms_scores = dataset_object.refine_results(
-                grasping_probs[j], grasping_deltas[j],
-                grasping_anchors, inference_config, filter_mode='prob', nms=False)
-            for i, rect in enumerate(pre_nms_predictions):
-                rect = cv2.boxPoints(((rect[0], rect[1]), (rect[2], rect[3]), rect[4]))
-                grasp_rectangles_image = cv2.drawContours(masked_image, [np.int0(rect)], 0, (0,0,0), 1)
-                grasp_rectangles_image = cv2.drawContours(grasp_rectangles_image, [np.int0(rect[:2])], 0, color, 1)
-                grasp_rectangles_image = cv2.drawContours(grasp_rectangles_image, [np.int0(rect[2:])], 0, color, 1)
+        if start_tracking and num_tracked_frames == 0:
+            y1, x1, y2, x2 = np.split(tracking_bbox, indices_or_sections=4, axis=-1)
+            # Tracker takes bbox in the form [x, y, w, h]
+            tracking_bbox = (x1, y1, x2 - x1, y2 - y1)
+            ok = tracker.init(color_image_to_display, tracking_bbox)
+            mode = 'tracking'
 
-        images = grasp_rectangles_image
+        if mode == 'tracking':
+            ok, tracking_bbox = tracker.update(color_image_to_display)
+            num_tracked_frames += 1
+            if num_tracked_frames > detection_period:
+                mode = 'detection'
+                num_tracked_frames = 0
+
+        if mode == 'detection':
+            rois, grasping_deltas, grasping_probs, masks, roi_scores, start_tracking = select_ROI(mouseX, mouseY, results)
+            masked_image, colors = dataset_object.get_mask_overlay(color_image_to_display, masks, roi_scores, threshold=0)
+            mode = 'tracking'
+            num_detected_frames += 1
+            # We need to reinstantiate the tracker with an updated ROI as predicted by Mask-Grasp R-CNN
+            # Need to calculate IOU between rois and tracking bbox
+            # First thing we need to convert tracking_bbox [x, y, w, h] -> [y1, x1, y2, x2]
+            x1, y1, w, h = np.split(tracking_bbox, indices_or_sections=4, axis=-1)
+            x2 = x1 + w
+            y2 = y1 + h
+            tracking_bbox = np.array([y1, x1, y2, x2])
+            iou = utils.compute_iou(tracking_bbox, rois)
+            tracking_bbox = rois[np.argmax(iou)]
+
+
+
+        # images = grasp_rectangles_image
+        images = masked_image
         cv2.imshow('MASK-GRASP RCNN OUTPUT', images)
+        frame_count += 1
         key = cv2.waitKey(1)
         if key & 0xFF == ord('q') or key == 27:
             cv2.destroyAllWindows()
@@ -202,8 +201,57 @@ finally:
 
 
 
-
-
+#
+# # Running Mask-Grasp R-CNN on a frame
+# results = mask_grasp_model.detect([rgbd_image_resized], verbose=0, task = mode)[0]
+#
+# # Capture input from the user about which object to interact with
+# rois, grasping_deltas, grasping_probs, masks, roi_scores = select_ROI(mouseX, mouseY, results)
+#
+# masked_image, colors = dataset_object.get_mask_overlay(color_image_to_display, masks, roi_scores, threshold=0)
+#
+# if mouseY + mouseX != 0:
+#     mouseX, mouseY = [0, 0]
+#     # Plotting the selected ROI
+#     for roi in rois:
+#         y1, x1, y2, x2 = np.split(roi, indices_or_sections=4, axis=-1)
+#         w = x2 - x1
+#         h = y2 - y1
+#         rect = cv2.boxPoints(((x1+ w/2, y1 + h/2), (w, h), 0))
+#         cv2.drawContours(masked_image, [np.int0(rect)], 0, (0, 0, 0), 1)
+#     # Since we are only using a single object tracker, we only initiate the tracker if there is 1 ROI selected
+#     if rois.shape[0] == 1:
+#         y1, x1, y2, x2 = np.split(rois, indices_or_sections=4, axis=-1)
+#         # Tracker takes bbox in the form [x, y, w, h]
+#         bbox_to_track = (x1, y1, x2 - x1, y2 - y1)
+#         ok = tracker.init(color_image_to_display, bbox_to_track)
+#
+# # Processing output from Mask Grasp R-CNN and plotting the results for the ROIs
+# for j, rect in enumerate(rois):
+#     color = (np.array(colors[j])*255).astype('uint8')
+#     color = (int(color[0]), int(color[1]), int(color[2]))
+#     expanded_rect_normalized = utils.norm_boxes(rect, inference_config.IMAGE_SHAPE[:2])
+#     y1, x1, y2, x2 = expanded_rect_normalized
+#     w = abs(x2 - x1)
+#     h = abs(y2 - y1)
+#     ROI_shape = np.array([h, w])
+#     pooled_feature_stride = np.array(ROI_shape/inference_config.GRASP_POOL_SIZE)#.astype('uint8')
+#     grasping_anchors = utils.generate_grasping_anchors(inference_config.GRASP_ANCHOR_SIZE,
+#                                                        inference_config.GRASP_ANCHOR_RATIOS,
+#                                                        [inference_config.GRASP_POOL_SIZE, inference_config.GRASP_POOL_SIZE],
+#                                                        pooled_feature_stride,
+#                                                        1,
+#                                                        inference_config.GRASP_ANCHOR_ANGLES,
+#                                                        expanded_rect_normalized,
+#                                                        inference_config)
+#     post_nms_predictions, top_box_probabilities, pre_nms_predictions, pre_nms_scores = dataset_object.refine_results(
+#         grasping_probs[j], grasping_deltas[j],
+#         grasping_anchors, inference_config, filter_mode='prob', nms=False)
+#     for i, rect in enumerate(pre_nms_predictions):
+#         rect = cv2.boxPoints(((rect[0], rect[1]), (rect[2], rect[3]), rect[4]))
+#         grasp_rectangles_image = cv2.drawContours(masked_image, [np.int0(rect)], 0, (0,0,0), 1)
+#         grasp_rectangles_image = cv2.drawContours(grasp_rectangles_image, [np.int0(rect[:2])], 0, color, 1)
+#         grasp_rectangles_image = cv2.drawContours(grasp_rectangles_image, [np.int0(rect[2:])], 0, color, 1)
 
 
 
