@@ -2176,7 +2176,7 @@ def fpn_grasp_graph(rois, feature_maps, image_meta,
 
 
 def build_fpn_mask_graph(rois, feature_maps, image_meta,
-                         pool_size, num_classes, train_bn=True):
+                         pool_size, num_classes, train_bn=True, bypass_mask_brach=False):
     """Builds the computation graph of the mask head of Feature Pyramid Network.
 
     rois: [batch, num_rois, (y1, x1, y2, x2)] Proposal boxes in normalized
@@ -2190,40 +2190,45 @@ def build_fpn_mask_graph(rois, feature_maps, image_meta,
 
     Returns: Masks [batch, num_rois, MASK_POOL_SIZE, MASK_POOL_SIZE, NUM_CLASSES]
     """
-    # ROI Pooling
-    # Shape: [batch, num_rois, MASK_POOL_SIZE, MASK_POOL_SIZE, channels]
-    x = PyramidROIAlign([pool_size, pool_size],
-                        name="roi_align_mask")([rois, image_meta] + feature_maps)
+    def generate_placeholder(ROIS):
+        return tf.ones([tf.shape(ROIS)[0], tf.shape(ROIS)[1], pool_size, pool_size, 2])
+    if bypass_mask_brach:
+        x = KL.Lambda(generate_placeholder)(rois)
+    else:
+        # ROI Pooling
+        # Shape: [batch, num_rois, MASK_POOL_SIZE, MASK_POOL_SIZE, channels]
+        x = PyramidROIAlign([pool_size, pool_size],
+                            name="roi_align_mask")([rois, image_meta] + feature_maps)
 
-    # Conv layers
-    x = KL.TimeDistributed(KL.Conv2D(256, (3, 3), padding="same"),
-                           name="mrcnn_mask_conv1")(x)
-    x = KL.TimeDistributed(BatchNorm(),
-                           name='mrcnn_mask_bn1')(x, training=train_bn)
-    x = KL.Activation('relu')(x)
+        # Conv layers
+        x = KL.TimeDistributed(KL.Conv2D(256, (3, 3), padding="same"),
+                               name="mrcnn_mask_conv1")(x)
+        x = KL.TimeDistributed(BatchNorm(),
+                               name='mrcnn_mask_bn1')(x, training=train_bn)
+        x = KL.Activation('relu')(x)
 
-    x = KL.TimeDistributed(KL.Conv2D(256, (3, 3), padding="same"),
-                           name="mrcnn_mask_conv2")(x)
-    x = KL.TimeDistributed(BatchNorm(),
-                           name='mrcnn_mask_bn2')(x, training=train_bn)
-    x = KL.Activation('relu')(x)
+        x = KL.TimeDistributed(KL.Conv2D(256, (3, 3), padding="same"),
+                               name="mrcnn_mask_conv2")(x)
+        x = KL.TimeDistributed(BatchNorm(),
+                               name='mrcnn_mask_bn2')(x, training=train_bn)
+        x = KL.Activation('relu')(x)
 
-    x = KL.TimeDistributed(KL.Conv2D(256, (3, 3), padding="same"),
-                           name="mrcnn_mask_conv3")(x)
-    x = KL.TimeDistributed(BatchNorm(),
-                           name='mrcnn_mask_bn3')(x, training=train_bn)
-    x = KL.Activation('relu')(x)
+        x = KL.TimeDistributed(KL.Conv2D(256, (3, 3), padding="same"),
+                               name="mrcnn_mask_conv3")(x)
+        x = KL.TimeDistributed(BatchNorm(),
+                               name='mrcnn_mask_bn3')(x, training=train_bn)
+        x = KL.Activation('relu')(x)
 
-    x = KL.TimeDistributed(KL.Conv2D(256, (3, 3), padding="same"),
-                           name="mrcnn_mask_conv4")(x)
-    x = KL.TimeDistributed(BatchNorm(),
-                           name='mrcnn_mask_bn4')(x, training=train_bn)
-    x = KL.Activation('relu')(x)
+        x = KL.TimeDistributed(KL.Conv2D(256, (3, 3), padding="same"),
+                               name="mrcnn_mask_conv4")(x)
+        x = KL.TimeDistributed(BatchNorm(),
+                               name='mrcnn_mask_bn4')(x, training=train_bn)
+        x = KL.Activation('relu')(x)
 
-    x = KL.TimeDistributed(KL.Conv2DTranspose(256, (2, 2), strides=2, activation="relu"),
-                           name="mrcnn_mask_deconv")(x)
-    x = KL.TimeDistributed(KL.Conv2D(num_classes, (1, 1), strides=1, activation="sigmoid"),
-                           name="mrcnn_mask")(x)
+        x = KL.TimeDistributed(KL.Conv2DTranspose(256, (2, 2), strides=2, activation="relu"),
+                               name="mrcnn_mask_deconv")(x)
+        x = KL.TimeDistributed(KL.Conv2D(num_classes, (1, 1), strides=1, activation="sigmoid"),
+                               name="mrcnn_mask")(x)
     return x
 
 
@@ -4771,6 +4776,7 @@ class MaskRCNN():
         else:
             # Network Heads
             # Proposal classifier and BBox regressor heads
+            bypass_mask_branch = config.USE_TRACKER_AS_ROI_SOURCE
             if config.USE_TRACKER_AS_ROI_SOURCE:
                 rois = input_tracker_roi
             else:
@@ -4796,7 +4802,8 @@ class MaskRCNN():
                                               input_image_meta,
                                               config.MASK_POOL_SIZE,
                                               config.NUM_CLASSES,
-                                              train_bn=config.TRAIN_BN)
+                                              train_bn=config.TRAIN_BN,
+                                              bypass_mask_brach=bypass_mask_branch)
 
             # build_grasp_regressor_and_classifier_graph
             grasp_class_logits, grasp_probs, grasp_bbox = build_new_grasping_graph(detection_boxes, mrcnn_feature_maps,
@@ -5418,7 +5425,6 @@ class MaskRCNN():
         """
         # How many detections do we have?
         # Detections array is padded with zeros. Find the first class_id == 0.
-
         zero_ix = np.where(detections[:, :4] == 0)[0]
         N = zero_ix[0] if zero_ix.shape[0] > 0 else detections.shape[0]
 
