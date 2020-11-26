@@ -2059,6 +2059,7 @@ def fpn_classifier_graph(rois, feature_maps, image_meta,
     """
     # ROI Pooling
     # Shape: [batch, num_rois, POOL_SIZE, POOL_SIZE, channels]
+
     x = PyramidROIAlign([pool_size, pool_size],
                         name="roi_align_classifier")([rois, image_meta] + feature_maps)
     # Two 1024 FC layers (implemented with Conv2D for consistency)
@@ -4652,36 +4653,41 @@ class MaskRCNN():
         else:
             anchors = input_anchors
 
-        # RPN Model
-        rpn = build_rpn_model(config.RPN_ANCHOR_STRIDE,
-                              len(config.RPN_ANCHOR_RATIOS), config.TOP_DOWN_PYRAMID_SIZE)
-        # Loop through pyramid layers
-        layer_outputs = []  # list of lists
-        for p in rpn_feature_maps:
-            layer_outputs.append(rpn([p]))
+        # Here, we want to have a way to toggle between using RPN to generate ROIs and specifying the ROIs directly,
+        # as predicted by a tracker
 
-        # Concatenate layer outputs
-        # Convert from list of lists of level outputs to list of lists
-        # of outputs across levels.
-        # e.g. [[a1, b1, c1], [a2, b2, c2]] => [[a1, a2], [b1, b2], [c1, c2]]
-        output_names = ["rpn_class_logits", "rpn_class", "rpn_bbox"]
-        outputs = list(zip(*layer_outputs))
-        outputs = [KL.Concatenate(axis=1, name=n)(list(o))
-                   for o, n in zip(outputs, output_names)]
+        if not config.USE_TRACKER_AS_ROI_SOURCE:
+            # RPN Model
+            rpn = build_rpn_model(config.RPN_ANCHOR_STRIDE,
+                                  len(config.RPN_ANCHOR_RATIOS), config.TOP_DOWN_PYRAMID_SIZE)
+            # Loop through pyramid layers
+            layer_outputs = []  # list of lists
+            for p in rpn_feature_maps:
+                layer_outputs.append(rpn([p]))
 
+            # Concatenate layer outputs
+            # Convert from list of lists of level outputs to list of lists
+            # of outputs across levels.
+            # e.g. [[a1, b1, c1], [a2, b2, c2]] => [[a1, a2], [b1, b2], [c1, c2]]
+            output_names = ["rpn_class_logits", "rpn_class", "rpn_bbox"]
+            outputs = list(zip(*layer_outputs))
+            outputs = [KL.Concatenate(axis=1, name=n)(list(o))
+                       for o, n in zip(outputs, output_names)]
 
-        rpn_class_logits, rpn_class, rpn_bbox = outputs
+            rpn_class_logits, rpn_class, rpn_bbox = outputs
 
-        # Generate proposals
-        # Proposals are [batch, N, (y1, x1, y2, x2)] in normalized coordinates
-        # and zero padded.
-        proposal_count = config.POST_NMS_ROIS_TRAINING if mode == "training"\
-            else config.POST_NMS_ROIS_INFERENCE
-        rpn_rois = ProposalLayer(
-            proposal_count=proposal_count,
-            nms_threshold=config.RPN_NMS_THRESHOLD,
-            name="ROI",
-            config=config)([rpn_class, rpn_bbox, anchors])
+            # Generate proposals
+            # Proposals are [batch, N, (y1, x1, y2, x2)] in normalized coordinates
+            # and zero padded.
+            proposal_count = config.POST_NMS_ROIS_TRAINING if mode == "training"\
+                else config.POST_NMS_ROIS_INFERENCE
+            rpn_rois = ProposalLayer(
+                proposal_count=proposal_count,
+                nms_threshold=config.RPN_NMS_THRESHOLD,
+                name="ROI",
+                config=config)([rpn_class, rpn_bbox, anchors])
+        else:
+            input_tracker_roi = KL.Input(shape=[1, 4], name="input_tracker_roi")
 
         if mode == "training":
             # Class ID mask to mark class IDs supported by the dataset the image
@@ -4765,8 +4771,12 @@ class MaskRCNN():
         else:
             # Network Heads
             # Proposal classifier and BBox regressor heads
+            if config.USE_TRACKER_AS_ROI_SOURCE:
+                rois = input_tracker_roi
+            else:
+                rois = rpn_rois
             mrcnn_class_logits, mrcnn_class, mrcnn_bbox =\
-                fpn_classifier_graph(rpn_rois, mrcnn_feature_maps, input_image_meta,
+                fpn_classifier_graph(rois, mrcnn_feature_maps, input_image_meta,
                                      config.POOL_SIZE, config.NUM_CLASSES,
                                      train_bn=config.TRAIN_BN,
                                      fc_layers_size=config.FPN_CLASSIF_FC_LAYERS_SIZE,
@@ -4774,13 +4784,11 @@ class MaskRCNN():
                                      num_grasp_anchors=config.GRASP_ANCHORS_PER_ROI,
                                      angles=config.GRASP_ANCHOR_ANGLES
                                      )
-
             # Detections
             # output is [batch, num_detections, (y1, x1, y2, x2, class_id, score)] in
             # normalized coordinates
-
             detections = DetectionLayer(config, name="mrcnn_detection")(
-                [rpn_rois, mrcnn_class, mrcnn_bbox, input_image_meta])
+                [rois, mrcnn_class, mrcnn_bbox, input_image_meta])
 
             # Create masks for detections
             detection_boxes = KL.Lambda(lambda x: x[..., :4])(detections)
@@ -4802,10 +4810,17 @@ class MaskRCNN():
                                                                                    num_grasp_anchors=config.GRASP_ANCHORS_PER_ROI,
                                                                                    angles=config.GRASP_ANCHOR_ANGLES)
 
-            model = KM.Model([input_image, input_image_meta, input_anchors],
-                             [detections, mrcnn_class, mrcnn_bbox,
-                                 mrcnn_mask, rpn_rois, rpn_class, rpn_bbox, grasp_class_logits, grasp_probs, grasp_bbox],
-                             name='mask_grasp_rcnn')
+            if config.USE_TRACKER_AS_ROI_SOURCE:
+                model = KM.Model([input_image, input_image_meta, input_anchors, input_tracker_roi],
+                                 [detections, mrcnn_class, mrcnn_bbox,
+                                     mrcnn_mask, grasp_class_logits, grasp_probs, grasp_bbox],
+                                 name='mask_grasp_rcnn')
+            else:
+                model = KM.Model([input_image, input_image_meta, input_anchors],
+                                 [detections, mrcnn_class, mrcnn_bbox,
+                                  mrcnn_mask, rois, rpn_class, rpn_bbox, grasp_class_logits, grasp_probs,
+                                  grasp_bbox],
+                                 name='mask_grasp_rcnn')
 
         # Add multi-GPU support.
         if config.GPU_COUNT > 1:
@@ -5517,7 +5532,7 @@ class MaskRCNN():
 
         return boxes, class_ids, scores, full_masks
 
-    def detect(self, images, verbose=0, task=''):
+    def detect(self, images, verbose=0, task='', tracker_rois=[]):
         """Runs the detection pipeline.
 
         images: List of images, potentially of different sizes.
@@ -5570,12 +5585,15 @@ class MaskRCNN():
                     "refinements": rpn_bbox,
                 })
         elif task == 'mask_grasp_rcnn':
-            detections, _, _, mrcnn_mask, _, _, _ , grasp_class_logits, grasp_probs, grasp_bbox= \
-                self.keras_model.predict([molded_images, image_metas, anchors], verbose=0)
+            if tracker_rois != []:
+                detections, _, _, mrcnn_mask, grasp_class_logits, grasp_probs, grasp_bbox= \
+                    self.keras_model.predict([molded_images, image_metas, anchors, tracker_rois], verbose=0)
+            else:
+                detections, _, _, mrcnn_mask, _, _, _, grasp_class_logits, grasp_probs, grasp_bbox = \
+                    self.keras_model.predict([molded_images, image_metas, anchors], verbose=0)
 
             results = []
             for i, image in enumerate(images):
-
                 final_rois, final_class_ids, final_scores, final_masks, final_grasp_bbox, final_grasp_probs= \
                     self.unmold_mask_grasp_detections(detections[i], mrcnn_mask[i],
                                            image.shape, molded_images[i].shape,

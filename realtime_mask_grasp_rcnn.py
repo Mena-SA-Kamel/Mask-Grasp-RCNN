@@ -63,7 +63,7 @@ MODEL_DIR = "models"
 # mask_grasp_model_path = 'models/colab_result_id#1/mask_rcnn_grasp_and_mask_0040.h5'
 # mask_grasp_model_path = 'models/colab_result_id#1/mask_rcnn_grasp_and_mask_0288.h5'
 # mask_grasp_model_path = 'models/colab_result_id#1/mask_rcnn_grasp_and_mask_0088.h5'
-mask_grasp_model_path = 'models/colab_result_id#1/attempt#32h_weights.h5'
+mask_grasp_model_path = 'models/colab_result_id#1/MASK_GRASP_RCNN_MODEL.h5'
 
 mask_grasp_model = modellib.MaskRCNN(mode="inference",
                            config=inference_config,
