@@ -4660,7 +4660,6 @@ class MaskRCNN():
 
         # Here, we want to have a way to toggle between using RPN to generate ROIs and specifying the ROIs directly,
         # as predicted by a tracker
-
         if not config.USE_TRACKER_AS_ROI_SOURCE:
             # RPN Model
             rpn = build_rpn_model(config.RPN_ANCHOR_STRIDE,
