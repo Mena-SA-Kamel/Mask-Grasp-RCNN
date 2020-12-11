@@ -2,6 +2,8 @@ import pyrealsense2 as rs
 import numpy as np
 import cv2
 import matplotlib.pyplot as plt
+from mpl_toolkits.mplot3d import Axes3D
+from pytransform3d.rotations import *
 import mrcnn.utils as utils
 import mrcnn.model as modellib
 from mask_grasp_rcnn import GraspMaskRCNNInferenceConfig, GraspMaskRCNNDataset
@@ -10,6 +12,34 @@ import random
 import time
 
 mouseX, mouseY = [0, 0]
+
+def compute_distance(P1, P2):
+    # This function computes the euclidean distance between two 3D points
+    return np.sqrt((P1[0] - P2[0]) ** 2 + (P1[1] - P2[1]) ** 2 + (P1[2] - P2[2]) ** 2)
+
+def generate_points_in_world_frame(real_width, real_height):
+    # This function generates the points in the world frame of reference
+    RW_P0 = [real_width/2, real_height/2, 0]
+    RW_P1 = [real_width/2, -real_height/2, 0]
+    RW_P2 = [-real_width/2, -real_height/2, 0]
+    RW_P3 = [-real_width/2, real_height/2, 0]
+    return [RW_P0, RW_P1, RW_P2, RW_P3]
+
+def de_project_point(intrinsics, depth_frame, point):
+    # This function deprojects point from the image plane to the camera frame of reference using camera intrinsic
+    # parameters
+    x, y = point
+    distance_to_point = depth_frame.as_depth_frame().get_distance(x, y)
+    de_projected_point = rs.rs2_deproject_pixel_to_point(intrinsics, [x, y], distance_to_point)
+    return de_projected_point
+
+def get_camera_frame_box_coords(intrinsics, depth_frame, box_vertices):
+    # This function deprojects the vertex points that make up the grasp box from the image plane to the camera frame
+    de_projected_points = []
+    for point in box_vertices:
+        de_projected_point = de_project_point(intrinsics, depth_frame, point)
+        de_projected_points.append(de_projected_point)
+    return np.array(de_projected_points)
 
 def generate_random_color():
     r = int(random.random()*255)
@@ -82,8 +112,8 @@ pipeline = rs.pipeline()
 # Create a config and configure the pipeline to stream
 # different resolutions of color and depth streams
 config = rs.config()
-config.enable_stream(rs.stream.depth, 640, 480, rs.format.z16, 6)
-config.enable_stream(rs.stream.color, 640, 480, rs.format.rgb8, 6)
+config.enable_stream(rs.stream.depth, 640, 480, rs.format.z16, 15)
+config.enable_stream(rs.stream.color, 640, 480, rs.format.rgb8, 15)
 
 # Start streaming
 profile = pipeline.start(config)
@@ -145,6 +175,11 @@ try:
         aligned_frames = align.process(frames)
         aligned_depth_frame = aligned_frames.get_depth_frame()  # aligned_depth_frame is a 640x480 depth image
         color_frame = aligned_frames.get_color_frame()
+        intrinsics = color_frame.profile.as_video_stream_profile().intrinsics
+        intrinsics_matrix = np.array([[intrinsics.fx, 0, intrinsics.ppx],
+                                      [0, intrinsics.fy, intrinsics.ppy],
+                                      [0, 0, 1]])
+
         hole_filling = rs.hole_filling_filter()
         aligned_depth_frame = hole_filling.process(aligned_depth_frame)
         if not aligned_depth_frame or not color_frame:
@@ -300,15 +335,81 @@ try:
                         grasping_anchors, inference_config, filter_mode='top_k', k=1, nms=False)
             color = (255, 0, 0)
             for i, rect in enumerate(pre_nms_predictions):
+                five_dim_box = rect
                 rect = cv2.boxPoints(((rect[0], rect[1]), (rect[2], rect[3]), rect[4]))
                 color_image_to_display = cv2.drawContours(color_image_to_display, [np.int0(rect)], 0, (0,0,0), 2)
                 color_image_to_display = cv2.drawContours(color_image_to_display, [np.int0(rect[:2])], 0, color, 2)
                 color_image_to_display = cv2.drawContours(color_image_to_display, [np.int0(rect[2:])], 0, color, 2)
                 if start_tracking:
                     # Here, rect specifies the vertices of the grasping box in image frame
-                    import code;
+                    rect_camera_frame = get_camera_frame_box_coords(intrinsics, aligned_depth_frame, rect)
+                    # rect_camera_frame = np.concatenate([rect_camera_frame, np.array([[0,0,0]])], axis = 0)
 
-                    code.interact(local=dict(globals(), **locals()))
+                    # Need to find the width and height of the bounding box in the world/ camera frames
+                    # real_width is the average of the distance between P1-P2 and P0-P3
+                    # real_height is the average of the distance between P0-P1 and P2-P3
+                    #           w
+                    # P2 ---------------------- P1
+                    # ||                        ||
+                    # ||            .           || h
+                    # ||          (0,0,0)       ||
+                    # P3 ---------------------- P0
+
+                    # rect[0] = np.dot(intrinsics_matrix, P0.reshape([3, 1]))
+                    P0 = rect_camera_frame[0]
+                    P1 = rect_camera_frame[1]
+                    P2 = rect_camera_frame[2]
+                    P3 = rect_camera_frame[3]
+
+                    real_width = np.mean([compute_distance(P1, P2), compute_distance(P0, P3)])
+                    real_height = np.mean([compute_distance(P0, P1), compute_distance(P2, P3)])
+                    print('Grasp Width: ', real_width, 'Grasp Height: ', real_height)
+
+                    # Defining real-world points corresponding to the grasping boxes
+                    RW_P0, RW_P1, RW_P2, RW_P3 = generate_points_in_world_frame(real_width, real_height)
+
+                    # Getting
+                    # Defining zero distortion coefficients
+                    dist_coef = np.zeros(4)
+                    image_points = rect.reshape([-1, 1, 2])
+                    object_points = np.array([P0, P1, P2, P3]).reshape([-1, 1, 3])
+
+                    # Cross calibration with EPnP to get the object pose with respect to the camera
+                    ret, rvec, tvec = cv2.solvePnP(object_points, image_points,
+                                                   intrinsics_matrix, dist_coef, None, None, False, cv2.SOLVEPNP_EPNP)
+
+                    rvec_matrix, jacobian = cv2.Rodrigues(rvec)
+
+                    object_pose = np.concatenate([rvec_matrix, tvec], axis=-1)
+                    # Validating the obtained matrix by transforming world point P0 to image frame
+                    world_point = RW_P0
+                    world_point.append(1)
+                    world_coords = np.array(world_point).reshape(4, 1)
+                    re_projected_point = np.dot(intrinsics_matrix, np.dot(object_pose, world_coords))
+                    re_projected_point = re_projected_point/re_projected_point[-1]
+
+                    ax = plot_basis(R=np.eye(3), ax_s=2)
+                    ax.view_init(elev=-35, azim=-80)
+
+                    ax = plot_basis(ax=ax, R=rvec_matrix, p = tvec.squeeze(), ax_s=3); plt.show()
+
+
+
+
+
+                    # # Plotting 3D Points
+                    # xs, ys, zs = np.split(rect_camera_frame, indices_or_sections=3, axis=-1)
+                    # fig = plt.figure()
+                    # ax = fig.add_subplot(111, projection='3d')
+                    # ax.set_xlabel('X')
+                    # ax.set_ylabel('Y')
+                    # ax.set_zlabel('Z')
+                    # ax.scatter(xs, ys, zs)
+                    # ax.set_xlim(0, 1)
+                    # ax.set_ylim(0, 1)
+                    # ax.set_zlim(0, 1)
+                    # plt.show()
+
 
         images = color_image_to_display
 

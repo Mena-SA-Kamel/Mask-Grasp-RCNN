@@ -4,9 +4,9 @@
 import numpy as np
 
 # Defining joint variables (Angles must be in radians)
-theta_1 = 0 * (np.pi / 180)    # This joint defines the pronation/suppination motion
-theta_2 = 90 * (np.pi / 180)    # This joint defines the radial/ulnar rotation
-theta_3 = 0 * (np.pi / 180)    # This joint defines the wrist flexion/extension
+theta_1 = 90 * (np.pi / 180)    # This joint defines the pronation/suppination motion
+theta_2 = 0 * (np.pi / 180)    # This joint defines the radial/ulnar rotation
+theta_3 = 90 * (np.pi / 180)    # This joint defines the wrist flexion/extension
 
 # Defining link lengths (Measurements are in cm)
 a1 = 6
