@@ -12,8 +12,30 @@ import random
 import time
 import open3d as o3d
 from matplotlib.path import Path
+from scipy.spatial.transform import Rotation as R
 
 mouseX, mouseY = [0, 0]
+
+def compute_real_box_size(intrinsics, aligned_depth_frame, rect):
+    rect_camera_frame = get_camera_frame_box_coords(intrinsics, aligned_depth_frame, rect)
+    # Need to find the width and height of the bounding box in the world/ camera frames
+    # real_width is the average of the distance between P1-P2 and P0-P3
+    # real_height is the average of the distance between P0-P1 and P2-P3
+    #           w
+    # P2 ---------------------- P1
+    # ||                        ||
+    # ||            .           || h
+    # ||          (0,0,0)       ||
+    # P3 ---------------------- P0
+    P0 = rect_camera_frame[0]
+    P1 = rect_camera_frame[1]
+    P2 = rect_camera_frame[2]
+    P3 = rect_camera_frame[3]
+
+    real_width = np.mean([compute_distance(P1, P2), compute_distance(P0, P3)])
+    real_height = np.mean([compute_distance(P0, P1), compute_distance(P2, P3)])
+    print('Grasp Width: ', real_width, 'Grasp Height: ', real_height)
+    return [real_width, real_height]
 
 def generate_pointcloud_from_rgbd(color_image, depth_image):
     # Creates an Open3D point cloud
@@ -41,11 +63,10 @@ def compute_distance(P1, P2):
 
 def generate_points_in_world_frame(real_width, real_height):
     # This function generates the points in the world frame of reference
-    RW_P0 = [real_width/2, real_height/2, 0]
-    RW_P1 = [real_width/2, -real_height/2, 0]
-    RW_P2 = [-real_width/2, -real_height/2, 0]
-    RW_P3 = [-real_width/2, real_height/2, 0]
-    return [RW_P0, RW_P1, RW_P2, RW_P3]
+    return np.array([[real_width/2, -real_height/2, 0],
+                    [real_width/2, real_height/2, 0],
+                    [-real_width/2, real_height/2, 0],
+                    [-real_width/2, -real_height/2, 0]])
 
 def de_project_point(intrinsics, depth_frame, point):
     # This function deprojects point from the image plane to the camera frame of reference using camera intrinsic
@@ -383,7 +404,6 @@ try:
                 color_image_to_display = cv2.drawContours(color_image_to_display, [np.int0(rect[2:])], 0, color, 2)
                 if start_tracking:
                     # Need to crop out the point cloud at the oriented rectangle bounds
-
                     # Create a mask to specify the region to extract the surface normals from. Based on Lenz et al.,
                     # the approach vector is estimated as the surface normal calculated at the point of minumum depth in
                     # the central one third (horizontally) of the rectangle
@@ -393,12 +413,11 @@ try:
                     x = int(x + (image_width - center_crop_size) // 2)
                     y = int(y + (image_height - center_crop_size) // 2)
 
+                    rect = cv2.boxPoints(((x, y), (w, h), theta))
                     extraction_mask_vertices = cv2.boxPoints(((x, y), (w, h/3), theta))
                     grasp_box_mask = generate_mask_from_polygon([image_height, image_width, 3], extraction_mask_vertices)
 
                     # Masking the color and depth frames with the grasp_box_mask
-                    # masked_color = resize_frame(color_image) * np.repeat(grasp_box_mask[...,None],3,axis=2)
-                    # masked_depth = resize_frame(np.expand_dims(depth_image, -1)) * grasp_box_mask
                     masked_color = color_image * np.repeat(grasp_box_mask[...,None],3,axis=2)
                     masked_depth = depth_image * grasp_box_mask
 
@@ -408,14 +427,18 @@ try:
                     pcd.orient_normals_towards_camera_location()
 
                     normals = np.array(pcd.normals)
-                    o3d.visualization.draw_geometries([pcd])
+                    # o3d.visualization.draw_geometries([pcd])
 
                     points = np.array(pcd.points)
+
+                    # Finding the point with the minumum depth
                     min_depth_ix = np.argmin(points[:, -1])
                     approach_vector = normals[min_depth_ix]
                     min_depth_point = points[min_depth_ix]
+
+                    # Getting the XYZ coordinates of the grasping box center <x, y>
                     box_center = de_project_point(intrinsics, aligned_depth_frame, [x, y])
-                    #
+
                     # # Plotting 3D Points
                     # xs, ys, zs = np.split(points, indices_or_sections=3, axis=-1)
                     # fig = plt.figure()
@@ -440,12 +463,12 @@ try:
                     #           normals[:,0], normals[:,1], normals[:,2], length=0.005, color='g')
                     # plt.show()
 
+                    #Visualization
                     # Generating a point cloud by open3D
                     pcd_full_image = generate_pointcloud_from_rgbd(color_image, depth_image)
-                    # pcd_full_image.transform([[1, 0, 0, 0], [0, -1, 0, 0], [0, 0, -1, 0], [0, 0, 0, 1]])
-                    # o3d.visualization.draw_geometries([pcd_full_image])
                     points = np.array(pcd_full_image.points)
 
+                    # Plotting approach vector on the point cloud
                     approach_vector_points = [box_center, box_center+(approach_vector*0.2)]
                     lines = [[0, 1]]
                     colors = [[1, 0, 0] for i in range(len(lines))]
@@ -453,10 +476,57 @@ try:
                     line_set.points = o3d.utility.Vector3dVector(approach_vector_points)
                     line_set.lines = o3d.utility.Vector2iVector(lines)
                     line_set.colors = o3d.utility.Vector3dVector(colors)
-                    o3d.visualization.draw_geometries([pcd_full_image, line_set])
 
-                    print('Approach vector orientation relative to camera coordinates: \n',
-                          o3d.geometry.get_rotation_matrix_from_xyz(approach_vector))
+                    print(theta)
+                    theta = -theta * (np.pi / 180)
+                    V = approach_vector
+                    q = np.array([V[0]*np.sin(theta/2), V[1]*np.sin(theta/2), V[2]*np.sin(theta/2), np.cos(theta/2)])
+                    approach_vector_orientation = R.from_quat(q).as_matrix()
+                    # Equivalent form
+                    approach_vector_orientation = o3d.geometry.get_rotation_matrix_from_axis_angle(theta*V)
+
+                    print('Approach vector orientation relative to camera coordinates: \n', approach_vector_orientation)
+
+                    real_width, real_height = compute_real_box_size(intrinsics, aligned_depth_frame, rect)
+
+                    box_vert_obj_frame = generate_points_in_world_frame(real_width, real_height)
+                    # Rotation about the Z axis of the surface normal
+
+                    r_z = np.array([[np.cos(theta), -np.sin(theta), 0],
+                                    [np.sin(theta), np.cos(theta), 0],
+                                    [0, 0, 1]])
+
+                    rotated_points = np.dot(r_z, box_vert_obj_frame.T).T
+                    HTM_camera_to_object = np.concatenate([approach_vector_orientation, np.expand_dims(box_center, -1)], axis=-1)
+                    HTM_camera_to_object = np.concatenate([HTM_camera_to_object, np.array([[0, 0, 0, 1]])], axis=0)
+                    rotated_points = np.concatenate([rotated_points, np.ones((4, 1))], axis=-1)
+                    rotated_points_camera_frame = np.dot(HTM_camera_to_object, rotated_points.T)
+
+                    # Plotting the grasp box on the point cloud
+                    # grasp_box_points = rotated_points_camera_frame.T[:,:3].tolist()
+                    rect_camera_frame = get_camera_frame_box_coords(intrinsics, aligned_depth_frame, rect)
+                    grasp_box_points = rect_camera_frame.tolist()
+                    lines = [[0, 1], [2, 3]]
+                    colors = [[0, 0, 1] for i in range(len(lines))]
+                    grasp_box = o3d.geometry.LineSet()
+                    grasp_box.points = o3d.utility.Vector3dVector(grasp_box_points)
+                    grasp_box.lines = o3d.utility.Vector2iVector(lines)
+                    grasp_box.colors = o3d.utility.Vector3dVector(colors)
+
+                    lines = [[1, 2], [3, 0]]
+                    colors = [[0, 0, 0] for i in range(len(lines))]
+                    grasp_box_2 = o3d.geometry.LineSet()
+                    grasp_box_2.points = o3d.utility.Vector3dVector(grasp_box_points)
+                    grasp_box_2.lines = o3d.utility.Vector2iVector(lines)
+                    grasp_box_2.colors = o3d.utility.Vector3dVector(colors)
+
+                    object_frame = o3d.geometry.TriangleMesh.create_coordinate_frame(size=0.15, origin=box_center)
+                    object_frame.rotate(approach_vector_orientation)
+
+                    camera_frame = o3d.geometry.TriangleMesh.create_coordinate_frame(size=0.05, origin=box_center)
+
+                    o3d.visualization.draw_geometries([pcd_full_image, line_set, grasp_box_2, grasp_box, object_frame, camera_frame])
+
 
 
 
