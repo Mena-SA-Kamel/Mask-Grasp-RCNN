@@ -12,7 +12,7 @@ import random
 import time
 import open3d as o3d
 from matplotlib.path import Path
-from scipy.spatial.transform import Rotation as R
+import serial
 
 mouseX, mouseY = [0, 0]
 
@@ -157,6 +157,90 @@ def select_ROI(mouseX, mouseY, r):
 
     return rois, grasping_deltas, grasping_probs, masks, roi_scores, selection_success
 
+def derive_motor_angles(orientation_matrix, dataset_object):
+    # Defining joint home positions
+    ps = 0
+    fe = 0
+    ru = 0
+
+    c = orientation_matrix[0, -1]
+    f = orientation_matrix[1, -1]
+    g, h, i = orientation_matrix[2].tolist()
+
+    s2 = i
+    c2 = np.sqrt(1 - s2 ** 2)
+    c2 = np.maximum(0.0001, c2)
+    s1 = f / c2
+    c1 = c / c2
+    # s3 = -h / c2
+    # c3 = g / c2
+    # Accounting for hand pose pointing downward
+    s3 = g / c2
+    c3 = h / c2
+
+    theta_1 = np.arctan2(s1, c1) / (np.pi / 180)
+    theta_2 = np.arctan2(s2, c2) / (np.pi / 180)
+    theta_3 = np.arctan2(s3, c3) / (np.pi / 180)
+
+    theta_1 += ps
+    theta_2 += ru
+    theta_3 += fe
+
+    theta_1 = dataset_object.wrap_angle_around_90(np.array([theta_1]))[0]
+    theta_2 = dataset_object.wrap_angle_around_90(np.array([theta_2]))[0]
+    theta_3 = dataset_object.wrap_angle_around_90(np.array([theta_3]))[0]
+    print('Theta 1 - Pronation/ Supination: ', theta_1,
+          '\nTheta 2 - Ulnar/ Radial: ', theta_2,
+          '\nTheta 3 - Flexion/Extension: ', theta_3)
+
+    return [theta_1, theta_2, theta_3]
+
+def orient_wrist(theta1, theta2, theta3):
+    # This function takes the joint angles, theta1, theta2, theta3, for
+    # pronate/supinate, ulnar/radial, and flexion/extension, respectively.
+
+    # Joint center positions as an 8 bit integer
+    ps_home = 100
+    ur_home = 170
+    fe_home = 162
+
+    # Defining the physical joint limits
+    pronate_supinate_limit = [-43, 90]
+    ulnar_radial_limit = [-13, 21]
+    flexion_extension_limit = [-42, 30]
+
+    # Clipping angles to the physical joint limits
+    theta1 = np.minimum(theta1, pronate_supinate_limit[1])
+    theta1 = np.maximum(theta1, pronate_supinate_limit[0])
+    theta2 = np.minimum(theta2, ulnar_radial_limit[1])
+    theta2 = np.maximum(theta2, ulnar_radial_limit[0])
+    theta3 = np.minimum(theta3, flexion_extension_limit[1])
+    theta3 = np.maximum(theta3, flexion_extension_limit[0])
+
+    if np.sign(theta1) == 1:
+        joint1 = np.interp(theta1, (0, pronate_supinate_limit[1]), (ps_home, 255))
+    else:
+        joint1 = np.interp(theta1, (pronate_supinate_limit[0], 0), (0, ps_home))
+
+    if np.sign(theta2) == 1:
+        joint2 = np.interp(theta2, (0, ulnar_radial_limit[1]), (ur_home, 0))
+    else:
+        joint2 = np.interp(theta2, (ulnar_radial_limit[0], 0), (255, ur_home))
+
+    if np.sign(theta3) == 1:
+        joint3 = np.interp(theta3, (0, flexion_extension_limit[1]), (fe_home, 255))
+    else:
+        joint3 = np.interp(theta3, (flexion_extension_limit[0], 0), (0, fe_home))
+
+    joint_output = np.array([joint1, joint2, joint3]).astype('uint8')
+
+    print('Clipped values: ', theta1, theta2, theta3)
+    print('Output values: ', joint_output)
+    return joint_output
+
+
+
+
 # Create a pipeline
 pipeline = rs.pipeline()
 
@@ -169,6 +253,9 @@ fps = 15
 config = rs.config()
 config.enable_stream(rs.stream.depth, image_width, image_height, rs.format.z16, fps)
 config.enable_stream(rs.stream.color, image_width, image_height, rs.format.rgb8, fps)
+
+# Starting serial link to robot arm
+ser = serial.Serial('COM6', 115200, timeout=1)
 
 # Start streaming
 profile = pipeline.start(config)
@@ -413,7 +500,7 @@ try:
                     x = int(x + (image_width - center_crop_size) // 2)
                     y = int(y + (image_height - center_crop_size) // 2)
 
-                    rect = cv2.boxPoints(((x, y), (w, h), theta))
+                    rect_vertices = cv2.boxPoints(((x, y), (w, h), theta))
                     extraction_mask_vertices = cv2.boxPoints(((x, y), (w, h/3), theta))
                     grasp_box_mask = generate_mask_from_polygon([image_height, image_width, 3], extraction_mask_vertices)
 
@@ -425,10 +512,7 @@ try:
                     pcd = generate_pointcloud_from_rgbd(masked_color, masked_depth)
                     pcd.estimate_normals(search_param=o3d.geometry.KDTreeSearchParamHybrid(radius=0.2, max_nn=50))
                     pcd.orient_normals_towards_camera_location()
-
                     normals = np.array(pcd.normals)
-                    # o3d.visualization.draw_geometries([pcd])
-
                     points = np.array(pcd.points)
 
                     # Finding the point with the minumum depth
@@ -436,40 +520,19 @@ try:
                     approach_vector = normals[min_depth_ix]
                     min_depth_point = points[min_depth_ix]
 
+                    # Approach vector needs to be pointing in the opposite direction
+                    approach_vector = -1 * approach_vector
+
                     # Getting the XYZ coordinates of the grasping box center <x, y>
                     box_center = de_project_point(intrinsics, aligned_depth_frame, [x, y])
 
-                    # # Plotting 3D Points
-                    # xs, ys, zs = np.split(points, indices_or_sections=3, axis=-1)
-                    # fig = plt.figure()
-                    # ax = fig.add_subplot(111, projection='3d')
-                    # ax.set_xlabel('X')
-                    # ax.set_ylabel('Y')
-                    # ax.set_zlabel('Z')
-                    #
-                    # max_range = np.array([xs.max() - xs.min(), ys.max() - ys.min(), zs.max() - zs.min()]).max() / 2.0
-                    # mid_x = (xs.max() + xs.min()) * 0.5
-                    # mid_y = (ys.max() + ys.min()) * 0.5
-                    # mid_z = (zs.max() + zs.min()) * 0.5
-                    # ax.set_xlim(mid_x - max_range, mid_x + max_range)
-                    # ax.set_ylim(mid_y - max_range, mid_y + max_range)
-                    # ax.set_zlim(mid_z - max_range, mid_z + max_range)
-                    # ax.scatter(xs, ys, zs)
-                    # ax.scatter(min_depth_point[0], min_depth_point[1], min_depth_point[2], c='r')
-                    # ax.scatter(0,0,0, c='k')
-                    # ax.quiver(box_center[0], box_center[1], box_center[2],
-                    #           approach_vector[0], approach_vector[1], approach_vector[2], length=0.03, color='r')
-                    # ax.quiver(points[:,0], points[:,1], points[:,2],
-                    #           normals[:,0], normals[:,1], normals[:,2], length=0.005, color='g')
-                    # plt.show()
-
-                    #Visualization
+                    #### Visualization
                     # Generating a point cloud by open3D
                     pcd_full_image = generate_pointcloud_from_rgbd(color_image, depth_image)
                     points = np.array(pcd_full_image.points)
 
                     # Plotting approach vector on the point cloud
-                    approach_vector_points = [box_center, box_center+(approach_vector*0.2)]
+                    approach_vector_points = [box_center, box_center + (approach_vector*0.2)]
                     lines = [[0, 1]]
                     colors = [[1, 0, 0] for i in range(len(lines))]
                     line_set = o3d.geometry.LineSet()
@@ -477,21 +540,38 @@ try:
                     line_set.lines = o3d.utility.Vector2iVector(lines)
                     line_set.colors = o3d.utility.Vector3dVector(colors)
 
-                    print(theta)
-                    theta = -theta * (np.pi / 180)
+                    theta = dataset_object.wrap_angle_around_90(np.array([theta]))[0]
+                    print('Angle in the image plane: ', theta, 'degrees')
+                    theta = -theta * (np.pi / 180) # network outputs positive angles in bottom right quadrant
                     V = approach_vector
-                    q = np.array([V[0]*np.sin(theta/2), V[1]*np.sin(theta/2), V[2]*np.sin(theta/2), np.cos(theta/2)])
-                    approach_vector_orientation = R.from_quat(q).as_matrix()
+                    # q = np.array([V[0]*np.sin(theta/2), V[1]*np.sin(theta/2), V[2]*np.sin(theta/2), np.cos(theta/2)])
+                    # approach_vector_orientation = R.from_quat(q).as_matrix()
                     # Equivalent form
-                    approach_vector_orientation = o3d.geometry.get_rotation_matrix_from_axis_angle(theta*V)
+
+                    # vy = np.array([0, 1, 0])
+                    # vz = approach_vector
+                    # vx = np.cross(vy, vz)
+
+                    vz = approach_vector
+                    vx = np.array([1, 0, 0])
+                    vy = np.cross(vz, vx)
+                    vx = vx.reshape([3, 1])
+                    vy = vy.reshape([3, 1])
+                    vz = vz.reshape([3, 1])
+                    V = np.concatenate([vx, vy, vz], axis=-1)
+                    rotation_z = np.array([[np.cos(-theta), -np.sin(-theta), 0],
+                                           [np.sin(-theta),  np.cos(-theta), 0],
+                                           [0            ,              0, 1]])
+
+                    approach_vector_orientation = np.dot(V, rotation_z)
+                    # approach_vector_orientation = o3d.geometry.get_rotation_matrix_from_axis_angle(theta*V)
 
                     print('Approach vector orientation relative to camera coordinates: \n', approach_vector_orientation)
 
-                    real_width, real_height = compute_real_box_size(intrinsics, aligned_depth_frame, rect)
-
+                    real_width, real_height = compute_real_box_size(intrinsics, aligned_depth_frame, rect_vertices)
                     box_vert_obj_frame = generate_points_in_world_frame(real_width, real_height)
-                    # Rotation about the Z axis of the surface normal
 
+                    # Rotation about the Z axis of the surface normal
                     r_z = np.array([[np.cos(theta), -np.sin(theta), 0],
                                     [np.sin(theta), np.cos(theta), 0],
                                     [0, 0, 1]])
@@ -504,7 +584,7 @@ try:
 
                     # Plotting the grasp box on the point cloud
                     # grasp_box_points = rotated_points_camera_frame.T[:,:3].tolist()
-                    rect_camera_frame = get_camera_frame_box_coords(intrinsics, aligned_depth_frame, rect)
+                    rect_camera_frame = get_camera_frame_box_coords(intrinsics, aligned_depth_frame, rect_vertices)
                     grasp_box_points = rect_camera_frame.tolist()
                     lines = [[0, 1], [2, 3]]
                     colors = [[0, 0, 1] for i in range(len(lines))]
@@ -525,12 +605,24 @@ try:
 
                     camera_frame = o3d.geometry.TriangleMesh.create_coordinate_frame(size=0.05, origin=box_center)
 
-                    # o3d.visualization.draw_geometries([pcd_full_image, line_set, grasp_box_2, grasp_box, object_frame, camera_frame])
+                    o3d.visualization.draw_geometries([pcd_full_image, line_set, grasp_box_2, grasp_box, object_frame, camera_frame])
 
+                    # theta1 : pronate/supinate
+                    # theta2 : ulnar/radial
+                    # theta3 : flexion/extension
+                    camera_angle = -70 * (np.pi / 180)
+                    r_x = np.array([[1,                    0,                     0],
+                                    [0, np.cos(camera_angle), -np.sin(camera_angle)],
+                                    [0, np.sin(camera_angle), np.cos(camera_angle)]])
+                    r_x_inverse = np.linalg.inv(r_x)
+                    vector = np.dot(approach_vector_orientation, r_x_inverse)
 
+                    theta1, theta2, theta3 = derive_motor_angles(vector, dataset_object)
+                    joint1, joint2, joint3 = orient_wrist(theta1, theta2, theta3).tolist()
+                    string_command = 'w %d %d %d' % (joint3, joint2, joint1)
+                    import code;
 
-
-
+                    code.interact(local=dict(globals(), **locals()))
 
         images = color_image_to_display
 
