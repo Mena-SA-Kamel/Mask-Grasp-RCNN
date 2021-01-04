@@ -157,6 +157,48 @@ def select_ROI(mouseX, mouseY, r):
 
     return rois, grasping_deltas, grasping_probs, masks, roi_scores, selection_success
 
+
+def derive_motor_angles_v2(orientation_matrix, dataset_object):
+    # Defining joint home positions
+    ps = 0
+    fe = 0
+    ru = 0
+
+    a = orientation_matrix[0, 0]
+    d = orientation_matrix[1, 0]
+    g, h, i = orientation_matrix[2].tolist()
+
+    s2 = g
+    c2 = np.sqrt(1 - s2 ** 2)
+    c2 = np.maximum(0.0001, c2)
+
+    s1 = d / c2
+    c1 = a / c2
+
+    s3 = h / c2
+    c3 = i / c2
+    # Accounting for hand pose pointing downward
+    # s3 = g / c2
+    # c3 = h / c2
+
+    theta_1 = np.arctan2(s1, c1) / (np.pi / 180)
+    theta_2 = np.arctan2(s2, c2) / (np.pi / 180)
+    theta_3 = np.arctan2(s3, c3) / (np.pi / 180)
+
+    theta_1 += ps
+    theta_2 += ru
+    theta_3 += fe
+
+    theta_1 = dataset_object.wrap_angle_around_90(np.array([theta_1]))[0]
+    theta_2 = dataset_object.wrap_angle_around_90(np.array([theta_2]))[0]
+    theta_3 = dataset_object.wrap_angle_around_90(np.array([theta_3]))[0]
+    print('Theta 1 - Pronation/ Supination: ', theta_1,
+          '\nTheta 2 - Ulnar/ Radial: ', theta_2,
+          '\nTheta 3 - Flexion/Extension: ', theta_3)
+
+    return [theta_1, theta_2, theta_3]
+
+
 def derive_motor_angles(orientation_matrix, dataset_object):
     # Defining joint home positions
     ps = 0
@@ -172,11 +214,12 @@ def derive_motor_angles(orientation_matrix, dataset_object):
     c2 = np.maximum(0.0001, c2)
     s1 = f / c2
     c1 = c / c2
-    # s3 = -h / c2
-    # c3 = g / c2
+
+    s3 = -h / c2
+    c3 = g / c2
     # Accounting for hand pose pointing downward
-    s3 = g / c2
-    c3 = h / c2
+    # s3 = g / c2
+    # c3 = h / c2
 
     theta_1 = np.arctan2(s1, c1) / (np.pi / 180)
     theta_2 = np.arctan2(s2, c2) / (np.pi / 180)
@@ -542,28 +585,32 @@ try:
 
                     theta = dataset_object.wrap_angle_around_90(np.array([theta]))[0]
                     print('Angle in the image plane: ', theta, 'degrees')
-                    theta = -theta * (np.pi / 180) # network outputs positive angles in bottom right quadrant
+                    theta = theta * (np.pi / 180) # network outputs positive angles in bottom right quadrant
                     V = approach_vector
                     # q = np.array([V[0]*np.sin(theta/2), V[1]*np.sin(theta/2), V[2]*np.sin(theta/2), np.cos(theta/2)])
                     # approach_vector_orientation = R.from_quat(q).as_matrix()
                     # Equivalent form
 
-                    # vy = np.array([0, 1, 0])
-                    # vz = approach_vector
-                    # vx = np.cross(vy, vz)
+                    vy = np.array([0, 1, 0])
+                    vz = approach_vector
+                    vx = np.cross(vy, vz)
 
                     vz = approach_vector
                     vx = np.array([1, 0, 0])
+                    # need to get the projection of vx onto the approach vector (normal)
+                    proj_n_vx = (np.dot(vx, approach_vector)/(np.linalg.norm(approach_vector)**2)) * approach_vector
+                    vx = vx - proj_n_vx
                     vy = np.cross(vz, vx)
                     vx = vx.reshape([3, 1])
                     vy = vy.reshape([3, 1])
                     vz = vz.reshape([3, 1])
                     V = np.concatenate([vx, vy, vz], axis=-1)
-                    rotation_z = np.array([[np.cos(-theta), -np.sin(-theta), 0],
-                                           [np.sin(-theta),  np.cos(-theta), 0],
+                    rotation_z = np.array([[np.cos(theta), -np.sin(theta), 0],
+                                           [np.sin(theta),  np.cos(theta), 0],
                                            [0            ,              0, 1]])
 
                     approach_vector_orientation = np.dot(V, rotation_z)
+
                     # approach_vector_orientation = o3d.geometry.get_rotation_matrix_from_axis_angle(theta*V)
 
                     print('Approach vector orientation relative to camera coordinates: \n', approach_vector_orientation)
@@ -615,9 +662,9 @@ try:
                                     [0, np.cos(camera_angle), -np.sin(camera_angle)],
                                     [0, np.sin(camera_angle), np.cos(camera_angle)]])
                     r_x_inverse = np.linalg.inv(r_x)
-                    vector = np.dot(approach_vector_orientation, r_x_inverse)
+                    vector = np.dot(approach_vector_orientation, r_x)
 
-                    theta1, theta2, theta3 = derive_motor_angles(vector, dataset_object)
+                    theta1, theta2, theta3 = derive_motor_angles_v2(vector, dataset_object)
                     joint1, joint2, joint3 = orient_wrist(theta1, theta2, theta3).tolist()
                     string_command = 'w %d %d %d' % (joint3, joint2, joint1)
                     import code;
