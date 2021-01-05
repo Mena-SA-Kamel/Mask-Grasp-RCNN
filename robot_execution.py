@@ -13,6 +13,7 @@ import time
 import open3d as o3d
 from matplotlib.path import Path
 import serial
+import time
 
 mouseX, mouseY = [0, 0]
 
@@ -172,22 +173,35 @@ def derive_motor_angles_v2(orientation_matrix, dataset_object):
     c2 = np.sqrt(1 - s2 ** 2)
     c2 = np.maximum(0.0001, c2)
 
+    # # V3
     s1 = d / c2
     c1 = a / c2
-
-    s3 = h / c2
-    c3 = i / c2
-    # Accounting for hand pose pointing downward
+    c3 = -h / c2
+    s3 = i / c2
+    # V2
+    # s1 = d / c2
+    # c1 = a / c2
+    # s3 = h / c2
+    # c3 = i / c2
+    # Accounting for hand pose pointing downward (V0)
     # s3 = g / c2
     # c3 = h / c2
 
     theta_1 = np.arctan2(s1, c1) / (np.pi / 180)
     theta_2 = np.arctan2(s2, c2) / (np.pi / 180)
     theta_3 = np.arctan2(s3, c3) / (np.pi / 180)
+    print('\nBEFORE CORRECTION: Theta 1 - Pronation/ Supination: ', theta_1,
+          '\nTheta 2 - Ulnar/ Radial: ', theta_2,
+          '\nTheta 3 - Flexion/Extension: ', theta_3,
+          '################\n')
+    theta_1 -= ps
+    theta_2 -= ru
+    theta_3 -= fe
 
-    theta_1 += ps
-    theta_2 += ru
-    theta_3 += fe
+    print('\nBEFORE Wrapping: Theta 1 - Pronation/ Supination: ', theta_1,
+          '\nTheta 2 - Ulnar/ Radial: ', theta_2,
+          '\nTheta 3 - Flexion/Extension: ', theta_3,
+          '################\n')
 
     theta_1 = dataset_object.wrap_angle_around_90(np.array([theta_1]))[0]
     theta_2 = dataset_object.wrap_angle_around_90(np.array([theta_2]))[0]
@@ -198,6 +212,145 @@ def derive_motor_angles_v2(orientation_matrix, dataset_object):
 
     return [theta_1, theta_2, theta_3]
 
+def derive_motor_angles_v8(orientation_matrix):
+    a = orientation_matrix[0, 0]
+    b = orientation_matrix[1, 0]
+    c = orientation_matrix[2, 0]
+    d = orientation_matrix[2, 1]
+    e = orientation_matrix[2, 2]
+
+    s2 = c
+    c2 = np.sqrt(1 - s2 ** 2)
+    c2 = np.maximum(0.0001, c2)
+    s1 = b / c2
+    c1 = a / c2
+    s3 = d / c2
+    c3 = e / c2
+
+    theta_1 = np.arctan2(s1, c1) / (np.pi / 180)
+    theta_2 = np.arctan2(s2, c2) / (np.pi / 180)
+    theta_3 = np.arctan2(s3, c3) / (np.pi / 180)
+
+    theta_1 = dataset_object.wrap_angle_around_90(np.array([theta_1]))[0]
+    theta_2 = dataset_object.wrap_angle_around_90(np.array([theta_2]))[0]
+    theta_3 = dataset_object.wrap_angle_around_90(np.array([theta_3]))[0]
+    print('Theta 1 - Pronation/ Supination: ', theta_1,
+          '\nTheta 2 - Ulnar/ Radial: ', theta_2,
+          '\nTheta 3 - Flexion/Extension: ', theta_3)
+
+    return [theta_1, theta_2, theta_3]
+
+def derive_motor_angles_v6(orientation_matrix):
+    a = orientation_matrix[0, 0]
+    b = orientation_matrix[1, 0]
+    c = orientation_matrix[2, 0]
+    d = orientation_matrix[2, 1]
+    e = orientation_matrix[2, 2]
+
+    s2 = c
+    c2 = np.sqrt(1 - s2 ** 2)
+    c2 = np.maximum(0.0001, c2)
+    s1 = b / c2
+    c1 = a / c2
+    s3 = e / c2
+    c3 = -d / c2
+
+    theta_1 = np.arctan2(s1, c1) / (np.pi / 180)
+    theta_2 = np.arctan2(s2, c2) / (np.pi / 180)
+    theta_3 = np.arctan2(s3, c3) / (np.pi / 180)
+
+    theta_1 = dataset_object.wrap_angle_around_90(np.array([theta_1]))[0]
+    theta_2 = dataset_object.wrap_angle_around_90(np.array([theta_2]))[0]
+    theta_3 = dataset_object.wrap_angle_around_90(np.array([theta_3]))[0]
+    print('Theta 1 - Pronation/ Supination: ', theta_1,
+          '\nTheta 2 - Ulnar/ Radial: ', theta_2,
+          '\nTheta 3 - Flexion/Extension: ', theta_3)
+
+    return [theta_1, theta_2, theta_3]
+
+def derive_motor_angles_v7(orientation_matrix):
+    a = orientation_matrix[0, 1]
+    b = orientation_matrix[1, 1]
+    c = orientation_matrix[2, 1]
+    d = orientation_matrix[2, 0]
+    e = orientation_matrix[2, 2]
+
+    s2 = -c
+    c2 = np.sqrt(1 - s2 ** 2)
+    c2 = np.maximum(0.0001, c2)
+    s1 = -b / c2
+    c1 = -a / c2
+    s3 = e / c2
+    c3 = -d / c2
+
+    theta_1 = np.arctan2(s1, c1) / (np.pi / 180)
+    theta_2 = np.arctan2(s2, c2) / (np.pi / 180)
+    theta_3 = np.arctan2(s3, c3) / (np.pi / 180)
+
+    theta_1 = dataset_object.wrap_angle_around_90(np.array([theta_1]))[0]
+    theta_2 = dataset_object.wrap_angle_around_90(np.array([theta_2]))[0]
+    theta_3 = dataset_object.wrap_angle_around_90(np.array([theta_3]))[0]
+    print('Theta 1 - Pronation/ Supination: ', theta_1,
+          '\nTheta 2 - Ulnar/ Radial: ', theta_2,
+          '\nTheta 3 - Flexion/Extension: ', theta_3)
+
+    return [theta_1, theta_2, theta_3]
+
+def derive_motor_angles_v5(orientation_matrix):
+    a = orientation_matrix[0, 1]
+    b = orientation_matrix[1, 1]
+    c = orientation_matrix[2, 1]
+    d = orientation_matrix[2, 0]
+    e = orientation_matrix[2, 2]
+
+    s2 = c
+    c2 = np.sqrt(1 - s2 ** 2)
+    c2 = np.maximum(0.0001, c2)
+    s1 = b / c2
+    c1 = a / c2
+    s3 = e / c2
+    c3 = d / c2
+
+    theta_1 = np.arctan2(s1, c1) / (np.pi / 180)
+    theta_2 = np.arctan2(s2, c2) / (np.pi / 180)
+    theta_3 = np.arctan2(s3, c3) / (np.pi / 180)
+
+    theta_1 = dataset_object.wrap_angle_around_90(np.array([theta_1]))[0]
+    theta_2 = dataset_object.wrap_angle_around_90(np.array([theta_2]))[0]
+    theta_3 = dataset_object.wrap_angle_around_90(np.array([theta_3]))[0]
+    print('Theta 1 - Pronation/ Supination: ', theta_1,
+          '\nTheta 2 - Ulnar/ Radial: ', theta_2,
+          '\nTheta 3 - Flexion/Extension: ', theta_3)
+
+    return [theta_1, theta_2, theta_3]
+
+def derive_motor_angles_v4(orientation_matrix):
+    a = orientation_matrix[0, 0]
+    b = orientation_matrix[1, 0]
+    c = orientation_matrix[2, 0]
+    d = orientation_matrix[2, 1]
+    e = orientation_matrix[2, 2]
+
+    s2 = c
+    c2 = np.sqrt(1 - s2 ** 2)
+    c2 = np.maximum(0.0001, c2)
+    s1 = b / c2
+    c1 = a / c2
+    s3 = e / c2
+    c3 = -d / c2
+
+    theta_1 = np.arctan2(s1, c1) / (np.pi / 180)
+    theta_2 = np.arctan2(s2, c2) / (np.pi / 180)
+    theta_3 = np.arctan2(s3, c3) / (np.pi / 180)
+
+    theta_1 = dataset_object.wrap_angle_around_90(np.array([theta_1]))[0]
+    theta_2 = dataset_object.wrap_angle_around_90(np.array([theta_2]))[0]
+    theta_3 = dataset_object.wrap_angle_around_90(np.array([theta_3]))[0]
+    print('Theta 1 - Pronation/ Supination: ', theta_1,
+          '\nTheta 2 - Ulnar/ Radial: ', theta_2,
+          '\nTheta 3 - Flexion/Extension: ', theta_3)
+
+    return [theta_1, theta_2, theta_3]
 
 def derive_motor_angles(orientation_matrix, dataset_object):
     # Defining joint home positions
@@ -299,6 +452,11 @@ config.enable_stream(rs.stream.color, image_width, image_height, rs.format.rgb8,
 
 # Starting serial link to robot arm
 ser = serial.Serial('COM6', 115200, timeout=1)
+ser.write(b'h')
+time.sleep(3)
+ser.write(b'j 0 400')
+time.sleep(3)
+ser.write(b'j 3 800')
 
 # Start streaming
 profile = pipeline.start(config)
@@ -664,12 +822,15 @@ try:
                     r_x_inverse = np.linalg.inv(r_x)
                     vector = np.dot(approach_vector_orientation, r_x)
 
-                    theta1, theta2, theta3 = derive_motor_angles_v2(vector, dataset_object)
+                    theta1, theta2, theta3 = derive_motor_angles_v4(vector)
                     joint1, joint2, joint3 = orient_wrist(theta1, theta2, theta3).tolist()
                     string_command = 'w %d %d %d' % (joint3, joint2, joint1)
+
+
                     import code;
 
                     code.interact(local=dict(globals(), **locals()))
+                    ser.write(string_command.encode())
 
         images = color_image_to_display
 
