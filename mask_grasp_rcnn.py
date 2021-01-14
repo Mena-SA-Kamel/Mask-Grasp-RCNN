@@ -827,9 +827,10 @@ class GraspMaskRCNNDataset(Dataset):
 
     def wrap_angle_around_90(self, angles):
         angles %= 360
-        angles[np.logical_and((angles >= 90), (angles < 180))] -= 180
+        angles[np.logical_and((angles > 90), (angles < 180))] -= 180
         theta_bet_180_270 = angles[np.logical_and((angles >= 180), (angles < 270))]
-        angles[np.logical_and((angles >= 180), (angles < 270))] = 180 - theta_bet_180_270
+        # angles[np.logical_and((angles >= 180), (angles < 270))] = 180 - theta_bet_180_270
+        angles[np.logical_and((angles >= 180), (angles < 270))] = theta_bet_180_270 - 180
         angles[np.logical_and((angles >= 270), (angles < 360))] -= 360
         return angles
 
