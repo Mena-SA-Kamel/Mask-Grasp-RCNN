@@ -14,13 +14,16 @@ from PIL import Image
 from scipy.signal import butter, lfilter, freqz
 import matplotlib.pyplot as plt
 import time
+from scipy.spatial.transform import Rotation as R
 # plt.style.use('ggplot')
 
-def live_plotter(x_vec, acc_history, gyro_history, axes_objects, identifier='', pause_time=0.1):
+def live_plotter(x_vec, acc_history, gyro_history, system_history, axes_objects, identifier='', pause_time=0.1):
     acc_x, acc_y, acc_z = np.split(acc_history, indices_or_sections=3, axis=0)
     gyro_x, gyro_y, gyro_z = np.split(gyro_history, indices_or_sections=3, axis=0)
+    system_x, system_y, system_z = np.split(system_history, indices_or_sections=3, axis=0)
     ax = axes_objects[0]
-    line1, line2, line3, line4, line5, line6 = axes_objects
+    line1, line2, line3, line4, line5, line6, line7, line8, line9 = axes_objects
+    # line1, line2, line3= axes_objects
     #SOURCE: https://github.com/makerportal/pylive
     if ax == []:
         # this is the call to matplotlib that allows dynamic plotting
@@ -34,28 +37,34 @@ def live_plotter(x_vec, acc_history, gyro_history, axes_objects, identifier='', 
         line4, = ax.plot(x_vec, gyro_x.squeeze(), '-o', alpha=0.8, label='Gyro - X')
         line5, = ax.plot(x_vec, gyro_y.squeeze(), '-o', alpha=0.8, label='Gyro - Y')
         line6, = ax.plot(x_vec, gyro_z.squeeze(), '-o', alpha=0.8, label='Gyro - Z')
+        line7, = ax.plot(x_vec, system_x.squeeze(), '-o', alpha=0.8, label='Complementary Filter - X')
+        line8, = ax.plot(x_vec, system_y.squeeze(), '-o', alpha=0.8, label='Complementary Filter - Y')
+        line9, = ax.plot(x_vec, system_z.squeeze(), '-o', alpha=0.8, label='Complementary Filter - Z')
         # update plot label/title
-        plt.ylabel('Acceleration (m/s^2)')
+        plt.ylabel('Theta (degrees)')
         plt.title('RealSense IMU Output'.format(identifier))
         plt.legend()
         plt.show()
 
     # after the figure, axis, and line are created, we only need to update the y-data
-    line1.set_ydata(acc_x)
-    line2.set_ydata(acc_y)
-    line3.set_ydata(acc_z)
-    line4.set_ydata(gyro_x)
+    # line1.set_ydata(acc_x)
+    # line2.set_ydata(acc_y)
+    # line3.set_ydata(acc_z)
+    # line4.set_ydata(gyro_x)
     line5.set_ydata(gyro_y)
-    line6.set_ydata(gyro_z)
+    # line6.set_ydata(gyro_z)
+    line7.set_ydata(system_x)
+    # line8.set_ydata(system_y)
+    line9.set_ydata(system_z)
     # # adjust limits if new data goes beyond bounds
     # if np.min(acc_y) <= line1.axes.get_ylim()[0] or np.max(acc_y) >= line1.axes.get_ylim()[1]:
     #     plt.ylim([np.min(acc_y) - np.std(acc_y), np.max(acc_y) + np.std(acc_y)])
     # this pauses the data so the figure/axis can catch up - the amount of pause can be altered above
     plt.pause(pause_time)
-    plt.ylim([-20, 20])
+    plt.ylim([-100, 100])
 
     # return line so we can update it again in the next iteration
-    return [line1, line2, line3, line4, line5, line6]
+    return [line1, line2, line3, line4, line5, line6, line7, line8, line9]
 
 def gyro_data(gyro):
     return np.asarray([gyro.x, gyro.y, gyro.z])
@@ -70,7 +79,7 @@ def butterworth_filter(type, data, cutoff, fs, order=5):
     y = lfilter(b, a, data)
     return y
 
-def capture_frames(num_frames, x_vals, acc_history, gyro_history, axes_objects, frame_rate=15):
+def capture_frames(num_frames, x_vals, acc_history, gyro_history, system_history, axes_objects, frame_rate=15):
     pipeline = rs.pipeline()
     config = rs.config()
     config.enable_stream(rs.stream.depth, 640, 480, rs.format.z16, frame_rate)
@@ -87,6 +96,12 @@ def capture_frames(num_frames, x_vals, acc_history, gyro_history, axes_objects, 
     align = rs.align(align_to)
     colorizer = rs.colorizer()
     frame_count = 0
+    gyro_previous = np.array([0, 0, 0])
+    gyro_y_data = []
+    frame_number = 0
+    num_frames = 2000
+    t_sum = 0
+
 
     for i in list(range(frame_rate*5)):
         frames = pipeline.wait_for_frames()
@@ -114,7 +129,7 @@ def capture_frames(num_frames, x_vals, acc_history, gyro_history, axes_objects, 
             current_millis = int(round(time.time() * 1000))
             if frame_count == 0:
                 previous_millis = current_millis
-            time_step = current_millis - previous_millis
+            dt = (current_millis - previous_millis)/1000
             previous_millis = current_millis
 
             # Getting IMU readings
@@ -124,20 +139,67 @@ def capture_frames(num_frames, x_vals, acc_history, gyro_history, axes_objects, 
             color_image_to_display = cv2.cvtColor(color_image, cv2.COLOR_RGB2BGR)
             cv2.imshow('RealSense Feed', color_image_to_display)
 
-            acc_history[:, -1] = accel
-            gyro_history[:, -1] = gyro
+            ax,ay,az = np.split(accel/9.8, indices_or_sections=3)
+            acc_theta_x = np.arctan2(ay, -az)*(180/np.pi)
+            acc_theta_y = np.arctan2(-az, ax)*(180/np.pi)
+            acc_theta_z = np.arctan2(ay, ax)*(180/np.pi)
+            # acc_current = np.array([-np.atan2()])
 
-            axes_objects = live_plotter(x_vals, acc_history, gyro_history, axes_objects)
+            # gyro_current = [thetax, thetay, thetaz]
+            gyro_current = gyro_previous + gyro*dt
+
+            acc_history[:, -1] = np.array([-(acc_theta_x+90), acc_theta_y, -(acc_theta_z+90)]).squeeze()
+            gyro_history[:, -1] = gyro_current * (180 / np.pi)
+
+            # Correcting for Gyro drift in the Y axis
+            m, b = [-0.17627199, 0.82105868]
+            gyro_history[1, -1] = gyro_history[1, -1] - (m*t_sum + b)
+
+            # complementary filter
+            G = 0.90
+            A = 0.1
+            system_history[:, -1] = (system_history[:, -2] + (gyro*dt* (180 / np.pi)))*G + acc_history[:, -1]*A
+
+            # Complementary filter does not work well with predicting yaw. Instead, replace those values with just
+            # raw gyro data
+            # Trying a high pass filter on the gyro = 1 - LPF
+            lpf_gyro = 0.95*gyro_history[:, -2] + 0.05*(gyro_history[:, -1])
+            # gyro_y_data.append(np.concatenate([gyro_history[:, -1], [dt]]))
+            # hpf_gyro = 1 - lpf_gyro[1]
+
+
+            system_history[1, -1] = gyro_history[1, -1]
+
+            theta_x, theta_y, theta_z = np.split(system_history[:, -1], indices_or_sections=3)
+
+            r = R.from_euler('zyx', [
+                [theta_z, 0, 0],
+                [0, theta_y, 0],
+                [0, 0, theta_x]], degrees=True).as_matrix()
+            rotation_matrix = np.dot(np.dot(r[0], r[1]), r[2])
+
+            # This is the hard coded rotation as a -70 degree rotation about the x axis
+            # array([[1., 0., 0.],
+            #        [0., 0.34202014, 0.93969262],
+            #        [0., -0.93969262, 0.34202014]])
+
+            print(rotation_matrix, '\n')
+
+            axes_objects = live_plotter(x_vals, acc_history, gyro_history, system_history, axes_objects)
 
             acc_history = np.append(acc_history[:, 1:], np.zeros([3, 1]), axis=-1)
             gyro_history = np.append(gyro_history[:, 1:], np.zeros([3, 1]), axis=-1)
+            system_history = np.append(system_history[:, 1:], np.zeros([3, 1]), axis=-1)
+
+            gyro_previous = gyro_current
+            frame_number += 1
+            t_sum += dt
+            if frame_number == num_frames:
+                data = np.array(gyro_y_data)
+                np.savetxt('output_data_gyro.txt', data)
+                break
 
 
-            # y_vec stores the readings of the signal
-
-            # acc_data[-1] = accel[-1]
-            # line1 = live_plotter(x_vals, acc_data, line1)
-            # y_vals = np.append(y_vals[1:], 0.0)
             frame_count = frame_count + 1
             key = cv2.waitKey(1)
             if key & 0xFF == ord('q') or key == 27:
@@ -157,107 +219,35 @@ acc_z = np.zeros(len(x_vals))
 gyro_x = np.zeros(len(x_vals))
 gyro_y = np.zeros(len(x_vals))
 gyro_z = np.zeros(len(x_vals))
-axes_objects = [[], [], [], [], [], []]
+system_x = np.zeros(len(x_vals))
+system_y = np.zeros(len(x_vals))
+system_z = np.zeros(len(x_vals))
+axes_objects = [[], [], [], [], [], [], [], [], []]
+# axes_objects = [[], [], []]
 
 acc_history = np.array([acc_x, acc_y, acc_z])
 gyro_history = np.array([gyro_x, gyro_y, gyro_z])
+system_history = np.array([system_x, system_y, system_z])
+
+capture_frames(-1, x_vals, acc_history, gyro_history, system_history, axes_objects, frame_rate)
 
 
-
-capture_frames(-1, x_vals, acc_history, gyro_history, axes_objects, frame_rate)
-
-# accelerometer_filtered = np.zeros(accelerometer_data.shape)
-# for i in list(range(3)):
-#     accelerometer_data[:, i] = accelerometer_data[:,i] - np.mean(accelerometer_data[:,i])
-#     noise = np.logical_or((accelerometer_data[:, i] < -1 * noise_level), (accelerometer_data[:, i] > noise_level))
-#     accelerometer_data[:, i] = accelerometer_data[:, i] * noise
-#     max_unfiltered = np.max(accelerometer_data[:, i])
-#     if np.sum(accelerometer_data[:, i]) == 0:
-#         accelerometer_filtered[:, i] = accelerometer_data[:, i]
-#         continue
-#     # accelerometer_filtered[:,i] = butterworth_filter('low',accelerometer_data[:,i],1.5,15)
-#     # accelerometer_filtered[:, i] = butterworth_filter('high',accelerometer_filtered[:,i],0.01,15)
-#     accelerometer_filtered[:, i] = accelerometer_data[:, i]
-#     max_filtered = np.max(accelerometer_filtered[:, i])
-#     scale = max_unfiltered / max_filtered
-#     accelerometer_filtered[:, i] = accelerometer_filtered[:, i] * scale
+# Correcting fot Gyro drift in the Y axis
+# gyro_noise_data = np.loadtxt('output_data_gyro.txt')
+# gx, gy, gz, dt = np.split(gyro_noise_data, indices_or_sections=4, axis=-1)
+# time_stamps = np.cumsum(dt)
+# m,b = np.polyfit(time_stamps, gy, 1)
 #
+# recon_gy = (m*time_stamps+b).reshape(-1, 1)
 #
-# # t = 1/frame_rate
-# t = time_data/1000
-# dx = np.zeros(num_frames)
-# dy = np.zeros(num_frames)
-# dz = np.zeros(num_frames)
-# vx = 0; vy = 0; vz = 0
-# i = 0
-# for a in accelerometer_filtered:
-#     dx[i] = (vx*t[i]) + 0.5*a[0]*t[i]**2
-#     dy[i] = (vy*t[i]) + 0.5*a[1]*t[i]**2
-#     dz[i] = (vz*t[i]) + 0.5*a[2]*t[i]**2
-#     vx = vx + a[0] * t[i]
-#     vy = vy + a[1] * t[i]
-#     vz = vz + a[2] * t[i]
-#     i = i + 1
-#
-# time = list(range(num_frames))
-# x_acceleration = accelerometer_data[:,0]
-# y_acceleration = accelerometer_data[:,1]
-# z_acceleration = accelerometer_data[:,2]
-# fig4,(ax1, ax2, ax3) = plt.subplots(3,1, sharex='col', sharey='row')
-# ax1.plot(time, x_acceleration); ax1.set_title('x'); ax1.set_ylim(np.min(accelerometer_data)-0.05, np.max(accelerometer_data)+0.05)
-# ax2.plot(time, y_acceleration);ax2.set_title('y'); ax2.set_ylim(np.min(accelerometer_data)-0.05, np.max(accelerometer_data)+0.05)
-# ax3.plot(time, z_acceleration);ax3.set_title('z'); ax3.set_ylim(np.min(accelerometer_data)-0.05, np.max(accelerometer_data)+0.05)
-# ax1.set_title('A unfiltered')
-# fig4.show()
-#
-# from scipy.fftpack import fft
-# N = num_frames
-# T = 1/frame_rate
-# x = np.linspace(0.0, N*T, N)
-# x_acceleration_fft = fft(x_acceleration)
-# x_acceleration_filtered_fft = fft(accelerometer_filtered[:,0])
-# xf = np.linspace(0.0, 1.0/(2.0*T), int(N/2))
-#
-# fig5,(ax1) = plt.subplots(1,1)
-# ax1.plot(xf, 2.0/N * np.abs(x_acceleration_fft[0:int(N/2)]))
-# ax1.grid()
-# fig5.show()
-#
-# fig6,(ax1) = plt.subplots(1,1)
-# ax1.plot(xf, 2.0/N * np.abs(x_acceleration_filtered_fft[0:int(N/2)]))
-# ax1.grid()
-# fig6.show()
-#
-# time = list(range(num_frames))
-# accelerometer_data = accelerometer_filtered
-# x_acceleration = accelerometer_data[:,0]
-# y_acceleration = accelerometer_data[:,1]
-# z_acceleration = accelerometer_data[:,2]
-# fig,(ax1, ax2, ax3) = plt.subplots(3,1)
-# # import code; code.interact(local=dict(globals(), **locals()))
-#
-# ax1.plot(time, x_acceleration); ax1.set_title('x'); ax1.set_ylim(np.min(accelerometer_data)-0.05, np.max(accelerometer_data)+0.05)
-# ax2.plot(time, y_acceleration);ax2.set_title('y'); ax2.set_ylim(np.min(accelerometer_data)-0.05, np.max(accelerometer_data)+0.05)
-# ax3.plot(time, z_acceleration);ax3.set_title('z'); ax3.set_ylim(np.min(accelerometer_data)-0.05, np.max(accelerometer_data)+0.05)
-# ax1.set_title('A filtered')
-# fig.show()
-#
-# x_gyro = gyroscope_data[:,0]
-# y_gyro = gyroscope_data[:,1]
-# z_gyro = gyroscope_data[:,2]
-# fig2,(ax1, ax2, ax3) = plt.subplots(3,1)
-# ax1.plot(time, x_gyro); ax1.set_title('x'); ax1.set_ylim(np.min(gyroscope_data)-0.05, np.max(gyroscope_data)+0.05)
-# ax2.plot(time, y_gyro);ax2.set_title('y'); ax2.set_ylim(np.min(gyroscope_data)-0.05, np.max(gyroscope_data)+0.05)
-# ax3.plot(time, z_gyro);ax3.set_title('z'); ax3.set_ylim(np.min(gyroscope_data)-0.05, np.max(gyroscope_data)+0.05)
-# ax1.set_title('Gyroscope unfiltered')
-# fig2.show()
-#
-# fig4,(ax1, ax2, ax3) = plt.subplots(3,1)
-# d = np.array([dx, dy, dz])
-# ax1.plot(time, dx); ax1.set_title('x'); ax1.set_ylim(np.min(d)-0.05, np.max(d)+0.05)
-# ax2.plot(time, dy);ax2.set_title('y'); ax2.set_ylim(np.min(d)-0.05, np.max(d)+0.05)
-# ax3.plot(time, dz);ax3.set_title('z'); ax3.set_ylim(np.min(d)-0.05, np.max(d)+0.05)
-# ax1.set_title('distance')
-# fig4.show()
-#
+# fig, ax = plt.subplots()
+# ax.plot(time_stamps, gx, label='Gyro - X')
+# ax.plot(time_stamps, gy, label='Gyro - Y')
+# ax.plot(time_stamps, gy - recon_gy, label='Gyro Reconstructed - Y')
+# ax.plot(time_stamps, gz, label='Gyro - Z')
+# ax.set_xlabel('Time (seconds)')
+# ax.set_ylabel('Theta (degrees)')
+# plt.title('Resting Gyro Readings')
+# plt.legend()
 # plt.show()
+# import code; code.interact(local=dict(globals(), **locals()))

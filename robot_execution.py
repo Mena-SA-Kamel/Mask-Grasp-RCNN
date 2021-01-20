@@ -648,14 +648,6 @@ try:
                     theta = dataset_object.wrap_angle_around_90(np.array([theta]))[0]
                     print('Angle in the image plane: ', theta, 'degrees')
                     theta = theta * (np.pi / 180) # network outputs positive angles in bottom right quadrant
-                    V = approach_vector
-                    # q = np.array([V[0]*np.sin(theta/2), V[1]*np.sin(theta/2), V[2]*np.sin(theta/2), np.cos(theta/2)])
-                    # approach_vector_orientation = R.from_quat(q).as_matrix()
-                    # Equivalent form
-
-                    # vy = np.array([0, 1, 0])
-                    # vz = approach_vector
-                    # vx = np.cross(vy, vz)
 
                     vz = approach_vector
                     vx = np.array([1, 0, 0])
