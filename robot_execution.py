@@ -36,7 +36,7 @@ def compute_real_box_size(intrinsics, aligned_depth_frame, rect):
 
     real_width = np.mean([compute_distance(P1, P2), compute_distance(P0, P3)])
     real_height = np.mean([compute_distance(P0, P1), compute_distance(P2, P3)])
-    print('Grasp Width: ', real_width, 'Grasp Height: ', real_height)
+    # print('Grasp Width: ', real_width, 'Grasp Height: ', real_height)
     return [real_width, real_height]
 
 def generate_pointcloud_from_rgbd(color_image, depth_image):
@@ -155,7 +155,7 @@ def select_ROI(mouseX, mouseY, r):
             grasping_probs = grasping_probs[selected_roi_ix]
             masks = masks[:,:,selected_roi_ix]
             roi_scores = roi_scores[selected_roi_ix]
-            print (masks.shape, roi_scores.shape, selected_roi_ix)
+            # print (masks.shape, roi_scores.shape, selected_roi_ix)
 
     return rois, grasping_deltas, grasping_probs, masks, roi_scores, selection_success
 
@@ -189,98 +189,17 @@ def derive_motor_angles_v0(orientation_matrix):
     theta_2 = np.arctan2(s2, c2) / (np.pi / 180)
     theta_3 = np.arctan2(s3, c3) / (np.pi / 180)
 
-    print ('\n FE Angle : ', theta_3)
-
     ps_home = 0
-    ur_home = 90 #90
-    fe_home = -90 #-90
+    ur_home = 90
+    fe_home = -90
 
     theta_1_corrected = theta_1 - ps_home
     theta_2_corrected = -1*(ur_home - theta_2)
     theta_3_corrected = theta_3 - fe_home
 
-    print('\n FE Angle (Corrected): ', theta_3_corrected)
-
     theta_1_wrapped = dataset_object.wrap_angle_around_90(np.array([theta_1_corrected]))[0]
     theta_2_wrapped = dataset_object.wrap_angle_around_90(np.array([theta_2_corrected]))[0]
     theta_3_wrapped = dataset_object.wrap_angle_around_90(np.array([theta_3_corrected]))[0]
-
-    print('\n FE Angle (Wrapped): ', theta_3_wrapped)
-    # theta_1_wrapped = theta_1_corrected
-    # theta_2_wrapped = theta_2_corrected
-    # theta_3_wrapped = theta_3_corrected
-    print('\nTheta 1 - Pronation/ Supination: ', theta_1_wrapped,
-          '\nTheta 2 - Ulnar/ Radial: ', theta_2_wrapped,
-          '\nTheta 3 - Flexion/Extension: ', theta_3_wrapped)
-
-    return [theta_1_wrapped, theta_2_wrapped, theta_3_wrapped]
-
-def derive_motor_angles_v2(orientation_matrix):
-    a = orientation_matrix[0, 1]
-    b = orientation_matrix[1, 1]
-    c = orientation_matrix[2, 1]
-    d = orientation_matrix[2, 0]
-    e = orientation_matrix[2, 2]
-
-    # s2 = c
-    # c2 = np.sqrt(1 - s2 ** 2)
-    # c2 = np.maximum(0.0001, c2)
-    # s1 = -b / c2
-    # c1 = -a / c2
-    # s3 = e / c2
-    # c3 = -d / c2
-    s2 = c
-    c2 = np.sqrt(1 - s2 ** 2)
-    c2 = np.maximum(0.0001, c2)
-    s1 = -b / c2
-    c1 = -a / c2
-    s3 = e / c2
-    c3 = -d / c2
-
-    theta_1 = np.arctan2(s1, c1) / (np.pi / 180)
-    theta_2 = np.arctan2(s2, c2) / (np.pi / 180)
-    theta_3 = np.arctan2(s3, c3) / (np.pi / 180)
-
-    # theta_1 = dataset_object.wrap_angle_around_90(np.array([theta_1]))[0]
-    # theta_2 = dataset_object.wrap_angle_around_90(np.array([theta_2]))[0]
-    # theta_3 = dataset_object.wrap_angle_around_90(np.array([theta_3]))[0]
-    print('Theta 1 - Pronation/ Supination: ', theta_1,
-          '\nTheta 2 - Ulnar/ Radial: ', theta_2,
-          '\nTheta 3 - Flexion/Extension: ', theta_3)
-
-    return [theta_1, theta_2, theta_3]
-
-def derive_motor_angles(orientation_matrix):
-    # Uses inverse kinematics to compute joint angles, to orient enf effector to the orientation specified by
-    # orientation_matrix
-
-    a = orientation_matrix[0, 1]
-    b = orientation_matrix[1, 1]
-    c = orientation_matrix[2, 1]
-    d = orientation_matrix[2, 0]
-    e = orientation_matrix[2, 2]
-
-    s2 = c
-    c2 = np.sqrt(1 - s2 ** 2)
-    c2 = np.maximum(0.0001, c2)
-    s1 = b / c2
-    c1 = a / c2
-    s3 = e / c2
-    c3 = d / c2
-
-    theta_1 = np.arctan2(s1, c1) / (np.pi / 180)
-    theta_2 = np.arctan2(s2, c2) / (np.pi / 180)
-    theta_3 = np.arctan2(s3, c3) / (np.pi / 180)
-
-    theta_1_wrapped = dataset_object.wrap_angle_around_90(np.array([theta_1]))[0]
-    theta_2_wrapped = dataset_object.wrap_angle_around_90(np.array([theta_2]))[0]
-    theta_3_wrapped = dataset_object.wrap_angle_around_90(np.array([theta_3]))[0]
-
-    print('\n JOINT ANGLES\n',
-          'Theta 1 - Pronation/ Supination: ', theta_1, theta_1_wrapped,
-          '\nTheta 2 - Ulnar/ Radial: ', theta_2,theta_2_wrapped,
-          '\nTheta 3 - Flexion/Extension: ', theta_3, theta_3_wrapped)
-
     return [theta_1_wrapped, theta_2_wrapped, theta_3_wrapped]
 
 def orient_wrist(theta1, theta2, theta3):
@@ -322,9 +241,9 @@ def orient_wrist(theta1, theta2, theta3):
         joint3 = np.interp(theta3, (flexion_extension_limit[0], 0), (0, fe_home))
 
     joint_output = np.array([joint1, joint2, joint3]).astype('uint8')
-
-    print('Clipped values: ', theta1, theta2, theta3)
-    print('Output values: ', joint_output)
+    #
+    # print('Clipped values: ', theta1, theta2, theta3)
+    # print('Output values: ', joint_output)
     return joint_output
 
 def compute_hand_aperture(grasp_box_width):
@@ -342,6 +261,49 @@ def compute_hand_aperture(grasp_box_width):
     motor_command = np.polynomial.polynomial.polyval(grasp_box_width, coeffs)
     return motor_command
 
+def gyro_data(gyro):
+    return np.asarray([gyro.x, gyro.y, gyro.z])
+
+def accel_data(accel):
+    return np.asarray([accel.x, accel.y, accel.z])
+
+def euler_angles_from_accelerometer(accelerometer_output):
+    # This function computes the camera euler angles from the accelerometer readings: ax, ay, az
+    ax, ay, az = np.split(accelerometer_output / 9.8, indices_or_sections=3)
+    theta_x_acc = np.arctan2(ay, -az) * (180 / np.pi)
+    theta_y_acc = np.arctan2(-az, ax) * (180 / np.pi)
+    theta_z_acc = np.arctan2(ay, ax) * (180 / np.pi)
+
+    theta_x_acc = -(theta_x_acc + 90)
+    theta_z_acc = -(theta_z_acc + 90)
+    return [theta_x_acc, theta_y_acc, theta_z_acc]
+
+def euler_angles_from_gyroscope(gyro, gyro_previous, dt, dt_sum):
+    # This function computes the camera euler angles from the gyroscope readings
+    gyro_current = gyro_previous + (gyro * dt) # Here gyro_previous needs to be in radians
+    theta_x_gyro, theta_y_gyro, theta_z_gyro = gyro_current * (180 / np.pi)
+    # m, b = [-0.17627199, 0.82105868]
+    # correction_factor = (m*dt_sum) + b
+    # theta_y_gyro = theta_y_gyro - correction_factor
+    # print(theta_y_gyro, 'correction_factor: ', correction_factor)
+    return [theta_x_gyro, theta_y_gyro, theta_z_gyro] # thetas are in degrees
+
+def euler_angles_from_complementary_filter(theta_x_acc, theta_z_acc, theta_x_gyro, theta_y_gyro, theta_z_gyro, system):
+    # complementary filter implementation
+    G = 0.90
+    A = 0.1
+    theta_x = (theta_x_gyro * G) + (theta_x_acc * A)
+    theta_z = (theta_z_gyro * G) + (theta_z_acc * A)
+    theta_y = theta_y_gyro
+    return [theta_x, theta_y, theta_z]
+
+def compute_dt(previous_millis, frame_number):
+    current_millis = int(round(time.time() * 1000))
+    if frame_number == 0:
+        previous_millis = current_millis
+    dt = (current_millis - previous_millis) / 1000
+    previous_millis = current_millis
+    return [previous_millis, dt]
 
 # Create a pipeline
 pipeline = rs.pipeline()
@@ -355,6 +317,8 @@ fps = 15
 config = rs.config()
 config.enable_stream(rs.stream.depth, image_width, image_height, rs.format.z16, fps)
 config.enable_stream(rs.stream.color, image_width, image_height, rs.format.rgb8, fps)
+config.enable_stream(rs.stream.accel)
+config.enable_stream(rs.stream.gyro)
 
 # Starting serial link to robot arm
 ser = serial.Serial('COM6', 115200, timeout=1)
@@ -366,7 +330,7 @@ profile = pipeline.start(config)
 # Getting the depth sensor's depth scale (see rs-align example for explanation)
 depth_sensor = profile.get_device().first_depth_sensor()
 depth_scale = depth_sensor.get_depth_scale()
-print("Depth Scale is: ", depth_scale)
+# print("Depth Scale is: ", depth_scale)
 
 # Create an align object
 # rs.align allows us to perform alignment of depth frames to others frames
@@ -408,6 +372,10 @@ location_history = []
 delta_t = []
 grasping_box_history = []
 hand_configured = False
+previous_millis = 0
+gyro_previous = np.array([0, 0, 0])
+system_previous = np.array([0, 0, 0])
+dt_sum = 0
 
 # Streaming loop
 for i in list(range(20)):
@@ -426,6 +394,8 @@ try:
         intrinsics_matrix = np.array([[intrinsics.fx, 0, intrinsics.ppx],
                                       [0, intrinsics.fy, intrinsics.ppy],
                                       [0, 0, 1]])
+        accel = accel_data(frames[2].as_motion_frame().get_motion_data())
+        gyro = gyro_data(frames[3].as_motion_frame().get_motion_data())
 
         # Defining the RealSense camera intrinsics as an Open3D object
         o3d_intrinsics = o3d.camera.PinholeCameraIntrinsic(width=intrinsics.width, height=intrinsics.height,
@@ -443,6 +413,8 @@ try:
         rgbd_image_resized = generate_rgbd_image(color_image, depth_image, center_crop=True, square_size=center_crop_size)
         rgb_image_resized = rgbd_image_resized[:, :, 0:3].astype('uint8')
         color_image_to_display = cv2.cvtColor(rgb_image_resized, cv2.COLOR_RGB2BGR)
+
+
 
         # If tracking did not start, then display detections of the network to the user
         if not start_tracking and num_detected_frames == 0:
@@ -594,6 +566,26 @@ try:
                 color_image_to_display = cv2.drawContours(color_image_to_display, [np.int0(rect[:2])], 0, color, 2)
                 color_image_to_display = cv2.drawContours(color_image_to_display, [np.int0(rect[2:])], 0, color, 2)
                 if start_tracking:
+                    # Computing time between frames
+                    previous_millis, dt = compute_dt(previous_millis, frame_count)
+                    # Getting camera pose from accelerometer
+                    theta_x_acc, theta_y_acc, theta_z_acc = euler_angles_from_accelerometer(accel)
+                    #Getting camera pose from gyroscope
+                    print ('dt: ', dt, 'dt_sum', dt_sum)
+                    theta_x_gyro, theta_y_gyro, theta_z_gyro = euler_angles_from_gyroscope(gyro, gyro_previous, dt, dt_sum)
+
+                    gyro_previous = np.array([theta_x_gyro, theta_y_gyro, theta_z_gyro])*(np.pi/180)
+                    print('\ngyro_current: ', theta_x_gyro, theta_y_gyro, theta_z_gyro)
+
+                    # complementary filter implementation
+                    G = 0.90
+                    A = 0.1
+                    theta_x = (system_previous[0] + gyro[0]*dt*(180 / np.pi)) * G + (theta_x_acc * A)
+                    theta_z = (system_previous[2] + gyro[2]*dt*(180 / np.pi)) * G + (theta_z_acc * A)
+                    theta_y = theta_y_gyro
+                    system_previous = np.array([theta_x, theta_y, theta_z])
+                    print('\nComplementary filter: ', theta_x, theta_y, theta_z)
+
                     # Need to crop out the point cloud at the oriented rectangle bounds
                     # Create a mask to specify the region to extract the surface normals from. Based on Lenz et al.,
                     # the approach vector is estimated as the surface normal calculated at the point of minumum depth in
@@ -646,7 +638,7 @@ try:
                     line_set.colors = o3d.utility.Vector3dVector(colors)
 
                     theta = dataset_object.wrap_angle_around_90(np.array([theta]))[0]
-                    print('Angle in the image plane: ', theta, 'degrees')
+                    # print('Angle in the image plane: ', theta, 'degrees')
                     theta = theta * (np.pi / 180) # network outputs positive angles in bottom right quadrant
 
                     vz = approach_vector
@@ -665,7 +657,7 @@ try:
 
                     approach_vector_orientation = np.dot(V, rotation_z)
 
-                    print('Approach vector orientation relative to camera coordinates: \n', approach_vector_orientation)
+                    # print('Approach vector orientation relative to camera coordinates: \n', approach_vector_orientation)
 
                     real_width, real_height = compute_real_box_size(intrinsics, aligned_depth_frame, rect_vertices)
                     box_vert_obj_frame = generate_points_in_world_frame(real_width, real_height)
@@ -704,7 +696,7 @@ try:
 
                     camera_frame = o3d.geometry.TriangleMesh.create_coordinate_frame(size=0.05, origin=box_center)
 
-                    o3d.visualization.draw_geometries([pcd_full_image, line_set, grasp_box_2, grasp_box, object_frame, camera_frame])
+                    # o3d.visualization.draw_geometries([pcd_full_image, line_set, grasp_box_2, grasp_box, object_frame, camera_frame])
 
                     # theta1 : pronate/supinate
                     # theta2 : ulnar/radial
@@ -729,24 +721,26 @@ try:
                     string_command = 'w %d %d %d' % (joint3, joint2, joint1)
                     aperture_command = 'j 0 %d' % (compute_hand_aperture(real_width*1000))
 
-                    if not hand_configured:
-                        ser.write(aperture_command.encode())
-                        time.sleep(3)
-                        ser.write(b'j 3 800')
-                        hand_configured = True
-
-                    time.sleep(3)
-                    ser.write(string_command.encode())
-                    import code;
-
-                    code.interact(local=dict(globals(), **locals()))
+                    # if not hand_configured:
+                    #     ser.write(aperture_command.encode())
+                    #     time.sleep(3)
+                    #     ser.write(b'j 3 800')
+                    #     hand_configured = True
+                    #
+                    # time.sleep(3)
+                    # ser.write(string_command.encode())
+                    # import code;
+                    #
+                    # code.interact(local=dict(globals(), **locals()))
+                    frame_count += 1
+                    dt_sum += dt
 
         images = color_image_to_display
 
         if not start_tracking and num_detected_frames == 0:
             images = masked_image
         cv2.imshow('MASK-GRASP RCNN OUTPUT', images)
-        frame_count += 1
+
         key = cv2.waitKey(1)
         if key & 0xFF == ord('q') or key == 27:
             cv2.destroyAllWindows()
