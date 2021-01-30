@@ -117,6 +117,10 @@ while True:
         mag_calibrated = np.dot((mag_uncalibrated - mag_b_vector), mag_A_matrix)
 
         mx, my, mz = mag_calibrated.squeeze().tolist()
+        memory = my
+        my = mx
+        mx = memory
+        mz = -mz
 
         theta_pitch = sys_history[0, -1]*(np.pi/180)
         theta_roll = sys_history[1, -1]*(np.pi/180)
@@ -127,14 +131,19 @@ while True:
         #
         # x_heading = mx*np.cos(theta_roll) + my*(np.sin(theta_roll)*np.sin(theta_pitch)) - mz*(np.cos(theta_pitch)*np.sin(theta_roll))
         # y_heading = my*np.cos(theta_pitch) - mz*np.sin(theta_pitch)
-        #
-        # x_heading = mx*np.cos(theta_roll) - mz*(np.sin(theta_roll))
-        # y_heading = mx*(np.sin(theta_roll)*np.sin(phi_pitch)) + my*np.cos(phi_pitch) + mz*(np.cos(theta_roll)*np.sin(phi_pitch))
 
-        yaw_angle = np.arctan2(mx, my) * (180 / np.pi)
+        # Kinda working?
+        # x_heading = mx*np.cos(theta_roll) - mz*(np.sin(theta_roll))
+        # y_heading = mx*(np.sin(theta_roll)*np.sin(theta_pitch)) + my*np.cos(theta_pitch) + mz*(np.cos(theta_roll)*np.sin(theta_pitch))
+
+        x_heading = mx*np.cos(theta_roll) + my*(np.sin(theta_roll)*np.sin(theta_pitch)) + mz*(np.cos(theta_pitch)*np.sin(theta_roll))
+        y_heading = my*np.cos(theta_pitch) - mz*np.sin(theta_pitch)
+
+
+        yaw_angle = np.arctan2(x_heading, y_heading) * (180 / np.pi)
 
         # Low pass filtering the yaw data
-        mag_history[-1] =  0.5*mag_history[-2] + 0.5*(yaw_angle - yaw_history)
+        mag_history[-1] =  0*mag_history[-2] + 1*(yaw_angle - yaw_history)
         if counter==0:
             yaw_history = yaw_angle
 
