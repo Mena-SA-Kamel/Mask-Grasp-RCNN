@@ -43,7 +43,7 @@ def live_plotter(x_vec, acc_history, gyro_history, mag_history, sys_history, axe
     line9.set_ydata(sys_y)
     line10.set_ydata(mag_history)
     plt.pause(pause_time)
-    plt.ylim([-100, 100])
+    plt.ylim([-180, 180])
 
     # return line so we can update it again in the next iteration
     return [line1, line2, line3, line4, line5, line6, line7, line8, line9, line10]
@@ -84,6 +84,8 @@ gz_history = []
 num_meas = 700
 magnetomer_readings = np.zeros([num_meas, 3])
 yaw_history = 0
+num_samples_for_yaw = 20 # Avg first 20 samples to get a good measure of where the home yaw position is
+sum_yaw = 0
 
 while True:
     try:
@@ -93,6 +95,11 @@ while True:
         dt = (current_millis - previous_millis) / 1000
         previous_millis = current_millis
         input_bytes = ser.readline()
+        counter += 1
+
+        if counter < 5:
+            continue
+
         decoded_bytes = np.array(input_bytes.decode().replace('\r','').replace('\n','').split('\t'), dtype='float32')
         ay, ax, az, gy, gx, gz, mx, my, mz, T = decoded_bytes.tolist()
 
@@ -118,6 +125,21 @@ while True:
         A = 0.1
         sys_history[:, -1] = (sys_history[:, -2] + (gyro * dt * (180 / np.pi))) * G + acc_history[:, -1] * A
 
+        # Gathering data for calibration
+        # if counter<num_meas:
+        #     magnetomer_readings[counter] = np.array([mx, my, mz])
+        # else:
+        #     np.savetxt('magnetometer_calibration-Feb11-Calibration_with_case.txt', magnetomer_readings)
+        #     fig = plt.figure()
+        #     ax = Axes3D(fig)
+        #     ax.scatter(magnetomer_readings[:, 0], magnetomer_readings[:, 1], magnetomer_readings[:, 2])
+        #     ax.set_xlabel('X axis')
+        #     ax.set_ylabel('Y axis')
+        #     ax.set_zlabel('Z axis')
+        #     ax.set_title("Magnetometer Calibration - Measurements in uT")
+        #     import code;
+        #     code.interact(local=dict(globals(), **locals()))
+
         # All measurements in the accelerometer frame of reference
         # Magnetometer
         mag_uncalibrated = np.array([mx, my, mz]).reshape([1, 3])
@@ -139,27 +161,16 @@ while True:
         # x_heading = mx*np.cos(theta_roll) + my*(np.sin(theta_roll)*np.sin(theta_pitch)) - mz*(np.cos(theta_pitch)*np.sin(theta_roll))
         # y_heading = my*np.cos(theta_pitch) + mz*np.sin(theta_pitch)
 
-        yaw_angle = np.arctan2(y_heading, x_heading) * (180 / np.pi)
+        yaw_angle = -np.arctan2(y_heading, x_heading) * (180 / np.pi)
 
         # Low pass filtering the yaw data
         mag_history[-1] = 0.1*mag_history[-2] + 0.9*(yaw_angle - yaw_history)
-        if counter==0:
-            yaw_history = yaw_angle
-
-        # # Gathering data for calibration
-        # if counter<num_meas:
-        #     magnetomer_readings[counter] = np.array([mx, my, mz])
-        # else:
-        #     np.savetxt('magnetometer_calibration-Feb11-Calibration_with_case.txt', magnetomer_readings)
-        #     fig = plt.figure()
-        #     ax = Axes3D(fig)
-        #     ax.scatter(magnetomer_readings[:, 0], magnetomer_readings[:, 1], magnetomer_readings[:, 2])
-        #     ax.set_xlabel('X axis')
-        #     ax.set_ylabel('Y axis')
-        #     ax.set_zlabel('Z axis')
-        #     ax.set_title("Magnetometer Calibration - Measurements in uT")
-        #     import code;
-        #     code.interact(local=dict(globals(), **locals()))
+        if counter<num_samples_for_yaw:
+            sum_yaw += yaw_angle
+            denom = np.maximum(1, counter)
+            yaw_history = sum_yaw/(denom)
+            print ("WARNING: DONT MOVE ARM: MAGNETOMETER COMPUTING HOME POSITION!")
+            mag_history[-1] = 0
 
         axes_objects = live_plotter(x_vals, acc_history, gyro_history, mag_history, sys_history, axes_objects)
         acc_history = np.append(acc_history[:, 1:], np.zeros([3, 1]), axis=-1)
@@ -167,8 +178,6 @@ while True:
         sys_history = np.append(sys_history[:, 1:], np.zeros([3, 1]), axis=-1)
         mag_history = np.append(mag_history[1:], 0)
         gyro_previous = gyro_current
-
-        counter += 1
 
     except:
         print("Keyboard Interrupt")
