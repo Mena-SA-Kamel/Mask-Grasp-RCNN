@@ -4,6 +4,7 @@ import matplotlib
 from matplotlib.patches import Polygon
 from mpl_toolkits.mplot3d import Axes3D
 from mpl_toolkits.mplot3d.art3d import Poly3DCollection
+import numpy as np
 
 fig, ax = plt.subplots()
 

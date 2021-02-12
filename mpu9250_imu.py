@@ -49,7 +49,7 @@ def live_plotter(x_vec, acc_history, gyro_history, mag_history, sys_history, axe
     return [line1, line2, line3, line4, line5, line6, line7, line8, line9, line10]
 
 
-ser = serial.Serial('COM10', 115200)
+ser = serial.Serial('COM6', 115200)
 ser.flushInput()
 
 data_stream_size = 100
@@ -67,10 +67,16 @@ ay_bias = 2.55
 az_scale = 1.1
 az_bias = 2.1
 
-mag_A_matrix = np.array([[1.0059,    -0.0040,   -0.0053],
-                         [-0.0040,    0.9689,    0.0612],
-                         [-0.0053,    0.0612,    1.0299]])
-mag_b_vector = np.array([54.2270,   53.4672,  -30.7811]).reshape([1, 3])
+# mag_A_matrix = np.array([[1.0059,    -0.0040,   -0.0053],
+#                          [-0.0040,    0.9689,    0.0612],
+#                          [-0.0053,    0.0612,    1.0299]])
+# mag_b_vector = np.array([54.2270,   53.4672,  -30.7811]).reshape([1, 3])
+
+mag_A_matrix = np.array([[0.9990,   -0.0166,    0.0160],
+                         [-0.0166,    1.0022,    0.0262],
+                         [0.0160,    0.0262,    1.0001]])
+mag_b_vector = np.array([62.5899,  101.0618,   14.7691]).reshape([1, 3])
+
 previous_millis = 0
 gyro_previous = np.array([0, 0, 0])
 sys_previous = np.array([0, 0, 0])
@@ -112,6 +118,7 @@ while True:
         A = 0.1
         sys_history[:, -1] = (sys_history[:, -2] + (gyro * dt * (180 / np.pi))) * G + acc_history[:, -1] * A
 
+        # All measurements in the accelerometer frame of reference
         # Magnetometer
         mag_uncalibrated = np.array([mx, my, mz]).reshape([1, 3])
         mag_calibrated = np.dot((mag_uncalibrated - mag_b_vector), mag_A_matrix)
@@ -126,32 +133,24 @@ while True:
         theta_roll = sys_history[1, -1]*(np.pi/180)
 
         # Tilt compensation
-        # x_heading = mx*np.cos(theta_pitch) - my*(np.sin(theta_roll)*np.sin(theta_pitch)) + mz*(np.cos(theta_roll)*np.sin(theta_pitch))
-        # y_heading = my*np.cos(theta_roll) + mz*np.sin(theta_roll)
-        #
+        x_heading = mx*np.cos(theta_roll) + mz*(np.sin(theta_roll))
+        y_heading = mx*(np.sin(theta_roll)*np.sin(theta_pitch)) + my*np.cos(theta_pitch) - mz*(np.cos(theta_roll)*np.sin(theta_pitch))
+
         # x_heading = mx*np.cos(theta_roll) + my*(np.sin(theta_roll)*np.sin(theta_pitch)) - mz*(np.cos(theta_pitch)*np.sin(theta_roll))
-        # y_heading = my*np.cos(theta_pitch) - mz*np.sin(theta_pitch)
+        # y_heading = my*np.cos(theta_pitch) + mz*np.sin(theta_pitch)
 
-        # Kinda working?
-        # x_heading = mx*np.cos(theta_roll) - mz*(np.sin(theta_roll))
-        # y_heading = mx*(np.sin(theta_roll)*np.sin(theta_pitch)) + my*np.cos(theta_pitch) + mz*(np.cos(theta_roll)*np.sin(theta_pitch))
-
-        x_heading = mx*np.cos(theta_roll) + my*(np.sin(theta_roll)*np.sin(theta_pitch)) + mz*(np.cos(theta_pitch)*np.sin(theta_roll))
-        y_heading = my*np.cos(theta_pitch) - mz*np.sin(theta_pitch)
-
-
-        yaw_angle = np.arctan2(x_heading, y_heading) * (180 / np.pi)
+        yaw_angle = np.arctan2(y_heading, x_heading) * (180 / np.pi)
 
         # Low pass filtering the yaw data
-        mag_history[-1] =  0*mag_history[-2] + 1*(yaw_angle - yaw_history)
+        mag_history[-1] = 0.1*mag_history[-2] + 0.9*(yaw_angle - yaw_history)
         if counter==0:
             yaw_history = yaw_angle
 
-        # Gathering data for calibration
+        # # Gathering data for calibration
         # if counter<num_meas:
         #     magnetomer_readings[counter] = np.array([mx, my, mz])
         # else:
-        #     np.savetxt('magnetometer_calibration.txt', magnetomer_readings)
+        #     np.savetxt('magnetometer_calibration-Feb11-Calibration_with_case.txt', magnetomer_readings)
         #     fig = plt.figure()
         #     ax = Axes3D(fig)
         #     ax.scatter(magnetomer_readings[:, 0], magnetomer_readings[:, 1], magnetomer_readings[:, 2])
