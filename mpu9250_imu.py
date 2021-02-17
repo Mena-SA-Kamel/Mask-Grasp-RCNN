@@ -67,15 +67,10 @@ ay_bias = 2.55
 az_scale = 1.1
 az_bias = 2.1
 
-# mag_A_matrix = np.array([[1.0059,    -0.0040,   -0.0053],
-#                          [-0.0040,    0.9689,    0.0612],
-#                          [-0.0053,    0.0612,    1.0299]])
-# mag_b_vector = np.array([54.2270,   53.4672,  -30.7811]).reshape([1, 3])
-
-mag_A_matrix = np.array([[0.9990,   -0.0166,    0.0160],
-                         [-0.0166,    1.0022,    0.0262],
-                         [0.0160,    0.0262,    1.0001]])
-mag_b_vector = np.array([62.5899,  101.0618,   14.7691]).reshape([1, 3])
+mag_A_matrix = np.array([[1.0082,   -0.0171,    0.0179],
+                         [-0.0171,    1.0053,    0.0296],
+                         [0.0179,    0.0296,    0.9881]])
+mag_b_vector = np.array([57.3756,   78.6094,    9.1631]).reshape([1, 3])
 
 previous_millis = 0
 gyro_previous = np.array([0, 0, 0])
@@ -84,8 +79,9 @@ gz_history = []
 num_meas = 700
 magnetomer_readings = np.zeros([num_meas, 3])
 yaw_history = 0
-num_samples_for_yaw = 20 # Avg first 20 samples to get a good measure of where the home yaw position is
+num_samples_for_yaw = 50 # Avg first 20 samples to get a good measure of where the home yaw position is
 sum_yaw = 0
+yaw_cal = []
 
 while True:
     try:
@@ -96,9 +92,9 @@ while True:
         previous_millis = current_millis
         input_bytes = ser.readline()
         counter += 1
-
-        if counter < 5:
-            continue
+        #
+        # if counter < 5:
+        #     continue
 
         decoded_bytes = np.array(input_bytes.decode().replace('\r','').replace('\n','').split('\t'), dtype='float32')
         ay, ax, az, gy, gx, gz, mx, my, mz, T = decoded_bytes.tolist()
@@ -125,11 +121,11 @@ while True:
         A = 0.1
         sys_history[:, -1] = (sys_history[:, -2] + (gyro * dt * (180 / np.pi))) * G + acc_history[:, -1] * A
 
-        # Gathering data for calibration
+        # # Gathering data for calibration
         # if counter<num_meas:
         #     magnetomer_readings[counter] = np.array([mx, my, mz])
         # else:
-        #     np.savetxt('magnetometer_calibration-Feb11-Calibration_with_case.txt', magnetomer_readings)
+        #     np.savetxt('magnetometer_calibration-Feb17-Calibration_with_case_imu.txt', magnetomer_readings)
         #     fig = plt.figure()
         #     ax = Axes3D(fig)
         #     ax.scatter(magnetomer_readings[:, 0], magnetomer_readings[:, 1], magnetomer_readings[:, 2])
@@ -165,12 +161,8 @@ while True:
 
         # Low pass filtering the yaw data
         mag_history[-1] = 0.1*mag_history[-2] + 0.9*(yaw_angle - yaw_history)
-        if counter<num_samples_for_yaw:
-            sum_yaw += yaw_angle
-            denom = np.maximum(1, counter)
-            yaw_history = sum_yaw/(denom)
-            print ("WARNING: DONT MOVE ARM: MAGNETOMETER COMPUTING HOME POSITION!")
-            mag_history[-1] = 0
+        if counter==num_samples_for_yaw:
+            yaw_history = np.sum(mag_history) / num_samples_for_yaw
 
         axes_objects = live_plotter(x_vals, acc_history, gyro_history, mag_history, sys_history, axes_objects)
         acc_history = np.append(acc_history[:, 1:], np.zeros([3, 1]), axis=-1)
