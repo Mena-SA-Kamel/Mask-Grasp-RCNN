@@ -47,7 +47,6 @@ rotation = R.from_euler('xyz', [[pitch, roll, 0]], degrees=True).as_matrix()
 test_vector_rotated = np.dot(test_vector, rotation.T)
 plot_vector(ax, origin, test_vector_rotated, 'c')
 
-
 ax.set_xlabel('X')
 ax.set_ylabel('Y')
 ax.set_zlabel('Z')
