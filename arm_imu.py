@@ -156,10 +156,10 @@ def compute_hand_aperture(grasp_box_width):
 
 def calibrate_magnetometer(mx, my, mz):
     # Calibrates the magnetometer for hard and soft sources
-    mag_A_matrix = np.array([[1.0082, -0.0171, 0.0179],
-                             [-0.0171, 1.0053, 0.0296],
-                             [0.0179, 0.0296, 0.9881]])
-    mag_b_vector = np.array([57.3756, 78.6094, 9.1631]).reshape([1, 3])
+    mag_A_matrix = np.array([[0.9953, -0.0146, 0.0201],
+                             [-0.0146, 1.0135, 0.0253],
+                             [0.0201, 0.0253, 0.9926]])
+    mag_b_vector = np.array([57.4634, 92.6249, 9.6638]).reshape([1, 3])
     # All measurements in the accelerometer frame of reference
     # Magnetometer
     mag_uncalibrated = np.array([mx, my, mz]).reshape([1, 3])
@@ -200,6 +200,42 @@ def compute_angles_from_accelerometer(ax, ay, az):
     theta_z = np.arctan2(ay, ax) * (180 / np.pi)
     return [theta_x, theta_y, theta_z]
 
+def arm_orientation_imu_9250(ser, dt, angles_t_1):
+    # Inputs: ser, dt, previous_angles in degrees, sample_counter, num_samples_for_yaw
+    # Outputs: current_degrees
+    # theta_pitch -> Rotation about x (flexion/extension)
+    # theta_roll -> Rotation about z (pronate/supinate)
+    # theta_yaw -> Rotation about y (ulnar/radial)
+    # Reading IMU data
+    ax, ay, az, gx, gy, gz, mx, my, mz = read_serial_port(ser)
+    # Calibrate the Accelerometer reading
+    ax, ay, az = calibrate_accelerometer(ax, ay, az)
+    # Correcting for magnetic distortion from hard and soft sources
+    mx, my, mz = calibrate_magnetometer(mx, my, mz)
+    # Computing the angle based on the accelerometer readings (Degrees)
+    accelerometer_angles = np.array(compute_angles_from_accelerometer(ax, ay, az)).squeeze()
+    # Computing the angle based on the Gyroscope readings (Degrees)
+    gyro_readings = np.array([gx, gy, gz])
+    gyro_angles = (gyro_readings * dt * (180 / np.pi))
+    # Complementary filter for accurate pitch and roll (Degrees)
+    G = 0.9
+    A = 0.1
+    angles_t = (angles_t_1 + gyro_angles) * G + accelerometer_angles * A
+
+    # Defining angles for time steps t and t-1 in radians
+    theta_pitch, theta_roll, theta_yaw = (angles_t * (np.pi / 180)).tolist()  # in radians
+    # Yaw tilt compensation
+    x_heading = mx * np.cos(theta_roll) + mz * (np.sin(theta_roll))
+    y_heading = mx * (np.sin(theta_roll) * np.sin(theta_pitch)) + my * np.cos(theta_pitch) - mz * (
+                np.cos(theta_roll) * np.sin(theta_pitch))
+    theta_yaw = np.arctan2(y_heading, x_heading) * (180 / np.pi)  # in degrees
+
+    # Low pass filtering the yaw data
+    theta_yaw_t_1 = angles_t_1[2]
+    theta_yaw_lpf = 0.1 * theta_yaw_t_1 + 0.9 * theta_yaw  # Yaw angle is in degrees
+    theta_pitch, theta_roll, _ = angles_t
+    return [theta_pitch, theta_roll, theta_yaw_lpf]
+
 
 ser = initialize_serial_link('COM6', 115200)
 
@@ -226,6 +262,7 @@ angles_t_1 = np.zeros(3,)
 angles_t = np.zeros(3,)
 yaw_sum = 0
 yaw_sample_counter = 0
+angles_t_1 = np.zeros(3,)
 
 while True:
     try:
@@ -236,56 +273,14 @@ while True:
         previous_millis = current_millis
         counter += 1
 
-        # theta_pitch -> Rotation about x (flexion/extension)
-        # theta_roll -> Rotation about z (pronate/supinate)
-        # theta_yaw -> Rotation about y (ulnar/radial)
-
-        # Reading IMU data
-        ax, ay, az, gx, gy, gz, mx, my, mz = read_serial_port(ser)
-        # Calibrate the Accelerometer reading
-        ax, ay, az = calibrate_accelerometer(ax, ay, az)
-        # Correcting for magnetic distortion from hard and soft sources
-        mx, my, mz = calibrate_magnetometer(mx, my, mz)
-        # Computing the angle based on the accelerometer readings (Degrees)
-        accelerometer_angles = np.array(compute_angles_from_accelerometer(ax, ay, az)).squeeze()
-        # Computing the angle based on the Gyroscope readings (Degrees)
-        gyro_readings = np.array([gx, gy, gz])
-        gyro_angles = (gyro_readings * dt * (180 / np.pi))
-        # Complementary filter for accurate pitch and roll (Degrees)
-        G = 0.9
-        A = 0.1
-        angles_t = (angles_t_1 + gyro_angles) * G + accelerometer_angles * A
-
-        # Defining angles for time steps t and t-1 in radians
-        theta_pitch, theta_roll, theta_yaw = (angles_t*(np.pi/180)).tolist() # in radians
-        theta_pitch_t_1, theta_roll_t_1, theta_yaw_t_1 = (angles_t_1*(np.pi/180)).tolist() # in radians
-        # Yaw tilt compensation
-        x_heading = mx*np.cos(theta_roll) + mz*(np.sin(theta_roll))
-        y_heading = mx*(np.sin(theta_roll)*np.sin(theta_pitch)) + my*np.cos(theta_pitch) - mz*(np.cos(theta_roll)*np.sin(theta_pitch))
-        theta_yaw_t = np.arctan2(y_heading, x_heading) * (180 / np.pi) # in degrees
-
-        if yaw_sample_counter<num_samples_for_yaw:
-            print(theta_yaw_t)
-            yaw_resting += theta_yaw_t
-            angles_t[2] = theta_yaw_t
-            angles_t_1 = angles_t
-            yaw_sample_counter += 1
-            continue
-        elif yaw_sample_counter == num_samples_for_yaw:
-
-            yaw_resting /= num_samples_for_yaw
-            theta_yaw_t_1 = 0
-            yaw_sample_counter += 1
-
-        # Low pass filtering the yaw data
-        theta_yaw_t_1 = angles_t_1[2]
-        theta_yaw = 0.1 * theta_yaw_t_1 + 0.9 * (theta_yaw_t - yaw_resting) # Yaw angle is in degrees
-        theta_pitch, theta_roll, _ = angles_t
+        theta_pitch, theta_roll, theta_yaw = arm_orientation_imu_9250(ser, dt, angles_t_1)
+        # Correcting for the resting yaw position by averaging the first num_samples_for_yaw measurements
         angles_t_1 = np.array([theta_pitch, theta_roll, theta_yaw])
-        print (theta_pitch, theta_roll, theta_yaw)
-
-
-
+        if counter < num_samples_for_yaw:
+            yaw_sum += theta_yaw
+        elif counter ==num_samples_for_yaw:
+            yaw_resting = yaw_sum / num_samples_for_yaw
+        theta_yaw -= yaw_resting
 
 
         R_shoulder_to_elbow = R.from_euler('xyz', [[theta_pitch, 0, theta_roll]], degrees=True).as_matrix().squeeze()
@@ -302,11 +297,21 @@ while True:
 
         desired_orientation = np.dot(np.dot(R_shoulder_to_elbow_inv, grasp_pose_shoulder_frame), wrist_pose_shoulder_frame_inv)
         theta1, theta2, theta3 = derive_motor_angles_v0(desired_orientation)
+        print(theta1, theta2, theta3)
+        angle_thresh = 3
+        desired_motor_angles = np.array([theta1, theta2, theta3])
+        if ((-angle_thresh <= desired_motor_angles) & (desired_motor_angles <= angle_thresh)).all():
+            # Home the hand joints if all the joints are within a certain range [-angle_thresh, angle_thresh]
+            home_command = 'h'
+            ser.write(home_command.encode())
+            print 'HOME'
+            continue
         joint1, joint2, joint3 = orient_wrist(theta1, theta2, theta3).tolist()
         string_command = 'w %d %d %d' % (joint3, joint2, joint1)
-        # print (theta1, theta2, theta3)
         aperture_command = 'j 0 %d' % (compute_hand_aperture(50))
-        # ser.write(string_command.encode())
+        # if counter %1==0:
+        #     ser.write(string_command.encode())
+        ser.write(string_command.encode())
     except:
         print("Keyboard Interrupt")
         break

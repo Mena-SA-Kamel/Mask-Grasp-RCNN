@@ -67,10 +67,10 @@ ay_bias = 2.55
 az_scale = 1.1
 az_bias = 2.1
 
-mag_A_matrix = np.array([[1.0082,   -0.0171,    0.0179],
-                         [-0.0171,    1.0053,    0.0296],
-                         [0.0179,    0.0296,    0.9881]])
-mag_b_vector = np.array([57.3756,   78.6094,    9.1631]).reshape([1, 3])
+mag_A_matrix = np.array([[0.9953,   -0.0146,    0.0201],
+                         [-0.0146,    1.0135,    0.0253],
+                         [0.0201,    0.0253,    0.9926]])
+mag_b_vector = np.array([57.4634,   92.6249,    9.6638]).reshape([1, 3])
 
 previous_millis = 0
 gyro_previous = np.array([0, 0, 0])
@@ -123,9 +123,11 @@ while True:
 
         # # Gathering data for calibration
         # if counter<num_meas:
+        #     if counter%10 ==0:
+        #         print("Progress: ", (counter / num_meas ) * 100, "% DONE")
         #     magnetomer_readings[counter] = np.array([mx, my, mz])
         # else:
-        #     np.savetxt('magnetometer_calibration-Feb17-Calibration_with_case_imu.txt', magnetomer_readings)
+        #     np.savetxt('magnetometer_calibration-Feb23-Calibration_with_case_imu_power_ON.txt', magnetomer_readings)
         #     fig = plt.figure()
         #     ax = Axes3D(fig)
         #     ax.scatter(magnetomer_readings[:, 0], magnetomer_readings[:, 1], magnetomer_readings[:, 2])
