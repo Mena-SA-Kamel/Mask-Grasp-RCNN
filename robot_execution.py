@@ -696,7 +696,7 @@ try:
 
                     camera_frame = o3d.geometry.TriangleMesh.create_coordinate_frame(size=0.05, origin=box_center)
 
-                    # o3d.visualization.draw_geometries([pcd_full_image, line_set, grasp_box_2, grasp_box, object_frame, camera_frame])
+                    o3d.visualization.draw_geometries([pcd_full_image, line_set, grasp_box_2, grasp_box, object_frame, camera_frame])
 
                     # theta1 : pronate/supinate
                     # theta2 : ulnar/radial
