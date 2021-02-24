@@ -156,7 +156,7 @@ def calibrate_magnetometer(mx, my, mz):
     mag_A_matrix = np.array([[0.9953, -0.0146, 0.0201],
                              [-0.0146, 1.0135, 0.0253],
                              [0.0201, 0.0253, 0.9926]])
-    mag_b_vector = np.array([57.4634, 92.6249, 9.6638]).reshape([1, 3])
+    mag_b_vector = np.array([57.4634, 78.6249, 9.6638]).reshape([1, 3])
     # All measurements in the accelerometer frame of reference
     # Magnetometer
     mag_uncalibrated = np.array([mx, my, mz]).reshape([1, 3])
@@ -232,71 +232,71 @@ def arm_orientation_imu_9250(ser, dt, angles_t_1):
     theta_yaw_lpf = 0 * theta_yaw_t_1  + 1 * theta_yaw  # Yaw angle is in degrees
     theta_pitch, theta_roll, _ = angles_t
     return [theta_pitch, theta_roll, theta_yaw_lpf]
-
-ser = initialize_serial_link('COM6', 115200)
-
-counter = 0
-previous_millis = 0
-yaw_resting = 0
-num_samples_for_yaw = 50 # Avg first 20 samples to get a good measure of where the home yaw position is
-angles_t_1 = np.zeros(3,)
-angles_t = np.zeros(3,)
-yaw_sum = 0
-yaw_data = []
-
-while True:
-    try:
-        current_millis = int(round(time.time() * 1000))
-        if counter == 0:
-            previous_millis = current_millis
-        dt = (current_millis - previous_millis) / 1000
-        previous_millis = current_millis
-        counter += 1
-
-        theta_pitch, theta_roll, theta_yaw = arm_orientation_imu_9250(ser, dt, angles_t_1)
-        # Correcting for the resting yaw position by averaging the first num_samples_for_yaw measurements
-        angles_t_1 = np.array([theta_pitch, theta_roll, theta_yaw])
-        if counter < num_samples_for_yaw:
-            yaw_sum += theta_yaw
-        elif counter ==num_samples_for_yaw:
-            yaw_resting = yaw_sum / (num_samples_for_yaw-1)
-        theta_yaw -= yaw_resting
-        yaw_data.append([theta_yaw])
-        if counter == 2000:
-            import code;
-
-            code.interact(local=dict(globals(), **locals()))
-
-        # R_shoulder_to_elbow = R.from_euler('xyz', [[theta_pitch, theta_yaw, theta_roll]], degrees=True).as_matrix().squeeze()
-        R_shoulder_to_elbow = R.from_euler('xyz', [[0, theta_yaw, 0]], degrees=True).as_matrix().squeeze()
-        R_shoulder_to_elbow_inv = np.linalg.inv(R_shoulder_to_elbow)
-
-        wrist_pose_shoulder_frame = np.array([[0, 0, 1],
-                                              [0, -1, 0],
-                                              [1, 0, 0]])
-        wrist_pose_shoulder_frame_inv = np.linalg.inv(wrist_pose_shoulder_frame)
-
-        grasp_pose_shoulder_frame = np.array([[1, 0, 0],
-                                              [0, 1, 0],
-                                              [0, 0, 1]])
-
-        desired_orientation = np.dot(np.dot(R_shoulder_to_elbow_inv, grasp_pose_shoulder_frame), wrist_pose_shoulder_frame_inv)
-        theta1, theta2, theta3 = derive_motor_angles_v0(desired_orientation)
-        print(theta1, theta2, theta3)
-        angle_thresh = 3
-        desired_motor_angles = np.array([theta1, theta2, theta3])
-        if ((-angle_thresh <= desired_motor_angles) & (desired_motor_angles <= angle_thresh)).all():
-            # Home the hand joints if all the joints are within a certain range [-angle_thresh, angle_thresh]
-            home_command = 'h'
-            ser.write(home_command.encode())
-            print('HOME')
-            continue
-        joint1, joint2, joint3 = orient_wrist(theta1, theta2, theta3).tolist()
-        string_command = 'w %d %d %d' % (joint3, joint2, joint1)
-        aperture_command = 'j 0 %d' % (compute_hand_aperture(50))
-        # if counter %3==0:
-        #     ser.write(string_command.encode())
-        # ser.write(string_command.encode())
-    except:
-        print("Keyboard Interrupt")
-        break
+#
+# ser = initialize_serial_link('COM6', 115200)
+#
+# counter = 0
+# previous_millis = 0
+# yaw_resting = 0
+# num_samples_for_yaw = 50 # Avg first 20 samples to get a good measure of where the home yaw position is
+# angles_t_1 = np.zeros(3,)
+# angles_t = np.zeros(3,)
+# yaw_sum = 0
+# yaw_data = []
+#
+# while True:
+#     try:
+#         current_millis = int(round(time.time() * 1000))
+#         if counter == 0:
+#             previous_millis = current_millis
+#         dt = (current_millis - previous_millis) / 1000
+#         previous_millis = current_millis
+#         counter += 1
+#
+#         theta_pitch, theta_roll, theta_yaw = arm_orientation_imu_9250(ser, dt, angles_t_1)
+#         # Correcting for the resting yaw position by averaging the first num_samples_for_yaw measurements
+#         angles_t_1 = np.array([theta_pitch, theta_roll, theta_yaw])
+#         if counter < num_samples_for_yaw:
+#             yaw_sum += theta_yaw
+#         elif counter ==num_samples_for_yaw:
+#             yaw_resting = yaw_sum / (num_samples_for_yaw-1)
+#         theta_yaw -= yaw_resting
+#         yaw_data.append([theta_yaw])
+#         if counter == 2000:
+#             import code;
+#
+#             code.interact(local=dict(globals(), **locals()))
+#
+#         # R_shoulder_to_elbow = R.from_euler('xyz', [[theta_pitch, theta_yaw, theta_roll]], degrees=True).as_matrix().squeeze()
+#         R_shoulder_to_elbow = R.from_euler('xyz', [[0, theta_yaw, 0]], degrees=True).as_matrix().squeeze()
+#         R_shoulder_to_elbow_inv = np.linalg.inv(R_shoulder_to_elbow)
+#
+#         wrist_pose_shoulder_frame = np.array([[0, 0, 1],
+#                                               [0, -1, 0],
+#                                               [1, 0, 0]])
+#         wrist_pose_shoulder_frame_inv = np.linalg.inv(wrist_pose_shoulder_frame)
+#
+#         grasp_pose_shoulder_frame = np.array([[1, 0, 0],
+#                                               [0, 1, 0],
+#                                               [0, 0, 1]])
+#
+#         desired_orientation = np.dot(np.dot(R_shoulder_to_elbow_inv, grasp_pose_shoulder_frame), wrist_pose_shoulder_frame_inv)
+#         theta1, theta2, theta3 = derive_motor_angles_v0(desired_orientation)
+#         print(theta_yaw)
+#         angle_thresh = 3
+#         desired_motor_angles = np.array([theta1, theta2, theta3])
+#         if ((-angle_thresh <= desired_motor_angles) & (desired_motor_angles <= angle_thresh)).all():
+#             # Home the hand joints if all the joints are within a certain range [-angle_thresh, angle_thresh]
+#             home_command = 'h'
+#             ser.write(home_command.encode())
+#             print('HOME')
+#             continue
+#         joint1, joint2, joint3 = orient_wrist(theta1, theta2, theta3).tolist()
+#         string_command = 'w %d %d %d' % (joint3, joint2, joint1)
+#         aperture_command = 'j 0 %d' % (compute_hand_aperture(50))
+#         # if counter %3==0:
+#         #     ser.write(string_command.encode())
+#         # ser.write(string_command.encode())
+#     except:
+#         print("Keyboard Interrupt")
+#         break

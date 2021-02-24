@@ -70,7 +70,7 @@ az_bias = 2.1
 mag_A_matrix = np.array([[0.9953,   -0.0146,    0.0201],
                          [-0.0146,    1.0135,    0.0253],
                          [0.0201,    0.0253,    0.9926]])
-mag_b_vector = np.array([57.4634,   92.6249,    9.6638]).reshape([1, 3])
+mag_b_vector = np.array([57.4634,   78.6249,    9.6638]).reshape([1, 3])
 
 previous_millis = 0
 gyro_previous = np.array([0, 0, 0])
@@ -90,6 +90,7 @@ while True:
             previous_millis = current_millis
         dt = (current_millis - previous_millis) / 1000
         previous_millis = current_millis
+        ser.write(b'r')
         input_bytes = ser.readline()
         counter += 1
         #

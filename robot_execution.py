@@ -16,6 +16,7 @@ import serial
 import time
 import os
 import intel_realsense_IMU
+import arm_IMU
 
 mouseX, mouseY = [0, 0]
 
@@ -338,10 +339,12 @@ delta_t = []
 grasping_box_history = []
 hand_configured = False
 previous_millis = 0
-gyro_previous = np.array([0, 0, 0])
-system_previous = np.array([0, 0, 0])
 dt_sum = 0
 cam_angles_t_1 = np.zeros(3,)
+arm_angles_t_1 = np.zeros(3,)
+num_samples_for_yaw = 20
+yaw_sum = 0
+yaw_resting = 0
 
 # Streaming loop
 for i in list(range(20)):
@@ -381,8 +384,26 @@ try:
 
         # Computing time between frames
         previous_millis, dt = compute_dt(previous_millis, frame_count)
+
         # Getting Camera Pose
         cam_angles_t = intel_realsense_IMU.camera_orientation_realsense(frames, dt, cam_angles_t_1)
+
+        # Getting Arm pose [theta_pitch, theta_roll, theta_yaw]
+        ser.write(b'r')
+        arm_angles_t = arm_IMU.arm_orientation_imu_9250(ser, dt, arm_angles_t_1)
+        ser.flushInput()
+        ser.flushOutput()
+        print('YAW: ', arm_angles_t[2])
+        if frame_count < num_samples_for_yaw:
+            yaw_sum += arm_angles_t[2]
+        elif frame_count == num_samples_for_yaw:
+            yaw_resting = yaw_sum / (num_samples_for_yaw)
+            print('DONE CALIBRATION')
+        else:
+            print('YAW_RESTING: ', yaw_resting)
+            arm_angles_t[2] -= yaw_resting
+
+        arm_angles_t_1 = np.array(arm_angles_t)
         cam_angles_t_1 = np.array(cam_angles_t)
 
         # If tracking did not start, then display detections of the network to the user
@@ -535,7 +556,8 @@ try:
                 color_image_to_display = cv2.drawContours(color_image_to_display, [np.int0(rect[:2])], 0, color, 2)
                 color_image_to_display = cv2.drawContours(color_image_to_display, [np.int0(rect[2:])], 0, color, 2)
                 if start_tracking:
-                    print(cam_angles_t)
+                    print ('')
+
 
 
 
@@ -683,8 +705,9 @@ try:
                     #
                     # time.sleep(3)
                     # ser.write(string_command.encode())
-
-
+        print(frame_count)
+        print("ARM Angles (theta_pitch, theta_roll, theta_yaw): ", arm_angles_t)
+        print("Camera Angles (theta_pitch, theta_yaw, theta_roll): ", cam_angles_t)
         frame_count += 1
         images = color_image_to_display
         if not start_tracking and num_detected_frames == 0:
