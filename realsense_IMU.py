@@ -1,5 +1,4 @@
 ########################################################################################################################
-# ECE 9516 - Topics in Autonomous Robotics - Final Project
 # Mena SA Kamel
 # Student Number: 251064703
 # MESc Candidate, Robotics and Control
@@ -8,14 +7,10 @@
 
 import pyrealsense2 as rs
 import numpy as np
-import os
 import cv2
-from PIL import Image
-from scipy.signal import butter, lfilter, freqz
 import matplotlib.pyplot as plt
 import time
 from scipy.spatial.transform import Rotation as R
-# plt.style.use('ggplot')
 
 def live_plotter(x_vec, acc_history, gyro_history, system_history, axes_objects, identifier='', pause_time=0.1):
     acc_x, acc_y, acc_z = np.split(acc_history, indices_or_sections=3, axis=0)
@@ -71,13 +66,6 @@ def gyro_data(gyro):
 
 def accel_data(accel):
     return np.asarray([accel.x, accel.y, accel.z])
-
-def butterworth_filter(type, data, cutoff, fs, order=5):
-    nyquist_freq = 0.5 * fs
-    normal_cutoff = cutoff / nyquist_freq
-    b, a = butter(order, normal_cutoff, btype=type, analog=False)
-    y = lfilter(b, a, data)
-    return y
 
 def capture_frames(num_frames, x_vals, acc_history, gyro_history, system_history, axes_objects, frame_rate=15):
     pipeline = rs.pipeline()

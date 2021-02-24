@@ -133,9 +133,6 @@ def orient_wrist(theta1, theta2, theta3):
         joint3 = np.interp(theta3, (flexion_extension_limit[0], 0), (0, fe_home))
 
     joint_output = np.array([joint1, joint2, joint3]).astype('uint8')
-    #
-    # print('Clipped values: ', theta1, theta2, theta3)
-    # print('Output values: ', joint_output)
     return joint_output
 
 def compute_hand_aperture(grasp_box_width):
@@ -232,37 +229,20 @@ def arm_orientation_imu_9250(ser, dt, angles_t_1):
 
     # Low pass filtering the yaw data
     theta_yaw_t_1 = angles_t_1[2]
-    theta_yaw_lpf = 0.1 * theta_yaw_t_1 + 0.9 * theta_yaw  # Yaw angle is in degrees
+    theta_yaw_lpf = 0 * theta_yaw_t_1  + 1 * theta_yaw  # Yaw angle is in degrees
     theta_pitch, theta_roll, _ = angles_t
     return [theta_pitch, theta_roll, theta_yaw_lpf]
 
-
 ser = initialize_serial_link('COM6', 115200)
 
-data_stream_size = 100
-x_vals = np.linspace(0,1,data_stream_size+1)[0:-1]
-acc_history = gyro_history = sys_history = np.array(np.zeros([3, len(x_vals)]))
-mag_history = np.zeros(len(x_vals))
-axes_objects = [[],[],[],[],[],[],[],[],[],[]]
-num_samples = 200
-orientations = ['+x', '-x', '+y', '-y', '+z', '-z']
 counter = 0
 previous_millis = 0
-gyro_previous = np.array([0, 0, 0])
-sys_previous = np.array([0, 0, 0])
-gz_history = []
-num_meas = 700
-magnetomer_readings = np.zeros([num_meas, 3])
 yaw_resting = 0
 num_samples_for_yaw = 50 # Avg first 20 samples to get a good measure of where the home yaw position is
-sum_yaw = 0
-yaw_cal = []
-hand_configured = False
 angles_t_1 = np.zeros(3,)
 angles_t = np.zeros(3,)
 yaw_sum = 0
-yaw_sample_counter = 0
-angles_t_1 = np.zeros(3,)
+yaw_data = []
 
 while True:
     try:
@@ -279,11 +259,16 @@ while True:
         if counter < num_samples_for_yaw:
             yaw_sum += theta_yaw
         elif counter ==num_samples_for_yaw:
-            yaw_resting = yaw_sum / num_samples_for_yaw
+            yaw_resting = yaw_sum / (num_samples_for_yaw-1)
         theta_yaw -= yaw_resting
+        yaw_data.append([theta_yaw])
+        if counter == 2000:
+            import code;
 
+            code.interact(local=dict(globals(), **locals()))
 
-        R_shoulder_to_elbow = R.from_euler('xyz', [[theta_pitch, 0, theta_roll]], degrees=True).as_matrix().squeeze()
+        # R_shoulder_to_elbow = R.from_euler('xyz', [[theta_pitch, theta_yaw, theta_roll]], degrees=True).as_matrix().squeeze()
+        R_shoulder_to_elbow = R.from_euler('xyz', [[0, theta_yaw, 0]], degrees=True).as_matrix().squeeze()
         R_shoulder_to_elbow_inv = np.linalg.inv(R_shoulder_to_elbow)
 
         wrist_pose_shoulder_frame = np.array([[0, 0, 1],
@@ -304,14 +289,14 @@ while True:
             # Home the hand joints if all the joints are within a certain range [-angle_thresh, angle_thresh]
             home_command = 'h'
             ser.write(home_command.encode())
-            print 'HOME'
+            print('HOME')
             continue
         joint1, joint2, joint3 = orient_wrist(theta1, theta2, theta3).tolist()
         string_command = 'w %d %d %d' % (joint3, joint2, joint1)
         aperture_command = 'j 0 %d' % (compute_hand_aperture(50))
-        # if counter %1==0:
+        # if counter %3==0:
         #     ser.write(string_command.encode())
-        ser.write(string_command.encode())
+        # ser.write(string_command.encode())
     except:
         print("Keyboard Interrupt")
         break
