@@ -3,6 +3,7 @@ import numpy as np
 import cv2
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
+from scipy.spatial.transform import Rotation as R
 from pytransform3d.rotations import *
 import mrcnn.utils as utils
 import mrcnn.model as modellib
@@ -210,8 +211,8 @@ def orient_wrist(theta1, theta2, theta3):
     # needed to drive the hand
 
     # Joint center positions as an 8 bit integer
-    ps_home = 100
-    ur_home = 170
+    ps_home = 102
+    ur_home = 180
     fe_home = 162
 
     # Defining the physical joint limits
@@ -263,13 +264,104 @@ def compute_hand_aperture(grasp_box_width):
     motor_command = np.polynomial.polynomial.polyval(grasp_box_width, coeffs)
     return motor_command
 
-def compute_dt(previous_millis, frame_number):
+def compute_dt(previous_millis, frame_number, zero_timer=False):
     current_millis = int(round(time.time() * 1000))
-    if frame_number == 0:
+    if frame_number == 0 or zero_timer:
         previous_millis = current_millis
     dt = (current_millis - previous_millis) / 1000
     previous_millis = current_millis
     return [previous_millis, dt]
+
+def compute_approach_vector(grasping_box):
+    # This function computes the approach vector for a given grasping box in 5-dimensional coordinates
+    # [x, y, w, h, theta].
+    # Returns the camera frame coordinates of the
+    x, y, w, h, theta = grasping_box
+    # Cropping the point cloud at the central 1/3 of the grasping box
+    extraction_mask_vertices = cv2.boxPoints(((x, y), (w, h / 3), theta))
+    grasp_box_mask = generate_mask_from_polygon([image_height, image_width, 3], extraction_mask_vertices)
+    # Masking the color and depth frames with the grasp_box_mask
+    masked_color = color_image * np.repeat(grasp_box_mask[..., None], 3, axis=2)
+    masked_depth = depth_image * grasp_box_mask
+    # Generating a point cloud by open3D for the grasping region as defined by the newly cropped color
+    # and depth channels
+    pcd = generate_pointcloud_from_rgbd(masked_color, masked_depth)
+    # Estimating surface normals
+    pcd.estimate_normals(search_param=o3d.geometry.KDTreeSearchParamHybrid(radius=0.2, max_nn=50))
+    # Pointing the surface normala towards the camera
+    pcd.orient_normals_towards_camera_location()
+    normals = np.array(pcd.normals)
+    points = np.array(pcd.points)
+    # Finding the point with the minumum depth - point with lowest distance in the Z direction
+    min_depth_ix = np.argmin(points[:, -1])
+    # approach_vector = normals[min_depth_ix]
+    # Defining approach vector as the average normal vector of the central 1/3 of the grasping box
+    approach_vector = np.mean(normals, axis=0)
+    min_depth_point = points[min_depth_ix]
+    # Approach vector needs to be pointing in the opposite direction - ie into the object because that is
+    # how we plan on approaching it
+    approach_vector = -1 * approach_vector
+    return approach_vector
+
+def visualize_wrist_in_camera_frame(color_image, depth_image, box_center, approach_vector, intrinsics,
+                                    aligned_depth_frame, rect_vertices, approach_vector_orientation):
+    # Plotting the grasp box on the point cloud
+    # Generating a point cloud by open3D
+    pcd_full_image = generate_pointcloud_from_rgbd(color_image, depth_image)
+    # Plotting approach vector on the point cloud
+    approach_vector_points = [box_center, box_center + (approach_vector * 0.2)]
+    lines = [[0, 1]]
+    colors = [[1, 0, 0] for i in range(len(lines))]
+    line_set = o3d.geometry.LineSet()
+    line_set.points = o3d.utility.Vector3dVector(approach_vector_points)
+    line_set.lines = o3d.utility.Vector2iVector(lines)
+    line_set.colors = o3d.utility.Vector3dVector(colors)
+    # grasp_box_points = rotated_points_camera_frame.T[:,:3].tolist()
+    rect_camera_frame = get_camera_frame_box_coords(intrinsics, aligned_depth_frame, rect_vertices)
+    grasp_box_points = rect_camera_frame.tolist()
+    lines = [[0, 1], [2, 3]]
+    colors = [[0, 0, 1] for i in range(len(lines))]
+    grasp_box = o3d.geometry.LineSet()
+    grasp_box.points = o3d.utility.Vector3dVector(grasp_box_points)
+    grasp_box.lines = o3d.utility.Vector2iVector(lines)
+    grasp_box.colors = o3d.utility.Vector3dVector(colors)
+
+    lines = [[1, 2], [3, 0]]
+    colors = [[0, 0, 0] for i in range(len(lines))]
+    grasp_box_2 = o3d.geometry.LineSet()
+    grasp_box_2.points = o3d.utility.Vector3dVector(grasp_box_points)
+    grasp_box_2.lines = o3d.utility.Vector2iVector(lines)
+    grasp_box_2.colors = o3d.utility.Vector3dVector(colors)
+    object_frame = o3d.geometry.TriangleMesh.create_coordinate_frame(size=0.15, origin=box_center)
+    object_frame.rotate(approach_vector_orientation)
+    camera_frame = o3d.geometry.TriangleMesh.create_coordinate_frame(size=0.05, origin=box_center)
+    o3d.visualization.draw_geometries([pcd_full_image, line_set, grasp_box_2, grasp_box, object_frame, camera_frame])
+
+def compute_wrist_orientation(approach_vector, theta):
+    # Computes the wrist orientation in the camera frame
+    # Need to get the projection of vx onto the approach vector (normal), to get the projection of vx on
+    # the plane perperndicular to the surface normal
+    vz = approach_vector
+    vx = np.array([1, 0, 0])
+    proj_n_vx = (np.dot(vx, approach_vector) / (np.linalg.norm(approach_vector) ** 2)) * approach_vector
+    vx = vx - proj_n_vx
+    vy = np.cross(vz, vx)
+    vx = vx.reshape([3, 1])
+    vy = vy.reshape([3, 1])
+    vz = vz.reshape([3, 1])
+    V = np.concatenate([vx, vy, vz], axis=-1)
+    return V
+
+def arm_orientation_imu_9250(serial_object):
+    serial_object.write(b'r')
+    input_bytes = serial_object.readline()
+    while input_bytes == b'':
+        print ('did not receive a ping back yet')
+        serial_object.write(b'r')
+        input_bytes = serial_object.readline()
+    decoded_bytes = np.array(input_bytes.decode().replace('\r', '').replace('\n', '').split('\t'), dtype='float32')
+    theta_pitch, theta_roll, theta_yaw = decoded_bytes.tolist()
+    return ([theta_pitch, theta_roll, theta_yaw])
 
 # Create a pipeline
 pipeline = rs.pipeline()
@@ -342,9 +434,10 @@ previous_millis = 0
 dt_sum = 0
 cam_angles_t_1 = np.zeros(3,)
 arm_angles_t_1 = np.zeros(3,)
-num_samples_for_yaw = 20
+num_samples_for_yaw = 50
 yaw_sum = 0
 yaw_resting = 0
+grasp_history = []
 
 # Streaming loop
 for i in list(range(20)):
@@ -384,27 +477,28 @@ try:
 
         # Computing time between frames
         previous_millis, dt = compute_dt(previous_millis, frame_count)
-
+        if dt> 2:
+            previous_millis, dt = compute_dt(previous_millis, frame_count, zero_timer=True)
+        print(dt)
         # Getting Camera Pose
         cam_angles_t = intel_realsense_IMU.camera_orientation_realsense(frames, dt, cam_angles_t_1)
 
         # Getting Arm pose [theta_pitch, theta_roll, theta_yaw]
-        ser.write(b'r')
-        arm_angles_t = arm_IMU.arm_orientation_imu_9250(ser, dt, arm_angles_t_1)
-        ser.flushInput()
-        ser.flushOutput()
-        print('YAW: ', arm_angles_t[2])
+        arm_angles_t = np.array(arm_orientation_imu_9250(ser))
+
         if frame_count < num_samples_for_yaw:
             yaw_sum += arm_angles_t[2]
+            frame_count += 1
+            print("WARNING: ZEROING MAGNETOMETER!...")
+            continue
         elif frame_count == num_samples_for_yaw:
             yaw_resting = yaw_sum / (num_samples_for_yaw)
             print('DONE CALIBRATION')
         else:
-            print('YAW_RESTING: ', yaw_resting)
             arm_angles_t[2] -= yaw_resting
-
-        arm_angles_t_1 = np.array(arm_angles_t)
         cam_angles_t_1 = np.array(cam_angles_t)
+        # print("ARM Angles (theta_pitch, theta_roll, theta_yaw): ", arm_angles_t)
+        # print("CAMERA Angles (theta_pitch, theta_yaw, theta_roll): ", cam_angles_t)
 
         # If tracking did not start, then display detections of the network to the user
         if not start_tracking and num_detected_frames == 0:
@@ -550,140 +644,100 @@ try:
                         grasping_anchors, inference_config, filter_mode='top_k', k=1, nms=False)
             color = (255, 0, 0)
             for i, rect in enumerate(pre_nms_predictions):
-                five_dim_box = rect
+                if grasp_history == []:
+                    grasp_history = rect
+                five_dim_box = grasp_history
+                print (five_dim_box)
                 rect = cv2.boxPoints(((rect[0], rect[1]), (rect[2], rect[3]), rect[4]))
                 color_image_to_display = cv2.drawContours(color_image_to_display, [np.int0(rect)], 0, (0,0,0), 2)
                 color_image_to_display = cv2.drawContours(color_image_to_display, [np.int0(rect[:2])], 0, color, 2)
                 color_image_to_display = cv2.drawContours(color_image_to_display, [np.int0(rect[2:])], 0, color, 2)
                 if start_tracking:
-                    print ('')
+
+                    print("ARM Angles (theta_pitch, theta_roll, theta_yaw): ", arm_angles_t)
+                    print("CAMERA Angles (theta_pitch, theta_yaw, theta_roll): ", cam_angles_t)
+                    # Need to crop out the point cloud at the oriented rectangle bounds
+                    # Create a mask to specify the region to extract the surface normals from. Based on Lenz et al.,
+                    # the approach vector is estimated as the surface normal calculated at the point of minumum depth in
+                    # the central one third (horizontally) of the rectangle
+                    x, y, w, h, theta = five_dim_box
+                    # Undoing the center cropping of the image
+                    x = int(x + (image_width - center_crop_size) // 2)
+                    y = int(y + (image_height - center_crop_size) // 2)
+                    # Getting grasping box vertices in the image plane
+                    rect_vertices = cv2.boxPoints(((x, y), (w, h), theta))
+                    # Calculating the approach vector for the grasp box
+                    approach_vector = compute_approach_vector([x, y, w, h, theta])
+                    # Getting the XYZ coordinates of the grasping box center <x, y>
+                    box_center = de_project_point(intrinsics, aligned_depth_frame, [x, y])
+                    # Wrapping angles so they are in [-90, 90] range
+                    theta = dataset_object.wrap_angle_around_90(np.array([theta]))[0]
+                    theta = theta * (np.pi / 180) # network outputs positive angles in bottom right quadrant
+                    # Computing the grasp box size in camera coordinates
+                    real_width, real_height = compute_real_box_size(intrinsics, aligned_depth_frame, rect_vertices)
+                    box_vert_obj_frame = generate_points_in_world_frame(real_width, real_height)
+                    #
+                    # visualize_wrist_in_camera_frame(color_image, depth_image, box_center, approach_vector, intrinsics,
+                    #                                 aligned_depth_frame, rect_vertices, approach_vector_orientation)
+
+                    # Computing the desired wrist orientation in the camera frame
+                    V = compute_wrist_orientation(approach_vector, theta)
+                    rotation_z = np.array([[np.cos(theta), -np.sin(theta), 0],
+                                           [np.sin(theta), np.cos(theta), 0],
+                                           [0, 0, 1]])
+                    approach_vector_orientation = np.dot(V, rotation_z)
+                    import code;
+
+                    code.interact(local=dict(globals(), **locals()))
+
+                    cam_pitch, cam_yaw, cam_roll = cam_angles_t
+                    arm_pitch, arm_roll, arm_yaw = arm_angles_t
+
+                    # R_shoulder_camera = R.from_euler('xyz', [[cam_pitch, 0, cam_roll]],
+                    #                                    degrees=True).as_matrix().squeeze()
+                    R_shoulder_camera = R.from_euler('xyz', [[cam_pitch, 0, 0]],
+                                                     degrees=True).as_matrix().squeeze()
+                    R_shoulder_elbow = R.from_euler('xyz', [[arm_pitch, arm_yaw, arm_roll]],
+                                                       degrees=True).as_matrix().squeeze()
+                    R_elbow_shoulder = np.linalg.inv(R_shoulder_elbow)
+                    grasp_orientation_shoulder = np.dot(R_shoulder_camera, approach_vector_orientation)
+                    calibration_matrix = np.array([[0, 0, 1],
+                                                   [0, -1, 0],
+                                                   [1, 0, 0]])
+                    calibration_matrix_inv = np.linalg.inv(calibration_matrix)
+                    grasp_orientation_elbow = np.dot(np.dot(R_elbow_shoulder, grasp_orientation_shoulder),calibration_matrix)
+
+                    # theta1 : pronate/supinate
+                    # theta2 : ulnar/radial
+                    # theta3 : flexion/extension
+                    theta1, theta2, theta3 = derive_motor_angles_v0(grasp_orientation_elbow)
+                    joint1, joint2, joint3 = orient_wrist(theta1, theta2, theta3).tolist()
+                    string_command = 'w %d %d %d' % (joint3, joint2, joint1)
+                    aperture_command = 'j 0 %d' % (compute_hand_aperture(real_width * 1000))
+
+                    print('ps', theta1, 'ur', theta2, 'fe', theta3)
 
 
 
+                    # ser.write(string_command.encode())
+                    # import code;
+                    #
+                    # code.interact(local=dict(globals(), **locals()))
 
 
-                    # # Need to crop out the point cloud at the oriented rectangle bounds
-                    # # Create a mask to specify the region to extract the surface normals from. Based on Lenz et al.,
-                    # # the approach vector is estimated as the surface normal calculated at the point of minumum depth in
-                    # # the central one third (horizontally) of the rectangle
                     #
-                    # x, y, w, h, theta = five_dim_box
-                    # # Undoing the center cropping of the image
-                    # x = int(x + (image_width - center_crop_size) // 2)
-                    # y = int(y + (image_height - center_crop_size) // 2)
-                    #
-                    # rect_vertices = cv2.boxPoints(((x, y), (w, h), theta))
-                    # extraction_mask_vertices = cv2.boxPoints(((x, y), (w, h/3), theta))
-                    # grasp_box_mask = generate_mask_from_polygon([image_height, image_width, 3], extraction_mask_vertices)
-                    #
-                    # # Masking the color and depth frames with the grasp_box_mask
-                    # masked_color = color_image * np.repeat(grasp_box_mask[...,None],3,axis=2)
-                    # masked_depth = depth_image * grasp_box_mask
-                    #
-                    # # Generating a point cloud by open3D for the grasping region
-                    # pcd = generate_pointcloud_from_rgbd(masked_color, masked_depth)
-                    # pcd.estimate_normals(search_param=o3d.geometry.KDTreeSearchParamHybrid(radius=0.2, max_nn=50))
-                    # pcd.orient_normals_towards_camera_location()
-                    # normals = np.array(pcd.normals)
-                    # points = np.array(pcd.points)
-                    #
-                    # # Finding the point with the minumum depth
-                    # min_depth_ix = np.argmin(points[:, -1])
-                    # # approach_vector = normals[min_depth_ix]
-                    # approach_vector = np.mean(normals, axis=0)
-                    # min_depth_point = points[min_depth_ix]
-                    #
-                    # # Approach vector needs to be pointing in the opposite direction
-                    # approach_vector = -1 * approach_vector
-                    #
-                    # # Getting the XYZ coordinates of the grasping box center <x, y>
-                    # box_center = de_project_point(intrinsics, aligned_depth_frame, [x, y])
-                    #
-                    # #### Visualization
-                    # # Generating a point cloud by open3D
-                    # pcd_full_image = generate_pointcloud_from_rgbd(color_image, depth_image)
-                    # points = np.array(pcd_full_image.points)
-                    #
-                    # # Plotting approach vector on the point cloud
-                    # approach_vector_points = [box_center, box_center + (approach_vector*0.2)]
-                    # lines = [[0, 1]]
-                    # colors = [[1, 0, 0] for i in range(len(lines))]
-                    # line_set = o3d.geometry.LineSet()
-                    # line_set.points = o3d.utility.Vector3dVector(approach_vector_points)
-                    # line_set.lines = o3d.utility.Vector2iVector(lines)
-                    # line_set.colors = o3d.utility.Vector3dVector(colors)
-                    #
-                    # theta = dataset_object.wrap_angle_around_90(np.array([theta]))[0]
-                    # # print('Angle in the image plane: ', theta, 'degrees')
-                    # theta = theta * (np.pi / 180) # network outputs positive angles in bottom right quadrant
-                    #
-                    # vz = approach_vector
-                    # vx = np.array([1, 0, 0])
-                    # # need to get the projection of vx onto the approach vector (normal)
-                    # proj_n_vx = (np.dot(vx, approach_vector)/(np.linalg.norm(approach_vector)**2)) * approach_vector
-                    # vx = vx - proj_n_vx
-                    # vy = np.cross(vz, vx)
-                    # vx = vx.reshape([3, 1])
-                    # vy = vy.reshape([3, 1])
-                    # vz = vz.reshape([3, 1])
-                    # V = np.concatenate([vx, vy, vz], axis=-1)
-                    # rotation_z = np.array([[np.cos(theta), -np.sin(theta), 0],
-                    #                        [np.sin(theta),  np.cos(theta), 0],
-                    #                        [0            ,              0, 1]])
-                    #
-                    # approach_vector_orientation = np.dot(V, rotation_z)
-                    #
-                    # # print('Approach vector orientation relative to camera coordinates: \n', approach_vector_orientation)
-                    #
-                    # real_width, real_height = compute_real_box_size(intrinsics, aligned_depth_frame, rect_vertices)
-                    # box_vert_obj_frame = generate_points_in_world_frame(real_width, real_height)
-                    #
-                    # # Rotation about the Z axis of the surface normal
-                    # r_z = np.array([[np.cos(theta), -np.sin(theta), 0],
-                    #                 [np.sin(theta), np.cos(theta), 0],
-                    #                 [0, 0, 1]])
-                    #
-                    # rotated_points = np.dot(r_z, box_vert_obj_frame.T).T
-                    # HTM_camera_to_object = np.concatenate([approach_vector_orientation, np.expand_dims(box_center, -1)], axis=-1)
-                    # HTM_camera_to_object = np.concatenate([HTM_camera_to_object, np.array([[0, 0, 0, 1]])], axis=0)
-                    # rotated_points = np.concatenate([rotated_points, np.ones((4, 1))], axis=-1)
-                    # rotated_points_camera_frame = np.dot(HTM_camera_to_object, rotated_points.T)
-                    #
-                    # # Plotting the grasp box on the point cloud
-                    # # grasp_box_points = rotated_points_camera_frame.T[:,:3].tolist()
-                    # rect_camera_frame = get_camera_frame_box_coords(intrinsics, aligned_depth_frame, rect_vertices)
-                    # grasp_box_points = rect_camera_frame.tolist()
-                    # lines = [[0, 1], [2, 3]]
-                    # colors = [[0, 0, 1] for i in range(len(lines))]
-                    # grasp_box = o3d.geometry.LineSet()
-                    # grasp_box.points = o3d.utility.Vector3dVector(grasp_box_points)
-                    # grasp_box.lines = o3d.utility.Vector2iVector(lines)
-                    # grasp_box.colors = o3d.utility.Vector3dVector(colors)
-                    #
-                    # lines = [[1, 2], [3, 0]]
-                    # colors = [[0, 0, 0] for i in range(len(lines))]
-                    # grasp_box_2 = o3d.geometry.LineSet()
-                    # grasp_box_2.points = o3d.utility.Vector3dVector(grasp_box_points)
-                    # grasp_box_2.lines = o3d.utility.Vector2iVector(lines)
-                    # grasp_box_2.colors = o3d.utility.Vector3dVector(colors)
-                    #
-                    # object_frame = o3d.geometry.TriangleMesh.create_coordinate_frame(size=0.15, origin=box_center)
-                    # object_frame.rotate(approach_vector_orientation)
-                    #
-                    # camera_frame = o3d.geometry.TriangleMesh.create_coordinate_frame(size=0.05, origin=box_center)
-                    #
-                    # o3d.visualization.draw_geometries([pcd_full_image, line_set, grasp_box_2, grasp_box, object_frame, camera_frame])
-                    #
-                    # # theta1 : pronate/supinate
-                    # # theta2 : ulnar/radial
-                    # # theta3 : flexion/extension
                     # camera_angle = -70 * (np.pi / 180)
                     # rotation_x = np.array([[1,                    0,                     0],
                     #                        [0, np.cos(camera_angle), -np.sin(camera_angle)],
                     #                        [0, np.sin(camera_angle), np.cos(camera_angle)]])
                     # r_x_inverse = np.linalg.inv(rotation_x)
                     # # vector = np.dot(approach_vector_orientation, rotation_x)
+                    # rotation_z = np.array([[np.cos(theta), -np.sin(theta), 0],
+                    #                        [np.sin(theta), np.cos(theta), 0],
+                    #                        [0, 0, 1]])
+                    # import code;
                     #
+                    # code.interact(local=dict(globals(), **locals()))
                     # vector = np.dot(np.dot(rotation_x, V), rotation_z)
                     # calibration_matrix = np.array([[0, 0, 1],
                     #                                [0, -1, 0],
@@ -691,12 +745,15 @@ try:
                     # vector_new = np.dot(vector, calibration_matrix)
                     # # vector = np.dot(rotation_x, V)
                     #
+                    # # theta1 : pronate/supinate
+                    # # theta2 : ulnar/radial
+                    # # theta3 : flexion/extension
                     # theta1, theta2, theta3 = derive_motor_angles_v0(vector_new)
                     # joint1, joint2, joint3 = orient_wrist(theta1, theta2, theta3).tolist()
                     # # configure_hand(real_width, real_height, joint3, joint2, joint1)
                     # string_command = 'w %d %d %d' % (joint3, joint2, joint1)
                     # aperture_command = 'j 0 %d' % (compute_hand_aperture(real_width*1000))
-
+                    #
                     # if not hand_configured:
                     #     ser.write(aperture_command.encode())
                     #     time.sleep(3)
@@ -705,9 +762,7 @@ try:
                     #
                     # time.sleep(3)
                     # ser.write(string_command.encode())
-        print(frame_count)
-        print("ARM Angles (theta_pitch, theta_roll, theta_yaw): ", arm_angles_t)
-        print("Camera Angles (theta_pitch, theta_yaw, theta_roll): ", cam_angles_t)
+
         frame_count += 1
         images = color_image_to_display
         if not start_tracking and num_detected_frames == 0:

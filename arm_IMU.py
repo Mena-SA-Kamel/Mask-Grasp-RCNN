@@ -185,7 +185,12 @@ def calibrate_accelerometer(ax, ay, az):
 
 def read_serial_port(serial_object):
     # Reads the serial port to get the IMU readings
+    serial_object.write(b'r')
     input_bytes = serial_object.readline()
+    while input_bytes == b'':
+        print ('did not receive a ping back yet')
+        serial_object.write(b'r')
+        input_bytes = serial_object.readline()
     decoded_bytes = np.array(input_bytes.decode().replace('\r', '').replace('\n', '').split('\t'), dtype='float32')
     ay, ax, az, gy, gx, gz, mx, my, mz, T = decoded_bytes.tolist()
     return [ax, ay, az, gx, gy, gz, mx, my, mz]
@@ -231,7 +236,7 @@ def arm_orientation_imu_9250(ser, dt, angles_t_1):
     theta_yaw_t_1 = angles_t_1[2]
     theta_yaw_lpf = 0 * theta_yaw_t_1  + 1 * theta_yaw  # Yaw angle is in degrees
     theta_pitch, theta_roll, _ = angles_t
-    return [theta_pitch, theta_roll, theta_yaw_lpf]
+    return [theta_pitch, theta_roll, theta_yaw]
 #
 # ser = initialize_serial_link('COM6', 115200)
 #

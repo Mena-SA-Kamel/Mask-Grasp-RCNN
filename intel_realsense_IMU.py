@@ -29,7 +29,6 @@ def camera_orientation_realsense(frames, dt, angles_t_1):
     accel = accel_data(frames[2].as_motion_frame().get_motion_data())
     gyro = gyro_data(frames[3].as_motion_frame().get_motion_data())
     ax, ay, az = np.split(accel / 9.8, indices_or_sections=3)
-    gx, gy, gz = np.split(gyro, indices_or_sections=3)
     # Computing the angle based on the accelerometer readings (Degrees)
     accelerometer_angles = np.array(compute_angles_from_accelerometer(ax, ay, az)).squeeze()
     # Computing the angle based on the Gyroscope readings (Degrees)
