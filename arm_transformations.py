@@ -83,9 +83,9 @@ def derive_motor_angles_v0(orientation_matrix):
         else:
             final_angles = angle_set_2
         theta_1, theta_2, theta_3 = final_angles
-        print('First Set of Angles : ', ('ps', theta_1_1, 'ur', theta_2_1, 'fe', theta_3_1), '\n')
-        print('Second Set of Angles : ', ('ps', theta_1_2, 'ur', theta_2_2, 'fe', theta_3_2), '\n')
-        print('Final Set of Angles : ', ('ps', theta_1, 'ur', theta_2, 'fe', theta_3), '\n')
+        # print('First Set of Angles : ', ('ps', theta_1_1, 'ur', theta_2_1, 'fe', theta_3_1), '\n')
+        # print('Second Set of Angles : ', ('ps', theta_1_2, 'ur', theta_2_2, 'fe', theta_3_2), '\n')
+        # print('Final Set of Angles : ', ('ps', theta_1, 'ur', theta_2, 'fe', theta_3), '\n')
     else:
         print ('CASE NOT CORRECTED')
         theta_1 = 0
@@ -103,20 +103,20 @@ def derive_motor_angles_v0(orientation_matrix):
 
 
     ps_home = 0
-    ur_home = 90
-    fe_home = -90
+    ur_home = 0
+    fe_home = -0
 
     theta_1_corrected = theta_1 - ps_home
     theta_2_corrected = -1*(ur_home - theta_2)
     theta_3_corrected = theta_3 - fe_home
-    print('Corrected Set of Angles : ', ('ps', theta_1_corrected, 'ur', theta_2_corrected, 'fe', theta_3_corrected),'\n')
+    # print('Corrected Set of Angles : ', ('ps', theta_1_corrected, 'ur', theta_2_corrected, 'fe', theta_3_corrected),'\n')
 
     theta_1_wrapped = wrap_angle_around_90(np.array([theta_1_corrected]))[0]
     theta_2_wrapped = wrap_angle_around_90(np.array([theta_2_corrected]))[0]
     theta_3_wrapped = wrap_angle_around_90(np.array([theta_3_corrected]))[0]
-    print('Wrapped Set of Angles : ', ('ps', theta_1_wrapped, 'ur', theta_2_wrapped, 'fe', theta_3_wrapped),'\n')
+    # print('Wrapped Set of Angles : ', ('ps', theta_1_wrapped, 'ur', theta_2_wrapped, 'fe', theta_3_wrapped),'\n')
 
-    print('\n'*3)
+    # print('\n'*3)
     return [theta_1_wrapped, theta_2_wrapped, theta_3_wrapped]
 
 def orient_wrist(theta1, theta2, theta3):
@@ -196,17 +196,20 @@ align_to = rs.stream.color
 align = rs.align(align_to)
 colorizer = rs.colorizer()
 
-ser = serial.Serial('COM6', 115200)
+ser = serial.Serial('COM6', 115200, timeout=0.05)
 ser.flushInput()
 
 counter = 0
 num_samples_for_yaw = 10 # Avg first 200 samples to get a good measure of where the home yaw position is
 yaw_sum = 0
+previous_millis_move = 0
+current_millis_move = 0
+frame_count_move = 0
 
 # Streaming loop
 for i in list(range(20)):
     frames = pipeline.wait_for_frames()
-cv2.namedWindow('MASK-GRASP RCNN OUTPUT', cv2.WINDOW_AUTOSIZE)
+# cv2.namedWindow('MASK-GRASP RCNN OUTPUT', cv2.WINDOW_AUTOSIZE)
 
 while True:
     try:
@@ -214,17 +217,17 @@ while True:
         previous_millis, dt = compute_dt(previous_millis, frame_count)
         if dt > 2:
             previous_millis, dt = compute_dt(previous_millis, frame_count, zero_timer=True)
-
+        print (dt)
         # Getting Camera Pose
         cam_angles_t = intel_realsense_IMU.camera_orientation_realsense(frames, dt, cam_angles_t_1)
         cam_angles_t_1 = np.array(cam_angles_t)
 
         frame_count += 1
-        ser.write(b'r')
+        ser.write(b'r') # Arm will only respond when it is done moving all the joints
         input_bytes = ser.readline()
         while input_bytes == b'':
             print('did not receive a ping back yet')
-            ser.write(b'r')
+            serial_read = ser.write(b'r')
             input_bytes = ser.readline()
 
         decoded_bytes = np.array(input_bytes.decode().replace('\r','').replace('\n','').split('\t'), dtype='float32')
@@ -240,12 +243,10 @@ while True:
         else:
             theta_yaw -= yaw_resting
 
-        # print("ARM Angles (theta_pitch, theta_roll, theta_yaw): ", theta_pitch, theta_roll, theta_yaw)
-        # print("CAMERA Angles (theta_pitch, theta_yaw, theta_roll): ", cam_angles_t)
 
-        approach_vector = np.array([0,1,0])
+        approach_vector = np.array([0,0,1])
         approach_vector = approach_vector/np.linalg.norm(approach_vector)
-        theta = 45 # Relative to the positive x-axis
+        theta = 0 # Relative to the positive x-axis
         # theta = theta + 90  # Relative to the positive Y axis: CW rotaion = positive, CCW = negative
         theta = wrap_angle_around_90(np.array([theta]))[0]
         theta = theta * (np.pi / 180)  # network outputs positive angles in bottom right quadrant
@@ -255,26 +256,21 @@ while True:
                                [0, 0, 1]])
         grasp_orientation_camera = np.dot(V, rotation_z)
 
+
         cam_pitch, cam_yaw, cam_roll = cam_angles_t
         arm_pitch, arm_roll, arm_yaw = [theta_pitch, theta_roll, theta_yaw]
+        # print (arm_pitch, arm_roll, arm_yaw)
 
-        # R_shoulder_camera = R.from_euler('xyz', [[cam_pitch, 0, cam_roll]],
-        #                                    degrees=True).as_matrix().squeeze()
         R_shoulder_camera = R.from_euler('xyz', [[-0, 0, 0]],
                                          degrees=True).as_matrix().squeeze()
         R_shoulder_elbow = R.from_euler('xyz', [[arm_pitch,0,0]],
                                         degrees=True).as_matrix().squeeze()
         R_elbow_shoulder = np.linalg.inv(R_shoulder_elbow)
         grasp_orientation_shoulder = np.dot(R_shoulder_camera, grasp_orientation_camera)
-        import code;
 
-        code.interact(local=dict(globals(), **locals()))
         calibration_matrix = np.array([[0, 0, 1],
                                        [0, -1, 0],
                                        [1, 0, 0]])
-        # calibration_matrix = np.array([[0, 0, 1],
-        #                                [1, 0, 0],
-        #                                [0, 1, 0]])
         calibration_matrix_inv = np.linalg.inv(calibration_matrix)
         grasp_orientation_elbow = np.dot(np.dot(R_elbow_shoulder, grasp_orientation_shoulder), calibration_matrix_inv)
 
@@ -284,9 +280,16 @@ while True:
         theta1, theta2, theta3 = derive_motor_angles_v0(grasp_orientation_elbow)
         joint1, joint2, joint3 = orient_wrist(theta1, theta2, theta3).tolist()
         string_command = 'w %d %d %d' % (joint3, joint2, joint1)
-
         print('ps', theta1, 'ur', theta2, 'fe', theta3)
-        # ser.write(string_command.encode())
+
+        current_millis_move = int(round(time.time() * 1000))
+        if frame_count_move == 0:
+            previous_millis_move = current_millis_move
+        if (current_millis_move - previous_millis_move) >= 1000:
+            print('Timer Done')
+            ser.write(string_command.encode())
+            previous_millis_move = current_millis_move
+        frame_count_move+=1
         counter += 1
     except:
         print("Keyboard Interrupt")
