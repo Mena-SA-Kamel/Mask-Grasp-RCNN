@@ -76,8 +76,6 @@ def derive_motor_angles_v0(orientation_matrix):
         join_sum.append(np.sum(np.abs(np.array([theta_1,theta_2, theta_3]))))
     theta_1, theta_2, theta_3 = joint_combinations[np.argmin(join_sum)] # Choosing the angle combo with the least
                                                                         # deviation required
-
-    print(joint_combinations[np.argmin(join_sum)])
     theta_1_wrapped = wrap_angle_around_90(np.array([theta_1]))[0]
     theta_2_wrapped = wrap_angle_around_90(np.array([theta_2]))[0]
     theta_3_wrapped = wrap_angle_around_90(np.array([theta_3]))[0]
@@ -265,12 +263,9 @@ while True:
             continue
 
         frames = pipeline.wait_for_frames()
-        # previous_millis, dt = compute_dt(previous_millis, frame_count)
-        # if dt > 2:
-        #     previous_millis, dt = compute_dt(previous_millis, frame_count, zero_timer=True)
-        # print (dt)
+
         # Getting Camera Pose
-        cam_angles_t = intel_realsense_IMU.camera_orientation_realsense(frames, dt, cam_angles_t_1)
+        cam_angles_t = intel_realsense_IMU.camera_orientation_realsense(frames, dt/1000, cam_angles_t_1)
         cam_angles_t_1 = np.array(cam_angles_t)
 
         frame_count += 1
@@ -294,11 +289,9 @@ while True:
         else:
             theta_yaw -= yaw_resting
 
-
         approach_vector = np.array([0,1,0])
         approach_vector = approach_vector/np.linalg.norm(approach_vector)
-        theta = 30 # Relative to the positive x-axis
-        # theta = theta + 90  # Relative to the positive Y axis: CW rotaion = positive, CCW = negative
+        theta = -90 # Relative to the positive x-axis
         theta = wrap_angle_around_90(np.array([theta]))[0]
         theta = theta * (np.pi / 180)  # network outputs positive angles in bottom right quadrant
         V = compute_wrist_orientation(approach_vector, theta)
@@ -306,29 +299,16 @@ while True:
                                [np.sin(theta), np.cos(theta), 0],
                                [0, 0, 1]])
         grasp_orientation_camera = np.dot(V, rotation_z)
-
-
         cam_pitch, cam_yaw, cam_roll = cam_angles_t
-        arm_pitch, arm_roll, arm_yaw = [theta_pitch, theta_roll, theta_yaw]
-        # print (arm_pitch, arm_roll, arm_yaw)
-
-        R_shoulder_camera = R.from_euler('xyz', [[-0, 0, 0]],
+        R_shoulder_camera = R.from_euler('xyz', [[cam_pitch, 0, cam_roll]],
                                          degrees=True).as_matrix().squeeze()
-        R_shoulder_elbow = R.from_euler('xyz', [[0,0,0]],
-                                        degrees=True).as_matrix().squeeze()
-        R_elbow_shoulder = np.linalg.inv(R_shoulder_elbow)
+        # print (cam_pitch, cam_yaw, cam_roll)
         grasp_orientation_shoulder = np.dot(R_shoulder_camera, grasp_orientation_camera)
-
-        calibration_matrix = np.array([[1,0,0],
-                                       [0,1,0],
-                                       [0,0,1]])
-        calibration_matrix_inv = np.linalg.inv(calibration_matrix)
-        grasp_orientation_elbow = np.dot(np.dot(R_elbow_shoulder, grasp_orientation_shoulder), calibration_matrix_inv)
-
         # theta1 : pronate/supinate
         # theta2 : ulnar/radial
         # theta3 : flexion/extension
-        theta1, theta2, theta3 = derive_motor_angles_v0(grasp_orientation_elbow)
+        theta1, theta2, theta3 = derive_motor_angles_v0(grasp_orientation_shoulder)
+        arm_pitch, arm_roll, arm_yaw = [theta_pitch, theta_roll, theta_yaw]
         theta1 = theta1 - arm_roll
         theta3 = theta3 - arm_pitch
         joint1, joint2, joint3 = orient_wrist(theta1, theta2, theta3).tolist()
@@ -336,7 +316,6 @@ while True:
         if update_count%1 == 0:
             print('ps', theta1, 'ur', theta2, 'fe', theta3)
             ser.write(string_command.encode())
-
         frame_count_move+=1
         counter += 1
     except:
