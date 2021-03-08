@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 import time
 from mpl_toolkits.mplot3d import Axes3D
 
-def live_plotter(x_vec, acc_history, gyro_history, mag_history, sys_history, axes_objects, identifier='', pause_time=0.0001):
+def live_plotter(x_vec, acc_history, gyro_history, mag_history, sys_history, axes_objects, identifier='', pause_time=0.000001):
     acc_x, acc_y, acc_z = np.split(acc_history, indices_or_sections=3, axis=0)
     gyro_x, gyro_y, gyro_z = np.split(gyro_history, indices_or_sections=3, axis=0)
     sys_x, sys_y, sys_z = np.split(sys_history, indices_or_sections=3, axis=0)

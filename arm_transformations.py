@@ -36,7 +36,7 @@ def compute_wrist_orientation(approach_vector, theta):
     V = np.concatenate([vx, vy, vz], axis=-1)
     return V
 
-def wrap_angle_around_90( angles):
+def wrap_angle_around_90(angles):
     angles %= 360
     angles[np.logical_and((angles > 90), (angles < 180))] -= 180
     theta_bet_180_270 = angles[np.logical_and((angles >= 180), (angles < 270))]
@@ -47,77 +47,116 @@ def wrap_angle_around_90( angles):
 
 def derive_motor_angles_v0(orientation_matrix):
     orientation_matrix = np.around(orientation_matrix, decimals=2)
-    a = orientation_matrix[0, 0]
+
     b = orientation_matrix[0, 1]
-    c = orientation_matrix[0, 2]
-    d = orientation_matrix[1, 0]
     e = orientation_matrix[1, 1]
-    f = orientation_matrix[1, 2]
     i = orientation_matrix[2, 2]
     g = orientation_matrix[2, 0]
     h = orientation_matrix[2, 1]
 
-    # value of i is what determines Gimbal lock: this is the case if i = +- 1, leading theta2 to eval to +/- 90 degrees
+    s2 = h
+    c2 = np.sqrt(1 - s2 ** 2) # c2 is either a positive or negative angle. We need to try those angle combinations,
+                                # and choose the angle combination with the lowest sum of angles
+    angle_signs = [1, -1]
+    join_sum = []
+    joint_combinations = np.zeros((2,3))
+    for j, angle_sign in enumerate(angle_signs):
+        c2_i = c2 * angle_sign
+        if c2_i == 0:
+            print("Potentially Gimbal lock")
+        c2_i = np.sign(c2_i)*np.maximum(0.0001, np.abs(c2_i)) # Gimbal lock case - Need to look into this
+        s1 = e / c2_i
+        c1 = b / c2_i
+        s3 = i / c2_i
+        c3 = g / c2_i
+        theta_1 = np.arctan2(s1, c1) / (np.pi / 180)
+        theta_2 = np.arctan2(s2, c2_i) / (np.pi / 180)
+        theta_3 = np.arctan2(s3, c3) / (np.pi / 180)
+        joint_combinations[j,:] = np.array([theta_1,theta_2, theta_3])
+        join_sum.append(np.sum(np.abs(np.array([theta_1,theta_2, theta_3]))))
+    theta_1, theta_2, theta_3 = joint_combinations[np.argmin(join_sum)] # Choosing the angle combo with the least
+                                                                        # deviation required
 
-    if np.abs(i) != 1:
-        theta_2_1 = np.arcsin(i)
-        theta_2_2 = np.pi - theta_2_1
-
-        theta_3_1 = np.arctan2(-h / np.cos(theta_2_1), g / np.cos(theta_2_1))
-        theta_3_2 = np.arctan2(-h / np.cos(theta_2_2), g / np.cos(theta_2_2))
-
-        theta_1_1 = np.arctan2(f / np.cos(theta_2_1), c / np.cos(theta_2_1))
-        theta_1_2 = np.arctan2(f / np.cos(theta_2_2), c / np.cos(theta_2_2))
-
-        theta_1_1 /= (np.pi / 180)
-        theta_1_2 /= (np.pi / 180)
-        theta_2_1 /= (np.pi / 180)
-        theta_2_2 /= (np.pi / 180)
-        theta_3_1 /= (np.pi / 180)
-        theta_3_2 /= (np.pi / 180)
-        angle_set_1 = np.array([theta_1_1, theta_2_1, theta_3_1])
-        angle_set_2 = np.array([theta_1_2, theta_2_2, theta_3_2])
-
-        if np.sum(np.abs(angle_set_1)) < np.sum(np.abs(angle_set_2)):
-            final_angles = angle_set_1
-        else:
-            final_angles = angle_set_2
-        theta_1, theta_2, theta_3 = final_angles
-        # print('First Set of Angles : ', ('ps', theta_1_1, 'ur', theta_2_1, 'fe', theta_3_1), '\n')
-        # print('Second Set of Angles : ', ('ps', theta_1_2, 'ur', theta_2_2, 'fe', theta_3_2), '\n')
-        # print('Final Set of Angles : ', ('ps', theta_1, 'ur', theta_2, 'fe', theta_3), '\n')
-    else:
-        print ('CASE NOT CORRECTED')
-        theta_1 = 0
-        if i == -1:
-            theta_2 = -np.pi/2
-            theta_3 = theta_1 + np.arctan2(-d, -e)
-            # theta_3 = theta_1 + np.arctan2(-a, -b)
-        else:
-            theta_2 = np.pi/2
-            theta_3 = -theta_1 + np.arctan2(-d, -e)
-            # theta_3 = -theta_1 + np.arctan2(a, b)
-        theta_1 /= (np.pi / 180)
-        theta_2 /= (np.pi / 180)
-        theta_3 /= (np.pi / 180)
-
-
-    ps_home = 0
-    ur_home = 0
-    fe_home = -0
-
-    theta_1_corrected = theta_1 - ps_home
-    theta_2_corrected = -1*(ur_home - theta_2)
-    theta_3_corrected = theta_3 - fe_home
-    # print('Corrected Set of Angles : ', ('ps', theta_1_corrected, 'ur', theta_2_corrected, 'fe', theta_3_corrected),'\n')
-
-    theta_1_wrapped = wrap_angle_around_90(np.array([theta_1_corrected]))[0]
-    theta_2_wrapped = wrap_angle_around_90(np.array([theta_2_corrected]))[0]
-    theta_3_wrapped = wrap_angle_around_90(np.array([theta_3_corrected]))[0]
-    # print('Wrapped Set of Angles : ', ('ps', theta_1_wrapped, 'ur', theta_2_wrapped, 'fe', theta_3_wrapped),'\n')
-
-    # print('\n'*3)
+    print(joint_combinations[np.argmin(join_sum)])
+    theta_1_wrapped = wrap_angle_around_90(np.array([theta_1]))[0]
+    theta_2_wrapped = wrap_angle_around_90(np.array([theta_2]))[0]
+    theta_3_wrapped = wrap_angle_around_90(np.array([theta_3]))[0]
     return [theta_1_wrapped, theta_2_wrapped, theta_3_wrapped]
+
+
+# def derive_motor_angles_v0(orientation_matrix):
+#     orientation_matrix = np.around(orientation_matrix, decimals=2)
+#     a = orientation_matrix[0, 0]
+#     b = orientation_matrix[0, 1]
+#     c = orientation_matrix[0, 2]
+#     d = orientation_matrix[1, 0]
+#     e = orientation_matrix[1, 1]
+#     f = orientation_matrix[1, 2]
+#     i = orientation_matrix[2, 2]
+#     g = orientation_matrix[2, 0]
+#     h = orientation_matrix[2, 1]
+#
+#     # value of i is what determines Gimbal lock: this is the case if i = +- 1, leading theta2 to eval to +/- 90 degrees
+#
+#     if np.abs(i) != 1:
+#         theta_2_1 = np.arcsin(h)
+#         theta_2_2 = np.pi - theta_2_1
+#
+#         theta_3_1 = np.arctan2(i / np.cos(theta_2_1), g / np.cos(theta_2_1))
+#         theta_3_2 = np.arctan2(i / np.cos(theta_2_2), g / np.cos(theta_2_2))
+#
+#         theta_1_1 = np.arctan2(e / np.cos(theta_2_1), b / np.cos(theta_2_1))
+#         theta_1_2 = np.arctan2(e / np.cos(theta_2_2), b / np.cos(theta_2_2))
+#
+#         theta_1_1 /= (np.pi / 180)
+#         theta_1_2 /= (np.pi / 180)
+#         theta_2_1 /= (np.pi / 180)
+#         theta_2_2 /= (np.pi / 180)
+#         theta_3_1 /= (np.pi / 180)
+#         theta_3_2 /= (np.pi / 180)
+#         angle_set_1 = np.array([theta_1_1, theta_2_1, theta_3_1])
+#         angle_set_2 = np.array([theta_1_2, theta_2_2, theta_3_2])
+#
+#         if np.sum(np.abs(angle_set_1)) < np.sum(np.abs(angle_set_2)):
+#             final_angles = angle_set_1
+#         else:
+#             final_angles = angle_set_2
+#         theta_1, theta_2, theta_3 = final_angles
+#         # print('First Set of Angles : ', ('ps', theta_1_1, 'ur', theta_2_1, 'fe', theta_3_1), '\n')
+#         # print('Second Set of Angles : ', ('ps', theta_1_2, 'ur', theta_2_2, 'fe', theta_3_2), '\n')
+#         # print('Final Set of Angles : ', ('ps', theta_1, 'ur', theta_2, 'fe', theta_3), '\n')
+#     else:
+#         print ('CASE NOT CORRECTED')
+#         theta_1 = 0
+#         if i == -1:
+#             theta_2 = -np.pi/2
+#             theta_3 = theta_1 + np.arctan2(c, a)
+#             # theta_3 = theta_1 + np.arctan2(-a, -b)
+#         else:
+#             theta_2 = np.pi/2
+#             theta_3 = -theta_1 + np.arctan2(-d, -a)
+#             # theta_3 = -theta_1 + np.arctan2(a, b)
+#         theta_1 /= (np.pi / 180)
+#         theta_2 /= (np.pi / 180)
+#         theta_3 /= (np.pi / 180)
+#
+#
+#     ps_home = 0
+#     ur_home = 0
+#     fe_home = -0
+#
+#     theta_1_corrected = theta_1 - ps_home
+#     theta_2_corrected = -1*(ur_home - theta_2)
+#     theta_3_corrected = theta_3 - fe_home
+#     # print('Corrected Set of Angles : ', ('ps', theta_1_corrected, 'ur', theta_2_corrected, 'fe', theta_3_corrected),'\n')
+#
+#     theta_1_wrapped = wrap_angle_around_90(np.array([theta_1_corrected]))[0]
+#     theta_2_wrapped = wrap_angle_around_90(np.array([theta_2_corrected]))[0]
+#     theta_3_wrapped = wrap_angle_around_90(np.array([theta_3_corrected]))[0]
+#     # print('Wrapped Set of Angles : ', ('ps', theta_1_wrapped, 'ur', theta_2_wrapped, 'fe', theta_3_wrapped),'\n')
+#
+#     # print('\n'*3)
+#     return [theta_1_wrapped, theta_2_wrapped, theta_3_wrapped]
 
 def orient_wrist(theta1, theta2, theta3):
     # This function takes the joint angles, theta1, theta2, theta3, for
@@ -205,6 +244,7 @@ yaw_sum = 0
 previous_millis_move = 0
 current_millis_move = 0
 frame_count_move = 0
+update_count = 0
 
 # Streaming loop
 for i in list(range(20)):
@@ -213,11 +253,22 @@ for i in list(range(20)):
 
 while True:
     try:
+        current_millis = int(round(time.time() * 1000))
+        if frame_count == 0:
+            previous_millis= current_millis
+        if (current_millis - previous_millis) >= 50:
+            dt = current_millis - previous_millis
+            previous_millis = current_millis
+            update_count+=1
+        else:
+            frame_count += 1
+            continue
+
         frames = pipeline.wait_for_frames()
-        previous_millis, dt = compute_dt(previous_millis, frame_count)
-        if dt > 2:
-            previous_millis, dt = compute_dt(previous_millis, frame_count, zero_timer=True)
-        print (dt)
+        # previous_millis, dt = compute_dt(previous_millis, frame_count)
+        # if dt > 2:
+        #     previous_millis, dt = compute_dt(previous_millis, frame_count, zero_timer=True)
+        # print (dt)
         # Getting Camera Pose
         cam_angles_t = intel_realsense_IMU.camera_orientation_realsense(frames, dt, cam_angles_t_1)
         cam_angles_t_1 = np.array(cam_angles_t)
@@ -226,7 +277,7 @@ while True:
         ser.write(b'r') # Arm will only respond when it is done moving all the joints
         input_bytes = ser.readline()
         while input_bytes == b'':
-            print('did not receive a ping back yet')
+            # print('did not receive a ping back yet')
             serial_read = ser.write(b'r')
             input_bytes = ser.readline()
 
@@ -244,9 +295,9 @@ while True:
             theta_yaw -= yaw_resting
 
 
-        approach_vector = np.array([0,0,1])
+        approach_vector = np.array([0,1,0])
         approach_vector = approach_vector/np.linalg.norm(approach_vector)
-        theta = 0 # Relative to the positive x-axis
+        theta = 30 # Relative to the positive x-axis
         # theta = theta + 90  # Relative to the positive Y axis: CW rotaion = positive, CCW = negative
         theta = wrap_angle_around_90(np.array([theta]))[0]
         theta = theta * (np.pi / 180)  # network outputs positive angles in bottom right quadrant
@@ -263,14 +314,14 @@ while True:
 
         R_shoulder_camera = R.from_euler('xyz', [[-0, 0, 0]],
                                          degrees=True).as_matrix().squeeze()
-        R_shoulder_elbow = R.from_euler('xyz', [[arm_pitch,0,0]],
+        R_shoulder_elbow = R.from_euler('xyz', [[0,0,0]],
                                         degrees=True).as_matrix().squeeze()
         R_elbow_shoulder = np.linalg.inv(R_shoulder_elbow)
         grasp_orientation_shoulder = np.dot(R_shoulder_camera, grasp_orientation_camera)
 
-        calibration_matrix = np.array([[0, 0, 1],
-                                       [0, -1, 0],
-                                       [1, 0, 0]])
+        calibration_matrix = np.array([[1,0,0],
+                                       [0,1,0],
+                                       [0,0,1]])
         calibration_matrix_inv = np.linalg.inv(calibration_matrix)
         grasp_orientation_elbow = np.dot(np.dot(R_elbow_shoulder, grasp_orientation_shoulder), calibration_matrix_inv)
 
@@ -278,17 +329,14 @@ while True:
         # theta2 : ulnar/radial
         # theta3 : flexion/extension
         theta1, theta2, theta3 = derive_motor_angles_v0(grasp_orientation_elbow)
+        theta1 = theta1 - arm_roll
+        theta3 = theta3 - arm_pitch
         joint1, joint2, joint3 = orient_wrist(theta1, theta2, theta3).tolist()
         string_command = 'w %d %d %d' % (joint3, joint2, joint1)
-        print('ps', theta1, 'ur', theta2, 'fe', theta3)
-
-        current_millis_move = int(round(time.time() * 1000))
-        if frame_count_move == 0:
-            previous_millis_move = current_millis_move
-        if (current_millis_move - previous_millis_move) >= 1000:
-            print('Timer Done')
+        if update_count%1 == 0:
+            print('ps', theta1, 'ur', theta2, 'fe', theta3)
             ser.write(string_command.encode())
-            previous_millis_move = current_millis_move
+
         frame_count_move+=1
         counter += 1
     except:
