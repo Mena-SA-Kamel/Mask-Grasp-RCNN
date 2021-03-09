@@ -247,7 +247,6 @@ update_count = 0
 # Streaming loop
 for i in list(range(20)):
     frames = pipeline.wait_for_frames()
-# cv2.namedWindow('MASK-GRASP RCNN OUTPUT', cv2.WINDOW_AUTOSIZE)
 
 while True:
     try:
@@ -261,7 +260,6 @@ while True:
         else:
             frame_count += 1
             continue
-
         frames = pipeline.wait_for_frames()
 
         # Getting Camera Pose
@@ -302,7 +300,6 @@ while True:
         cam_pitch, cam_yaw, cam_roll = cam_angles_t
         R_shoulder_camera = R.from_euler('xyz', [[cam_pitch, 0, cam_roll]],
                                          degrees=True).as_matrix().squeeze()
-        # print (cam_pitch, cam_yaw, cam_roll)
         grasp_orientation_shoulder = np.dot(R_shoulder_camera, grasp_orientation_camera)
         # theta1 : pronate/supinate
         # theta2 : ulnar/radial
@@ -310,6 +307,7 @@ while True:
         theta1, theta2, theta3 = derive_motor_angles_v0(grasp_orientation_shoulder)
         arm_pitch, arm_roll, arm_yaw = [theta_pitch, theta_roll, theta_yaw]
         theta1 = theta1 - arm_roll
+        theta2 = theta2 - arm_yaw
         theta3 = theta3 - arm_pitch
         joint1, joint2, joint3 = orient_wrist(theta1, theta2, theta3).tolist()
         string_command = 'w %d %d %d' % (joint3, joint2, joint1)

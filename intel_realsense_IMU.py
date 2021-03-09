@@ -34,8 +34,8 @@ def camera_orientation_realsense(frames, dt, angles_t_1):
     # Computing the angle based on the Gyroscope readings (Degrees)
     gyro_angles = (gyro * dt * (180 / np.pi))
     # Complementary filter for accurate pitch and roll (Degrees)
-    G = 0.9
-    A = 0.1
+    G = 0.90
+    A = 0.10
     angles_t = (angles_t_1 + gyro_angles) * G + accelerometer_angles * A
     theta_pitch, _, theta_roll = angles_t
     theta_yaw = angles_t_1[1] + gyro_angles[1]
