@@ -18,6 +18,7 @@ import time
 import os
 import intel_realsense_IMU
 import arm_IMU
+from shapely.geometry import Polygon
 
 mouseX, mouseY = [0, 0]
 
@@ -402,6 +403,19 @@ def arm_orientation_imu_9250(serial_object):
     theta_pitch, theta_roll, theta_yaw = decoded_bytes.tolist()
     return ([theta_pitch, theta_roll, theta_yaw])
 
+def compute_oriented_box_iou(target_box, other_boxes, dataset_object):
+    # Computes the Oriented box IoU between "target_box" and a set of other boxes defined by "other_boxes"
+    oriented_box_iou = []
+    target_box_shapely = dataset_object.shapely_polygon(target_box)
+    for k, other_box in enumerate(other_boxes):
+        other_box_shapely = dataset_object.shapely_polygon(other_box)
+        intersection_area = target_box_shapely.intersection(other_box_shapely).area
+        if intersection_area:
+            union_area = target_box_shapely.union(other_box_shapely).area
+            iou = intersection_area / union_area
+            oriented_box_iou.append(iou)
+    return oriented_box_iou
+
 # Create a pipeline
 pipeline = rs.pipeline()
 
@@ -649,7 +663,7 @@ try:
             roi_areas = (rois[:, 2] - rois[:, 0]) * (rois[:, 3] - rois[:, 1])
             try:
                 iou = utils.compute_iou(tracking_bbox, rois, tracking_bbox_area, roi_areas)
-                tracking_bbox = rois[np.argmax(iou)]
+                tracking_bbox = rois[np.argmax(iou)] # Choosing the detection with the highest IoU with the tracked box
                 bbox_plot = tracking_bbox.reshape(-1, 4)
             except:
                 print("ERROR: Encountered error when computing IOU")
@@ -679,114 +693,131 @@ try:
                                                                inference_config.GRASP_ANCHOR_ANGLES,
                                                                normalized_roi,
                                                                inference_config)
+
+            # Here, for each bounding box detected by the network, we have the associating grasp boxes (196 total),
+            # currently, we select the top grasping box for each object. When tracking an object, we ideally want to
+            # select the grasp box with the highest similarity score to the previous box, in frame t-1
             post_nms_predictions, top_box_probabilities, pre_nms_predictions, pre_nms_scores = dataset_object.refine_results(
                         grasping_probs[j], grasping_deltas[j],
                         grasping_anchors, inference_config, filter_mode='top_k', k=1, nms=False)
             color = (255, 0, 0)
-            for i, rect in enumerate(pre_nms_predictions):
-                if grasp_history == []:
-                    grasp_history = rect
-                five_dim_box = grasp_history
-                print (five_dim_box)
-                rect = cv2.boxPoints(((grasp_history[0], grasp_history[1]), (grasp_history[2], grasp_history[3]), grasp_history[4]))
-                # rect = cv2.boxPoints(((rect[0], rect[1]), (rect[2], rect[3]), rect[4]))
-                color_image_to_display = cv2.drawContours(color_image_to_display, [np.int0(rect)], 0, (0,0,0), 2)
+            if start_tracking: # A specific bounding box is tracked, now we need to send grasp info to the robot
+                if num_tracked_frames == 1 and num_detected_frames == 0:
+                    refined_results = dataset_object.refine_results(grasping_probs[j], grasping_deltas[j],
+                                                                    grasping_anchors, inference_config,
+                                                                    filter_mode='top_k', k=1, nms=False)
+                    grasp_history = pre_nms_predictions[0]
+                    five_dim_box = grasp_history
+                else:
+                    # Need to get oriented grasp box with highest IoU score with grasp_history
+                    refined_results = dataset_object.refine_results(grasping_probs[j], grasping_deltas[j],
+                                                                    grasping_anchors, inference_config,
+                                                                    filter_mode='top_k', k=grasping_deltas[j].shape[0],
+                                                                    nms=False)
+                    post_nms_predictions, top_box_probabilities, pre_nms_predictions, pre_nms_scores = refined_results
+                    grasp_iou = compute_oriented_box_iou(grasp_history, post_nms_predictions, dataset_object)
+                    if np.max(grasp_iou) > 0.8:
+                        grasp_history = post_nms_predictions[np.argmax(grasp_iou)] # If there is high similarity between frame t-1 and framt t grasp boxes, then go with the most similar box
+                    else:
+                        # Low pass filter to reduce the effect of an outlier grasping box
+                        grasp_history = 0.5*grasp_history + 0.5*post_nms_predictions[0]
+                    five_dim_box = grasp_history
+
+                rect = cv2.boxPoints(((five_dim_box[0], five_dim_box[1]), (five_dim_box[2], five_dim_box[3]), five_dim_box[4]))
+                color_image_to_display = cv2.drawContours(color_image_to_display, [np.int0(rect)], 0, (0, 0, 0), 2)
                 color_image_to_display = cv2.drawContours(color_image_to_display, [np.int0(rect[:2])], 0, color, 2)
                 color_image_to_display = cv2.drawContours(color_image_to_display, [np.int0(rect[2:])], 0, color, 2)
-                if start_tracking:
 
-                    print("ARM Angles (theta_pitch, theta_roll, theta_yaw): ", arm_angles_t)
-                    print("CAMERA Angles (theta_pitch, theta_yaw, theta_roll): ", cam_angles_t)
-                    # Need to crop out the point cloud at the oriented rectangle bounds
-                    # Create a mask to specify the region to extract the surface normals from. Based on Lenz et al.,
-                    # the approach vector is estimated as the surface normal calculated at the point of minumum depth in
-                    # the central one third (horizontally) of the rectangle
-                    x, y, w, h, theta = five_dim_box
-                    # Undoing the center cropping of the image
-                    x = int(x + (image_width - center_crop_size) // 2)
-                    y = int(y + (image_height - center_crop_size) // 2)
-                    # Getting grasping box vertices in the image plane
-                    rect_vertices = cv2.boxPoints(((x, y), (w, h), theta))
-                    # Calculating the approach vector for the grasp box
-                    approach_vector = compute_approach_vector([x, y, w, h, theta])
-                    # Getting the XYZ coordinates of the grasping box center <x, y>
-                    box_center = de_project_point(intrinsics, aligned_depth_frame, [x, y])
-                    # Wrapping angles so they are in [-90, 90] range
-                    theta = dataset_object.wrap_angle_around_90(np.array([theta]))[0]
-                    theta = theta * (np.pi / 180) # network outputs positive angles in bottom right quadrant
-                    # Computing the grasp box size in camera coordinates
-                    real_width, real_height = compute_real_box_size(intrinsics, aligned_depth_frame, rect_vertices)
-                    box_vert_obj_frame = generate_points_in_world_frame(real_width, real_height)
-                    # visualize_wrist_in_camera_frame(color_image, depth_image, box_center, approach_vector, intrinsics,
-                    #                                 aligned_depth_frame, rect_vertices, approach_vector_orientation)
+                # print("ARM Angles (theta_pitch, theta_roll, theta_yaw): ", arm_angles_t)
+                # print("CAMERA Angles (theta_pitch, theta_yaw, theta_roll): ", cam_angles_t)
+                # Need to crop out the point cloud at the oriented rectangle bounds
+                # Create a mask to specify the region to extract the surface normals from. Based on Lenz et al.,
+                # the approach vector is estimated as the surface normal calculated at the point of minumum depth in
+                # the central one third (horizontally) of the rectangle
+                x, y, w, h, theta = five_dim_box
+                # Undoing the center cropping of the image
+                x = int(x + (image_width - center_crop_size) // 2)
+                y = int(y + (image_height - center_crop_size) // 2)
+                # Getting grasping box vertices in the image plane
+                rect_vertices = cv2.boxPoints(((x, y), (w, h), theta))
+                # Calculating the approach vector for the grasp box
+                approach_vector = compute_approach_vector([x, y, w, h, theta])
+                # Getting the XYZ coordinates of the grasping box center <x, y>
+                box_center = de_project_point(intrinsics, aligned_depth_frame, [x, y])
+                # Wrapping angles so they are in [-90, 90] range
+                theta = dataset_object.wrap_angle_around_90(np.array([theta]))[0]
+                theta = theta * (np.pi / 180) # network outputs positive angles in bottom right quadrant
+                # Computing the grasp box size in camera coordinates
+                real_width, real_height = compute_real_box_size(intrinsics, aligned_depth_frame, rect_vertices)
+                box_vert_obj_frame = generate_points_in_world_frame(real_width, real_height)
+                # visualize_wrist_in_camera_frame(color_image, depth_image, box_center, approach_vector, intrinsics,
+                #                                 aligned_depth_frame, rect_vertices, approach_vector_orientation)
 
-                    # Computing the desired wrist orientation in the camera frame
-                    V = compute_wrist_orientation(approach_vector, theta)
-                    rotation_z = np.array([[np.cos(theta), -np.sin(theta), 0],
-                                           [np.sin(theta), np.cos(theta), 0],
-                                           [0, 0, 1]])
-                    approach_vector_orientation = np.dot(V, rotation_z)
+                # Computing the desired wrist orientation in the camera frame
+                V = compute_wrist_orientation(approach_vector, theta)
+                rotation_z = np.array([[np.cos(theta), -np.sin(theta), 0],
+                                       [np.sin(theta), np.cos(theta), 0],
+                                       [0, 0, 1]])
+                approach_vector_orientation = np.dot(V, rotation_z)
 
-                    # Defining rotation matrix to go from the shoulder to camera frame
-                    cam_pitch, cam_yaw, cam_roll = cam_angles_t
+                # Defining rotation matrix to go from the shoulder to camera frame
+                cam_pitch, cam_yaw, cam_roll = cam_angles_t
 
-                    R_shoulder_camera = R.from_euler('xyz', [[cam_pitch, 0, cam_roll]],
-                                                       degrees=True).as_matrix().squeeze()
-                    grasp_orientation_shoulder = np.dot(R_shoulder_camera, approach_vector_orientation)
+                R_shoulder_camera = R.from_euler('xyz', [[cam_pitch, 0, cam_roll]],
+                                                 degrees=True).as_matrix().squeeze()
+                grasp_orientation_shoulder = np.dot(R_shoulder_camera, approach_vector_orientation)
 
-                    # theta1 : pronate/supinate
-                    # theta2 : ulnar/radial
-                    # theta3 : flexion/extension
-                    theta1, theta2, theta3 = derive_motor_angles_v0(grasp_orientation_shoulder)
-                    arm_pitch, arm_roll, arm_yaw = arm_angles_t
-                    theta1 = theta1 - arm_roll
-                    theta2 = theta2 - (-arm_yaw)
-                    theta3 = theta3 - arm_pitch
-                    joint1, joint2, joint3 = orient_wrist(theta1, theta2, theta3).tolist()
-                    string_command = 'w %d %d %d' % (joint3, joint2, joint1)
-                    aperture_command = 'j 0 %d' % (compute_hand_aperture(real_width * 1000))
+                # theta1 : pronate/supinate
+                # theta2 : ulnar/radial
+                # theta3 : flexion/extension
+                theta1, theta2, theta3 = derive_motor_angles_v0(grasp_orientation_shoulder)
+                arm_pitch, arm_roll, arm_yaw = arm_angles_t
+                theta1 = theta1 - arm_roll
+                theta2 = theta2 - (-arm_yaw)
+                theta3 = theta3 - arm_pitch
+                joint1, joint2, joint3 = orient_wrist(theta1, theta2, theta3).tolist()
+                string_command = 'w %d %d %d' % (joint3, joint2, joint1)
+                aperture_command = 'j 0 %d' % (compute_hand_aperture(real_width * 1000))
 
-                    print('ps', theta1, 'ur', theta2, 'fe', theta3)
-                    ser.write(string_command.encode())
-
-
-                    #
-                    # camera_angle = -70 * (np.pi / 180)
-                    # rotation_x = np.array([[1,                    0,                     0],
-                    #                        [0, np.cos(camera_angle), -np.sin(camera_angle)],
-                    #                        [0, np.sin(camera_angle), np.cos(camera_angle)]])
-                    # r_x_inverse = np.linalg.inv(rotation_x)
-                    # # vector = np.dot(approach_vector_orientation, rotation_x)
-                    # rotation_z = np.array([[np.cos(theta), -np.sin(theta), 0],
-                    #                        [np.sin(theta), np.cos(theta), 0],
-                    #                        [0, 0, 1]])
-                    # import code;
-                    #
-                    # code.interact(local=dict(globals(), **locals()))
-                    # vector = np.dot(np.dot(rotation_x, V), rotation_z)
-                    # calibration_matrix = np.array([[0, 0, 1],
-                    #                                [0, -1, 0],
-                    #                                [1, 0, 0]])
-                    # vector_new = np.dot(vector, calibration_matrix)
-                    # # vector = np.dot(rotation_x, V)
-                    #
-                    # # theta1 : pronate/supinate
-                    # # theta2 : ulnar/radial
-                    # # theta3 : flexion/extension
-                    # theta1, theta2, theta3 = derive_motor_angles_v0(vector_new)
-                    # joint1, joint2, joint3 = orient_wrist(theta1, theta2, theta3).tolist()
-                    # # configure_hand(real_width, real_height, joint3, joint2, joint1)
-                    # string_command = 'w %d %d %d' % (joint3, joint2, joint1)
-                    # aperture_command = 'j 0 %d' % (compute_hand_aperture(real_width*1000))
-                    #
-                    # if not hand_configured:
-                    #     ser.write(aperture_command.encode())
-                    #     time.sleep(3)
-                    #     ser.write(b'j 3 800')
-                    #     hand_configured = True
-                    #
-                    # time.sleep(3)
-                    # ser.write(string_command.encode())
+                # print('ps', theta1, 'ur', theta2, 'fe', theta3)
+                # ser.write(string_command.encode())
+                #
+                # camera_angle = -70 * (np.pi / 180)
+                # rotation_x = np.array([[1,                    0,                     0],
+                #                        [0, np.cos(camera_angle), -np.sin(camera_angle)],
+                #                        [0, np.sin(camera_angle), np.cos(camera_angle)]])
+                # r_x_inverse = np.linalg.inv(rotation_x)
+                # # vector = np.dot(approach_vector_orientation, rotation_x)
+                # rotation_z = np.array([[np.cos(theta), -np.sin(theta), 0],
+                #                        [np.sin(theta), np.cos(theta), 0],
+                #                        [0, 0, 1]])
+                # import code;
+                #
+                # code.interact(local=dict(globals(), **locals()))
+                # vector = np.dot(np.dot(rotation_x, V), rotation_z)
+                # calibration_matrix = np.array([[0, 0, 1],
+                #                                [0, -1, 0],
+                #                                [1, 0, 0]])
+                # vector_new = np.dot(vector, calibration_matrix)
+                # # vector = np.dot(rotation_x, V)
+                #
+                # # theta1 : pronate/supinate
+                # # theta2 : ulnar/radial
+                # # theta3 : flexion/extension
+                # theta1, theta2, theta3 = derive_motor_angles_v0(vector_new)
+                # joint1, joint2, joint3 = orient_wrist(theta1, theta2, theta3).tolist()
+                # # configure_hand(real_width, real_height, joint3, joint2, joint1)
+                # string_command = 'w %d %d %d' % (joint3, joint2, joint1)
+                # aperture_command = 'j 0 %d' % (compute_hand_aperture(real_width*1000))
+                #
+                # if not hand_configured:
+                #     ser.write(aperture_command.encode())
+                #     time.sleep(3)
+                #     ser.write(b'j 3 800')
+                #     hand_configured = True
+                #
+                # time.sleep(3)
+                # ser.write(string_command.encode())
 
         frame_count += 1
         images = color_image_to_display
