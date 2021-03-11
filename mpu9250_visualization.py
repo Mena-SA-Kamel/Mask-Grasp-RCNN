@@ -73,7 +73,7 @@ gz_history = []
 num_meas = 700
 magnetomer_readings = np.zeros([num_meas, 3])
 yaw_history = 0
-num_samples_for_yaw = 200 # Avg first 200 samples to get a good measure of where the home yaw position is
+num_samples_for_yaw = 500 # Avg first 200 samples to get a good measure of where the home yaw position is
 yaw_sum = 0
 yaw_cal = []
 

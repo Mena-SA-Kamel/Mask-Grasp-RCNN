@@ -706,6 +706,7 @@ try:
                     refined_results = dataset_object.refine_results(grasping_probs[j], grasping_deltas[j],
                                                                     grasping_anchors, inference_config,
                                                                     filter_mode='top_k', k=1, nms=False)
+                    post_nms_predictions, top_box_probabilities, pre_nms_predictions, pre_nms_scores = refined_results
                     grasp_history = pre_nms_predictions[0]
                     five_dim_box = grasp_history
                 else:
@@ -716,11 +717,11 @@ try:
                                                                     nms=False)
                     post_nms_predictions, top_box_probabilities, pre_nms_predictions, pre_nms_scores = refined_results
                     grasp_iou = compute_oriented_box_iou(grasp_history, post_nms_predictions, dataset_object)
-                    if np.max(grasp_iou) > 0.8:
-                        grasp_history = post_nms_predictions[np.argmax(grasp_iou)] # If there is high similarity between frame t-1 and framt t grasp boxes, then go with the most similar box
-                    else:
-                        # Low pass filter to reduce the effect of an outlier grasping box
-                        grasp_history = 0.5*grasp_history + 0.5*post_nms_predictions[0]
+                    # if np.max(grasp_iou) > 0.8:
+                    #     grasp_history = post_nms_predictions[np.argmax(grasp_iou)] # If there is high similarity between frame t-1 and framt t grasp boxes, then go with the most similar box
+                    # else:
+                    #     # Low pass filter to reduce the effect of an outlier grasping box
+                    #     grasp_history = 0.5*grasp_history + 0.5*post_nms_predictions[0]
                     five_dim_box = grasp_history
 
                 rect = cv2.boxPoints(((five_dim_box[0], five_dim_box[1]), (five_dim_box[2], five_dim_box[3]), five_dim_box[4]))
@@ -779,8 +780,8 @@ try:
                 string_command = 'w %d %d %d' % (joint3, joint2, joint1)
                 aperture_command = 'j 0 %d' % (compute_hand_aperture(real_width * 1000))
 
-                # print('ps', theta1, 'ur', theta2, 'fe', theta3)
-                # ser.write(string_command.encode())
+                print('ps', theta1, 'ur', theta2, 'fe', theta3)
+                ser.write(string_command.encode())
                 #
                 # camera_angle = -70 * (np.pi / 180)
                 # rotation_x = np.array([[1,                    0,                     0],
