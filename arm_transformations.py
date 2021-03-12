@@ -64,22 +64,63 @@ def derive_motor_angles_v0(orientation_matrix):
         c2_i = c2 * angle_sign
         if c2_i == 0:
             print("Potentially Gimbal lock")
-        c2_i = np.sign(c2_i)*np.maximum(0.0001, np.abs(c2_i)) # Gimbal lock case - Need to look into this
-        s1 = e / c2_i
-        c1 = b / c2_i
-        s3 = i / c2_i
+        sign = np.sign(c2_i)
+        if sign == 0:
+            sign = 1
+        c2_i = sign*np.maximum(0.0001, np.abs(c2_i)) # Gimbal lock case - Need to look into this
+        s1 = -b / c2_i
+        c1 = e / c2_i
+        s3 = -i / c2_i
         c3 = g / c2_i
         theta_1 = np.arctan2(s1, c1) / (np.pi / 180)
         theta_2 = np.arctan2(s2, c2_i) / (np.pi / 180)
         theta_3 = np.arctan2(s3, c3) / (np.pi / 180)
         joint_combinations[j,:] = np.array([theta_1,theta_2, theta_3])
         join_sum.append(np.sum(np.abs(np.array([theta_1,theta_2, theta_3]))))
-    theta_1, theta_2, theta_3 = joint_combinations[np.argmin(join_sum)] # Choosing the angle combo with the least
+    # theta_1, theta_2, theta_3 = joint_combinations[np.argmin(join_sum)] # Choosing the angle combo with the least
                                                                         # deviation required
-    theta_1_wrapped = wrap_angle_around_90(np.array([theta_1]))[0]
-    theta_2_wrapped = wrap_angle_around_90(np.array([theta_2]))[0]
-    theta_3_wrapped = wrap_angle_around_90(np.array([theta_3]))[0]
-    return [theta_1_wrapped, theta_2_wrapped, theta_3_wrapped]
+    theta_1, theta_2, theta_3 = joint_combinations[0]  # Choosing the angle combo with the least
+    # theta_1_wrapped = wrap_angle_around_90(np.array([theta_1]))[0]
+    # theta_2_wrapped = wrap_angle_around_90(np.array([theta_2]))[0]
+    # theta_3_wrapped = wrap_angle_around_90(np.array([theta_3]))[0]
+    # return [theta_1_wrapped, theta_2_wrapped, theta_3_wrapped]
+    return [theta_1, theta_2, theta_3]
+#
+# def derive_motor_angles_v0(orientation_matrix):
+#     orientation_matrix = np.around(orientation_matrix, decimals=2)
+#
+#     b = orientation_matrix[0, 1]
+#     e = orientation_matrix[1, 1]
+#     i = orientation_matrix[2, 2]
+#     g = orientation_matrix[2, 0]
+#     h = orientation_matrix[2, 1]
+#
+#     s2 = h
+#     c2 = np.sqrt(1 - s2 ** 2) # c2 is either a positive or negative angle. We need to try those angle combinations,
+#                                 # and choose the angle combination with the lowest sum of angles
+#     angle_signs = [1, -1]
+#     join_sum = []
+#     joint_combinations = np.zeros((2,3))
+#     for j, angle_sign in enumerate(angle_signs):
+#         c2_i = c2 * angle_sign
+#         if c2_i == 0:
+#             print("Potentially Gimbal lock")
+#         c2_i = np.sign(c2_i)*np.maximum(0.0001, np.abs(c2_i)) # Gimbal lock case - Need to look into this
+#         s1 = e / c2_i
+#         c1 = b / c2_i
+#         s3 = i / c2_i
+#         c3 = g / c2_i
+#         theta_1 = np.arctan2(s1, c1) / (np.pi / 180)
+#         theta_2 = np.arctan2(s2, c2_i) / (np.pi / 180)
+#         theta_3 = np.arctan2(s3, c3) / (np.pi / 180)
+#         joint_combinations[j,:] = np.array([theta_1,theta_2, theta_3])
+#         join_sum.append(np.sum(np.abs(np.array([theta_1,theta_2, theta_3]))))
+#     theta_1, theta_2, theta_3 = joint_combinations[np.argmin(join_sum)] # Choosing the angle combo with the least
+#                                                                         # deviation required
+#     theta_1_wrapped = wrap_angle_around_90(np.array([theta_1]))[0]
+#     theta_2_wrapped = wrap_angle_around_90(np.array([theta_2]))[0]
+#     theta_3_wrapped = wrap_angle_around_90(np.array([theta_3]))[0]
+#     return [theta_1_wrapped, theta_2_wrapped, theta_3_wrapped]
 
 
 # def derive_motor_angles_v0(orientation_matrix):
@@ -162,12 +203,12 @@ def orient_wrist(theta1, theta2, theta3):
     # needed to drive the hand
 
     # Joint center positions as an 8 bit integer
-    ps_home = 102
+    ps_home = 155  # 102
     ur_home = 180
     fe_home = 162
 
     # Defining the physical joint limits
-    pronate_supinate_limit = [-43, 90]
+    pronate_supinate_limit = [-95, 90]
     ulnar_radial_limit = [-13, 21]
     flexion_extension_limit = [-42, 30]
 
@@ -290,6 +331,7 @@ while True:
         approach_vector = np.array([0,1,0])
         approach_vector = approach_vector/np.linalg.norm(approach_vector)
         theta = -90 # Relative to the positive x-axis
+
         theta = wrap_angle_around_90(np.array([theta]))[0]
         theta = theta * (np.pi / 180)  # network outputs positive angles in bottom right quadrant
         V = compute_wrist_orientation(approach_vector, theta)
@@ -297,18 +339,33 @@ while True:
                                [np.sin(theta), np.cos(theta), 0],
                                [0, 0, 1]])
         grasp_orientation_camera = np.dot(V, rotation_z)
+        grasp_orientation_camera_2 = grasp_orientation_camera.copy()
+        grasp_orientation_camera_2[:, :2] = grasp_orientation_camera_2[:, :2] * -1 # Equivalent graspbox
+
         cam_pitch, cam_yaw, cam_roll = cam_angles_t
-        R_shoulder_camera = R.from_euler('xyz', [[cam_pitch, 0, cam_roll]],
+        # R_shoulder_camera = R.from_euler('xyz', [[cam_pitch, 0, cam_roll]],
+        #                                  degrees=True).as_matrix().squeeze()
+        R_shoulder_camera = R.from_euler('xyz', [[0, 0, 0]],
                                          degrees=True).as_matrix().squeeze()
-        grasp_orientation_shoulder = np.dot(R_shoulder_camera, grasp_orientation_camera)
-        # theta1 : pronate/supinate
-        # theta2 : ulnar/radial
-        # theta3 : flexion/extension
-        theta1, theta2, theta3 = derive_motor_angles_v0(grasp_orientation_shoulder)
+
+        grasp_combinations = [grasp_orientation_camera, grasp_orientation_camera_2]
+        joint_deviations = np.zeros(2)
+        joint_angles = np.zeros((2, 3))
+        for i, grasp_orientation in enumerate(grasp_combinations):
+            grasp_orientation_shoulder = np.dot(R_shoulder_camera, grasp_orientation)
+            # theta1 : pronate/supinate
+            # theta2 : ulnar/radial
+            # theta3 : flexion/extension
+            theta1, theta2, theta3 = derive_motor_angles_v0(grasp_orientation_shoulder)
+            joint_deviations[i] = np.sum(np.abs(np.array([theta1, theta2, theta3])))
+            joint_angles[i] = np.array([theta1, theta2, theta3])
+        grasp_box_index = np.argmin(joint_deviations)
+        theta1, theta2, theta3 = joint_angles[grasp_box_index]
         arm_pitch, arm_roll, arm_yaw = [theta_pitch, theta_roll, theta_yaw]
         theta1 = theta1 - arm_roll
-        theta2 = theta2 - arm_yaw
+        theta2 = theta2 - (-arm_yaw)
         theta3 = theta3 - arm_pitch
+
         joint1, joint2, joint3 = orient_wrist(theta1, theta2, theta3).tolist()
         string_command = 'w %d %d %d' % (joint3, joint2, joint1)
         if update_count%1 == 0:
