@@ -122,57 +122,23 @@ while True:
         A = 0.1
         sys_history[:, -1] = (sys_history[:, -2] + (gyro * dt * (180 / np.pi))) * G + acc_history[:, -1] * A
 
-        # # Gathering data for calibration
-        # if counter<num_meas:
-        #     if counter%10 ==0:
-        #         print("Progress: ", (counter / num_meas ) * 100, "% DONE")
-        #     magnetomer_readings[counter] = np.array([mx, my, mz])
-        # else:
-        #     np.savetxt('magnetometer_calibration-Feb23-Calibration_with_case_imu_power_ON.txt', magnetomer_readings)
-        #     fig = plt.figure()
-        #     ax = Axes3D(fig)
-        #     ax.scatter(magnetomer_readings[:, 0], magnetomer_readings[:, 1], magnetomer_readings[:, 2])
-        #     ax.set_xlabel('X axis')
-        #     ax.set_ylabel('Y axis')
-        #     ax.set_zlabel('Z axis')
-        #     ax.set_title("Magnetometer Calibration - Measurements in uT")
-        #     import code;
-        #     code.interact(local=dict(globals(), **locals()))
-
-        # All measurements in the accelerometer frame of reference
-        # Magnetometer
-        mag_uncalibrated = np.array([mx, my, mz]).reshape([1, 3])
-        mag_calibrated = np.dot((mag_uncalibrated - mag_b_vector), mag_A_matrix)
-
-        mx, my, mz = mag_calibrated.squeeze().tolist()
-        memory = my
-        my = mx
-        mx = memory
-        mz = -mz
-
-        theta_pitch = sys_history[0, -1]*(np.pi/180)
-        theta_roll = sys_history[1, -1]*(np.pi/180)
-
-        # Tilt compensation
-        x_heading = mx*np.cos(theta_roll) + mz*(np.sin(theta_roll))
-        y_heading = mx*(np.sin(theta_roll)*np.sin(theta_pitch)) + my*np.cos(theta_pitch) - mz*(np.cos(theta_roll)*np.sin(theta_pitch))
-
-        # x_heading = mx*np.cos(theta_roll) + my*(np.sin(theta_roll)*np.sin(theta_pitch)) - mz*(np.cos(theta_pitch)*np.sin(theta_roll))
-        # y_heading = my*np.cos(theta_pitch) + mz*np.sin(theta_pitch)
-
-        yaw_angle = -np.arctan2(y_heading, x_heading) * (180 / np.pi)
-
-        # Low pass filtering the yaw data
-        mag_history[-1] = 0.1*mag_history[-2] + 0.9*(yaw_angle - yaw_history)
-        if counter==num_samples_for_yaw:
-            yaw_history = np.sum(mag_history) / num_samples_for_yaw
-
-        axes_objects = live_plotter(x_vals, acc_history, gyro_history, mag_history, sys_history, axes_objects)
-        acc_history = np.append(acc_history[:, 1:], np.zeros([3, 1]), axis=-1)
-        gyro_history = np.append(gyro_history[:, 1:], np.zeros([3, 1]), axis=-1)
-        sys_history = np.append(sys_history[:, 1:], np.zeros([3, 1]), axis=-1)
-        mag_history = np.append(mag_history[1:], 0)
-        gyro_previous = gyro_current
+        # Gathering data for calibration
+        if counter<num_meas:
+            if counter%10 ==0:
+                print("Progress: ", (counter / num_meas ) * 100, "% DONE")
+            magnetomer_readings[counter] = np.array([mx, my, mz])
+        else:
+            np.savetxt('magnetometer_calibration-Mar12-Calibration_with_case_imu_power_ON_new_home.txt', magnetomer_readings)
+            fig = plt.figure()
+            ax = Axes3D(fig)
+            ax.scatter(magnetomer_readings[:, 0], magnetomer_readings[:, 1], magnetomer_readings[:, 2])
+            ax.set_xlabel('X axis')
+            ax.set_ylabel('Y axis')
+            ax.set_zlabel('Z axis')
+            ax.set_title("Magnetometer Calibration - Measurements in uT")
+            import code;
+            code.interact(local=dict(globals(), **locals()))
+        time.sleep(0.1)
 
     except:
         print("Keyboard Interrupt")
