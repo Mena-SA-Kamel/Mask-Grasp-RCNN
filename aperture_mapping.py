@@ -8,17 +8,21 @@ def compute_hand_aperture(grasp_box_width):
     if os.path.exists(coef_path):
         coeffs = np.loadtxt(coef_path)
     else:
-        motor_commands = np.arange(0, 1100, 100)
-        aperture_size = np.array([90, 88, 75, 60, 40, 30, 18, 10, 8, 5.9, 5.4])
-        coeffs = np.polynomial.polynomial.polyfit(aperture_size, motor_commands, 4)
+        # motor_commands = np.arange(0, 1100, 100)
+        # aperture_size = np.array([90, 88, 75, 60, 40, 30, 18, 10, 8, 5.9, 5.4])
+        motor_commands = np.array(
+            [0, 20, 40, 60, 70, 80, 90, 100, 110, 120, 130, 140, 150, 160, 170, 180, 190, 200, 210, 220, 230, 240, 255])
+        aperture_size = np.array([83, 83, 83, 75, 65, 61, 49, 44, 30, 23, 14, 7, 3, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0])
+        coeffs = np.polynomial.polynomial.polyfit(aperture_size, motor_commands, 8)
         np.savetxt(coef_path, coeffs)
     return np.polynomial.polynomial.polyval(grasp_box_width, coeffs)
 
 
 
 motor_commands = np.arange(0, 1100, 100)
-# aperture_size = np.array([90,81,72,58,45,29,19,12.58,10,5.9,0])
-aperture_size = np.array([90,88,75,60,40,30,18,10,8,5.9,5.4])
+motor_commands = np.array([0,20,40,60,70,80,90,100,110,120,130,140,150,160,170,180,190,200,210,220,230,240,255])
+aperture_size = np.array([83,83,83,75,65,61,49,44,30,23,14,7,3,1,0,0,0,0,0,0,0,0,0])
+# aperture_size = np.array([90,88,75,60,40,30,18,10,8,5.9,5.4])
 # m, b = np.polyfit(motor_commands, aperture_size, 1)
 # coeffs = np.polynomial.polynomial.polyfit(motor_commands, aperture_size, 4)
 # ffit = np.polynomial.polynomial.polyval(motor_commands, coeffs)
@@ -37,13 +41,13 @@ aperture_size = np.array([90,88,75,60,40,30,18,10,8,5.9,5.4])
 # import code; code.interact(local=dict(globals(), **locals()))
 
 m, b = np.polyfit(aperture_size, motor_commands, 1)
-coeffs = np.polynomial.polynomial.polyfit(aperture_size, motor_commands, 4)
+coeffs = np.polynomial.polynomial.polyfit(aperture_size, motor_commands, 8)
 ffit = np.polynomial.polynomial.polyval(aperture_size, coeffs)
 
 fig, ax = plt.subplots()
 ax.plot(aperture_size, motor_commands, label='Measurement')
 plt.plot(aperture_size, m*aperture_size + b, label='Linear Regression')
-ax.plot(aperture_size, ffit, label='Polynomial (degree = 4) Regression')
+ax.plot(aperture_size, ffit, label='Polynomial (degree = 8) Regression')
 ax.set_title('Hand Aperture Mapping')
 ax.set_xlabel('Aperture Size (mm)')
 ax.set_ylabel('Motor Commands')

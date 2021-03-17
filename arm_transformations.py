@@ -203,14 +203,15 @@ def orient_wrist(theta1, theta2, theta3):
     # needed to drive the hand
 
     # Joint center positions as an 8 bit integer
-    ps_home = 155  # 102
+    ps_home = 155 #102
     ur_home = 180
     fe_home = 162
 
     # Defining the physical joint limits
     pronate_supinate_limit = [-95, 90]
     ulnar_radial_limit = [-13, 21]
-    flexion_extension_limit = [-42, 30]
+    # flexion_extension_limit = [-42, 30]
+    flexion_extension_limit = [-35, 55]
 
     # Clipping angles to the physical joint limits
     theta1 = np.minimum(theta1, pronate_supinate_limit[1])
@@ -230,16 +231,14 @@ def orient_wrist(theta1, theta2, theta3):
     else:
         joint2 = np.interp(theta2, (ulnar_radial_limit[0], 0), (255, ur_home))
 
-    if np.sign(theta3) == 1:
-        joint3 = np.interp(theta3, (0, flexion_extension_limit[1]), (fe_home, 255))
+    if np.sign(theta3) == 1: # flexion
+        # joint3 = np.interp(theta3, (0, flexion_extension_limit[1]), (fe_home, 255))
+        joint3 = np.interp(theta3, (0, flexion_extension_limit[1]), (fe_home, 0))
     else:
-        joint3 = np.interp(theta3, (flexion_extension_limit[0], 0), (0, fe_home))
+        # joint3 = np.interp(theta3, (flexion_extension_limit[0], 0), (0, fe_home))
+        joint3 = np.interp(theta3, (flexion_extension_limit[0], 0), (255, fe_home))
 
     joint_output = np.array([joint1, joint2, joint3]).astype('uint8')
-
-    #
-    # print('Clipped values: ', theta1, theta2, theta3)
-    # print('Output values: ', joint_output)
     return joint_output
 
 # Create a pipeline
@@ -362,14 +361,14 @@ while True:
         grasp_box_index = np.argmin(joint_deviations)
         theta1, theta2, theta3 = joint_angles[grasp_box_index]
         arm_pitch, arm_roll, arm_yaw = [theta_pitch, theta_roll, theta_yaw]
-        theta1 = theta1 - arm_roll
-        theta2 = theta2 - (-arm_yaw)
-        theta3 = theta3 - arm_pitch
+        # theta1 = theta1 - arm_roll
+        # theta2 = theta2 - (-arm_yaw)
+        # theta3 = theta3 - arm_pitch
 
         joint1, joint2, joint3 = orient_wrist(theta1, theta2, theta3).tolist()
         string_command = 'w %d %d %d' % (joint3, joint2, joint1)
         if update_count%1 == 0:
-            print('ps', theta1, 'ur', theta2, 'fe', theta3)
+            print('ps', theta1, 'ur', theta2, 'ef', theta3)
             ser.write(string_command.encode())
         frame_count_move+=1
         counter += 1

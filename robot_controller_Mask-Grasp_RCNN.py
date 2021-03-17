@@ -214,7 +214,6 @@ def compute_wrist_orientation(approach_vector, theta):
     vz = vz.reshape([3, 1])
     V = np.concatenate([vx, vy, vz], axis=-1)
     return V
-
 def derive_motor_angles_v0(orientation_matrix):
     orientation_matrix = np.around(orientation_matrix, decimals=2)
 
@@ -234,7 +233,10 @@ def derive_motor_angles_v0(orientation_matrix):
         c2_i = c2 * angle_sign
         if c2_i == 0:
             print("Potentially Gimbal lock")
-        c2_i = np.sign(c2_i)*np.maximum(0.0001, np.abs(c2_i)) # Gimbal lock case - Need to look into this
+        sign = np.sign(c2_i)
+        if sign == 0:
+            sign = 1
+        c2_i = sign*np.maximum(0.0001, np.abs(c2_i)) # Gimbal lock case - Need to look into this
         s1 = -b / c2_i
         c1 = e / c2_i
         s3 = -i / c2_i
@@ -247,10 +249,10 @@ def derive_motor_angles_v0(orientation_matrix):
     # theta_1, theta_2, theta_3 = joint_combinations[np.argmin(join_sum)] # Choosing the angle combo with the least
                                                                         # deviation required
     theta_1, theta_2, theta_3 = joint_combinations[0]  # Choosing the angle combo with the least
-    theta_1_wrapped = dataset_object.wrap_angle_around_90(np.array([theta_1]))[0]
-    theta_2_wrapped = dataset_object.wrap_angle_around_90(np.array([theta_2]))[0]
-    theta_3_wrapped = dataset_object.wrap_angle_around_90(np.array([theta_3]))[0]
-    return [theta_1_wrapped, theta_2_wrapped, theta_3_wrapped]
+
+    fe_home = -35
+    theta_3 = theta_3 - fe_home
+    return [theta_1, theta_2, theta_3]
 
 # def derive_motor_angles_v0(orientation_matrix):
 #     orientation_matrix = np.around(orientation_matrix, decimals=2)
@@ -302,7 +304,8 @@ def orient_wrist(theta1, theta2, theta3):
     # Defining the physical joint limits
     pronate_supinate_limit = [-95, 90]
     ulnar_radial_limit = [-13, 21]
-    flexion_extension_limit = [-42, 30]
+    # flexion_extension_limit = [-42, 30]
+    flexion_extension_limit = [-35, 55]
 
     # Clipping angles to the physical joint limits
     theta1 = np.minimum(theta1, pronate_supinate_limit[1])
@@ -322,15 +325,14 @@ def orient_wrist(theta1, theta2, theta3):
     else:
         joint2 = np.interp(theta2, (ulnar_radial_limit[0], 0), (255, ur_home))
 
-    if np.sign(theta3) == 1:
-        joint3 = np.interp(theta3, (0, flexion_extension_limit[1]), (fe_home, 255))
+    if np.sign(theta3) == 1: # flexion
+        # joint3 = np.interp(theta3, (0, flexion_extension_limit[1]), (fe_home, 255))
+        joint3 = np.interp(theta3, (0, flexion_extension_limit[1]), (fe_home, 0))
     else:
-        joint3 = np.interp(theta3, (flexion_extension_limit[0], 0), (0, fe_home))
+        # joint3 = np.interp(theta3, (flexion_extension_limit[0], 0), (0, fe_home))
+        joint3 = np.interp(theta3, (flexion_extension_limit[0], 0), (255, fe_home))
 
     joint_output = np.array([joint1, joint2, joint3]).astype('uint8')
-    #
-    # print('Clipped values: ', theta1, theta2, theta3)
-    # print('Output values: ', joint_output)
     return joint_output
 
 def compute_hand_aperture(grasp_box_width):
@@ -396,7 +398,6 @@ baud_rate = 115200
 time_out = 0.05
 ser = serial.Serial('COM6', baud_rate, timeout=time_out)
 ser.write(b'h') # Homing the arm at the beginning of execution
-
 # Loading the Mask-Grasp R-CNN Model
 mode = "mask_grasp_rcnn"
 MODEL_DIR = "models"
@@ -415,6 +416,7 @@ yaw_sum = 0 # Stores the cumulative sum of yaw angles for the first num_samples_
 previous_millis = 0 # Stores the time the last update was made
 selection_flag = False # Specifies if the user selected an object or not
 grasp_prob_thresh = 0.5
+display_counter = 0
 
 # Streaming loop
 for i in list(range(20)):
@@ -521,7 +523,7 @@ try:
                 # Selecting the grasp boxes with a grasp probability higher than grasp_prob_thresh
                 filtered_predictions = post_nms_predictions[top_box_probabilities > grasp_prob_thresh]
                 if filtered_predictions.shape[0] ==0:
-                    filtered_predictions = post_nms_predictions[0]
+                    filtered_predictions = post_nms_predictions[0].reshape((1,5))
                 post_nms_predictions = filtered_predictions
 
                 # Storing the high probability grasp orientations in Direction Cosine Matrix Format (DCM)
@@ -572,14 +574,21 @@ try:
 
                 joint_deviations = np.zeros(potential_grasps.shape[0])
                 joint_angles = np.zeros((potential_grasps.shape[0], 3))
+                arm_pitch, arm_roll, arm_yaw = arm_angles_t
                 for i, grasp_orientation_shoulder in enumerate(potential_grasps):
-                    theta1_t, theta2_t, theta3_t = derive_motor_angles_v0(grasp_orientation_shoulder)
-                    arm_pitch, arm_roll, arm_yaw = arm_angles_t
-                    theta1_t = theta1_t - arm_roll
-                    theta2_t = theta2_t - (-arm_yaw)
-                    theta3_t = theta3_t - arm_pitch
+                    grasp_orientation_shoulder_2 = grasp_orientation_shoulder.copy()
+                    grasp_orientation_shoulder_2[:, :2] = grasp_orientation_shoulder_2[:, :2] * -1  # Equivalent graspbox
+                    equivalent_grasps = [grasp_orientation_shoulder, grasp_orientation_shoulder_2]
+                    equivalent_joint_deviations = np.zeros(2)
+                    equivalent_joint_angles = np.zeros((2, 3))
+                    for j, equivalent_grasp in enumerate(equivalent_grasps):
+                        theta1_t, theta2_t, theta3_t = derive_motor_angles_v0(equivalent_grasp)
+                        equivalent_joint_deviations[j] = np.sum(np.abs(np.array([theta1_t, theta2_t, theta3_t])))
+                        equivalent_joint_angles[j] = np.array([theta1_t, theta2_t, theta3_t])
+                    theta1_t, theta2_t, theta3_t = equivalent_joint_angles[np.argmin(equivalent_joint_deviations)]
                     joint_deviations[i] = np.sum(np.abs(np.array([theta1_t, theta2_t, theta3_t])))
                     joint_angles[i] = np.array([theta1_t, theta2_t, theta3_t])
+                    potential_grasps[i] = equivalent_grasps[np.argmin(equivalent_joint_deviations)]
 
                 grasp_box_index = np.argmin(joint_deviations)
 
@@ -588,19 +597,27 @@ try:
                 # theta1 : pronate/supinate
                 # theta2 : ulnar/radial
                 # theta3 : flexion/extension
-
-                theta1_t, theta2_t, theta3_t = derive_motor_angles_v0(potential_grasps[grasp_box_index])
+                print('arm_pitch, arm_roll, arm_yaw: ', arm_pitch, arm_roll, arm_yaw)
                 arm_pitch, arm_roll, arm_yaw = arm_angles_t
-                theta1_t = theta1_t - arm_roll
-                theta2_t = theta2_t - (-arm_yaw)
-                theta3_t = theta3_t - arm_pitch
+                R_shoulder_arm = R.from_euler('xyz', [[arm_pitch, arm_yaw, arm_roll]],
+                                              degrees=True).as_matrix().squeeze()
+                R_shoulder_arm_inv = np.linalg.inv(R_shoulder_arm)
+                theta1_t, theta2_t, theta3_t = derive_motor_angles_v0(np.dot(R_shoulder_arm_inv, potential_grasps[grasp_box_index]))
+                # theta1_t, theta2_t, theta3_t = derive_motor_angles_v0(potential_grasps[grasp_box_index])
+
+                # theta1_t = theta1_t - arm_roll
+                # theta2_t = theta2_t - (-arm_yaw)
+                # theta3_t = theta3_t - arm_pitch
                 joint1, joint2, joint3 = orient_wrist(theta1_t, theta2_t, theta3_t).tolist()
                 string_command = 'w %d %d %d' % (joint3, joint2, joint1)
                 aperture_command = 'j 0 %d' % (compute_hand_aperture(real_width * 1000))
 
-                print('ps', theta1_t, 'ur', theta2_t, 'fe', theta3_t)
+                print('ps', theta1_t, 'ur', theta2_t, 'ef', theta3_t)
+                if display_counter == 0:
+                    time.sleep(5)
                 ser.write(string_command.encode())
                 color_image_with_grasp = plot_selected_box(color_image_with_grasp, post_nms_predictions, grasp_box_index)
+                display_counter += 1
 
             image_to_display = images = np.hstack((color_image_to_display, color_image_with_grasp))
         frame_count += 1
