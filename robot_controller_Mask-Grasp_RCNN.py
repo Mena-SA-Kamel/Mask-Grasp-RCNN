@@ -53,12 +53,12 @@ def compute_dt(previous_millis, frame_number, zero_timer=False):
     previous_millis = current_millis
     return [previous_millis, dt]
 
-def arm_orientation_imu_9250(serial_object):
+def arm_orientation_imu_9250(serial_object, command='r'):
     # This function performs the handshake between Python and the Robot arm. Returns the arm angles.
-    serial_object.write(b'r')
+    serial_object.write(command.encode())
     input_bytes = serial_object.readline()
     while input_bytes == b'':
-        serial_object.write(b'r')
+        serial_object.write(command.encode())
         input_bytes = serial_object.readline()
     decoded_bytes = np.array(input_bytes.decode().replace('\r', '').replace('\n', '').split('\t'), dtype='float32')
     theta_pitch, theta_roll, theta_yaw = decoded_bytes.tolist()
@@ -384,6 +384,16 @@ def plot_selected_box(image, boxes, box_index):
     image = cv2.drawContours(image, [np.int0(rect[2:])], 0, col, 2)
     return image
 
+def preshape_hand(real_width, real_height, ser):
+    grasp_width = real_width * 1000
+    grasp_width = np.minimum(grasp_width, 83)
+    aperture_command = compute_hand_aperture(grasp_width)
+    aperture_command = np.minimum(aperture_command, 220)
+    aperture_command = np.maximum(aperture_command, 0)
+    grasp_type = compute_grasp_type(real_height * 1000)
+    string_command = 'g %d %d' % (grasp_type, int(aperture_command))
+    ser.write(string_command.encode())
+
 # Variables that store where the subject pointed
 mouseX, mouseY = [0, 0]
 
@@ -430,8 +440,11 @@ selection_flag = False # Specifies if the user selected an object or not
 grasp_prob_thresh = 0.5
 display_counter = 0
 button_press_counter = 0
-close_hand = False
+initiate_grasp = False
+open_hand = False
 aperture_command = 0
+hand_preshaped = False
+button_pressed = False
 
 # Streaming loop
 for i in list(range(20)):
@@ -481,7 +494,14 @@ try:
         cam_angles_t = intel_realsense_IMU.camera_orientation_realsense(frames, dt, cam_angles_t_1)
         cam_angles_t_1 = np.array(cam_angles_t)
         # Getting Arm pose [theta_pitch, theta_roll, theta_yaw]
-        arm_angles_t = np.array(arm_orientation_imu_9250(ser))
+        if button_pressed and hand_preshaped:
+            # c -> Read IMU and increment finger positions
+            arm_angles_t = np.array(arm_orientation_imu_9250(ser, 'c'))
+        elif open_hand and hand_preshaped:
+            # o -> Read and decrement finger positions
+            arm_angles_t = np.array(arm_orientation_imu_9250(ser, 'o'))
+        else:
+            arm_angles_t = np.array(arm_orientation_imu_9250(ser))
 
         if frame_count < num_samples_for_yaw:
             yaw_sum += arm_angles_t[2]
@@ -624,22 +644,12 @@ try:
                 print('ps', theta1_t, 'ur', theta2_t, 'ef', theta3_t)
                 if display_counter == 0:
                     time.sleep(5)
-
-                if close_hand:
-                    grasp_width = real_width * 1000
-                    grasp_width = np.minimum(grasp_width, 83)
-                    aperture_command = compute_hand_aperture(grasp_width) + 5*button_press_counter # How big the aperture should be
-                    aperture_command = np.minimum(aperture_command, 220)
-                    aperture_command = np.maximum(aperture_command, 0)
-                    grasp_type = compute_grasp_type(real_height * 1000)
-                    string_command = 'g %d %d' % (grasp_type, int(aperture_command))
-                    print (string_command)
+                if initiate_grasp and not hand_preshaped:
+                    preshape_hand(real_width, real_height, ser)
+                    hand_preshaped = True
+                if not initiate_grasp:
+                    string_command = 'w %d %d %d' % (joint3, joint2, joint1)
                     ser.write(string_command.encode())
-
-                else:
-                    print ('continue')
-                    #string_command = 'w %d %d %d' % (joint3, joint2, joint1)
-
                 color_image_with_grasp = plot_selected_box(color_image_with_grasp, post_nms_predictions, grasp_box_index)
                 display_counter += 1
 
@@ -659,13 +669,14 @@ try:
             time.sleep(1)
             break
         if key == 8: # If backspace is pressed then open the hand
-            button_press_counter -= 1
+            open_hand = True
+        else:
+            open_hand = False
         if key == 32: # If space bar is pressed, capture state
-            button_press_counter += 1
-            close_hand = True
-            print(button_press_counter)
-        # else:
-        #     close_hand = False
+            initiate_grasp = True
+            button_pressed = True
+        else:
+            button_pressed = False
         end_time = time.time()
 
 finally:
