@@ -58,7 +58,6 @@ def arm_orientation_imu_9250(serial_object):
     serial_object.write(b'r')
     input_bytes = serial_object.readline()
     while input_bytes == b'':
-        print ('did not receive a ping back yet')
         serial_object.write(b'r')
         input_bytes = serial_object.readline()
     decoded_bytes = np.array(input_bytes.decode().replace('\r', '').replace('\n', '').split('\t'), dtype='float32')
@@ -335,20 +334,33 @@ def orient_wrist(theta1, theta2, theta3):
     joint_output = np.array([joint1, joint2, joint3]).astype('uint8')
     return joint_output
 
+def compute_grasp_type(grasp_box_height):
+    # Computes the grasp type based on grasp box height
+    # grasp_type = 0 -> OneFPinch
+    # grasp_type = 1 -> TwoFPinch
+    # grasp_type = 2 -> Power
+    if 0 < grasp_box_height <= 50:
+        grasp_type = 0
+    elif 50 < grasp_box_height <= 100:
+        grasp_type = 1
+    else:
+        grasp_type = 2
+    return grasp_type
+
 def compute_hand_aperture(grasp_box_width):
     # This function computes the motor command required to acheive an aperture of size grasp_box_width
     coef_path = 'aperture_mapping.txt'
-    grasp_box_width = np.minimum(grasp_box_width, 90)
-    grasp_box_width = np.maximum(grasp_box_width, 0)
     if os.path.exists(coef_path):
         coeffs = np.loadtxt(coef_path)
     else:
-        motor_commands = np.arange(0, 1100, 100)
-        aperture_size = np.array([90, 88, 75, 60, 40, 30, 18, 10, 8, 5.9, 5.4])
-        coeffs = np.polynomial.polynomial.polyfit(aperture_size, motor_commands, 4)
+        # motor_commands = np.arange(0, 1100, 100)
+        # aperture_size = np.array([90, 88, 75, 60, 40, 30, 18, 10, 8, 5.9, 5.4])
+        motor_commands = np.array(
+            [0, 20, 40, 60, 70, 80, 90, 100, 110, 120, 130, 140, 150, 160, 170, 180, 190, 200, 210, 220, 230, 240, 255])
+        aperture_size = np.array([83, 83, 83, 75, 65, 61, 49, 44, 30, 23, 14, 7, 3, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0])
+        coeffs = np.polynomial.polynomial.polyfit(aperture_size, motor_commands, 8)
         np.savetxt(coef_path, coeffs)
-    motor_command = np.polynomial.polynomial.polyval(grasp_box_width, coeffs)
-    return motor_command
+    return np.polynomial.polynomial.polyval(grasp_box_width, coeffs)
 
 def plot_selected_box(image, boxes, box_index):
     color = np.array([[0, 255, 0]])
@@ -417,6 +429,9 @@ previous_millis = 0 # Stores the time the last update was made
 selection_flag = False # Specifies if the user selected an object or not
 grasp_prob_thresh = 0.5
 display_counter = 0
+button_press_counter = 0
+close_hand = False
+aperture_command = 0
 
 # Streaming loop
 for i in list(range(20)):
@@ -551,7 +566,7 @@ try:
                     # Wrapping angles so they are in [-90, 90] range
                     theta = dataset_object.wrap_angle_around_90(np.array([theta]))[0]
                     theta = theta * (np.pi / 180)  # network outputs positive angles in bottom right quadrant
-                    # Computing the grasp box size in camera coordinates
+                    # Computing the grasp box size in camera coordinates, size in meters
                     real_width, real_height = compute_real_box_size(intrinsics, aligned_depth_frame, rect_vertices)
                     box_vert_obj_frame = generate_points_in_world_frame(real_width, real_height)
                     # visualize_wrist_in_camera_frame(color_image, depth_image, box_center, approach_vector, intrinsics,
@@ -596,26 +611,35 @@ try:
             if state == "display":
                 # theta1 : pronate/supinate
                 # theta2 : ulnar/radial
-                # theta3 : flexion/extension
+                # theta3 : extension/flexion
                 print('arm_pitch, arm_roll, arm_yaw: ', arm_pitch, arm_roll, arm_yaw)
                 arm_pitch, arm_roll, arm_yaw = arm_angles_t
                 R_shoulder_arm = R.from_euler('xyz', [[arm_pitch, arm_yaw, arm_roll]],
                                               degrees=True).as_matrix().squeeze()
                 R_shoulder_arm_inv = np.linalg.inv(R_shoulder_arm)
                 theta1_t, theta2_t, theta3_t = derive_motor_angles_v0(np.dot(R_shoulder_arm_inv, potential_grasps[grasp_box_index]))
-                # theta1_t, theta2_t, theta3_t = derive_motor_angles_v0(potential_grasps[grasp_box_index])
 
-                # theta1_t = theta1_t - arm_roll
-                # theta2_t = theta2_t - (-arm_yaw)
-                # theta3_t = theta3_t - arm_pitch
                 joint1, joint2, joint3 = orient_wrist(theta1_t, theta2_t, theta3_t).tolist()
-                string_command = 'w %d %d %d' % (joint3, joint2, joint1)
-                aperture_command = 'j 0 %d' % (compute_hand_aperture(real_width * 1000))
 
                 print('ps', theta1_t, 'ur', theta2_t, 'ef', theta3_t)
                 if display_counter == 0:
                     time.sleep(5)
-                ser.write(string_command.encode())
+
+                if close_hand:
+                    grasp_width = real_width * 1000
+                    grasp_width = np.minimum(grasp_width, 83)
+                    aperture_command = compute_hand_aperture(grasp_width) + 5*button_press_counter # How big the aperture should be
+                    aperture_command = np.minimum(aperture_command, 220)
+                    aperture_command = np.maximum(aperture_command, 0)
+                    grasp_type = compute_grasp_type(real_height * 1000)
+                    string_command = 'g %d %d' % (grasp_type, int(aperture_command))
+                    print (string_command)
+                    ser.write(string_command.encode())
+
+                else:
+                    print ('continue')
+                    #string_command = 'w %d %d %d' % (joint3, joint2, joint1)
+
                 color_image_with_grasp = plot_selected_box(color_image_with_grasp, post_nms_predictions, grasp_box_index)
                 display_counter += 1
 
@@ -624,11 +648,25 @@ try:
         mouseX, mouseY = [0, 0]
         cv2.imshow('MASK-GRASP RCNN OUTPUT', image_to_display)
         key = cv2.waitKey(1)
+
+
         if key & 0xFF == ord('q') or key == 27:
             cv2.destroyAllWindows()
             break
+        if key & 0xFF == ord('h'):
+            time.sleep(1)
+            ser.write(b'h')
+            time.sleep(1)
+            break
+        if key == 8: # If backspace is pressed then open the hand
+            button_press_counter -= 1
+        if key == 32: # If space bar is pressed, capture state
+            button_press_counter += 1
+            close_hand = True
+            print(button_press_counter)
+        # else:
+        #     close_hand = False
         end_time = time.time()
-        print (dt)
 
 finally:
     pipeline.stop()
