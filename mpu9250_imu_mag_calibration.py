@@ -49,7 +49,7 @@ def live_plotter(x_vec, acc_history, gyro_history, mag_history, sys_history, axe
     return [line1, line2, line3, line4, line5, line6, line7, line8, line9, line10]
 
 
-ser = serial.Serial('COM6', 115200)
+ser = serial.Serial('COM6', 115200, timeout= 0.1)
 ser.flushInput()
 
 data_stream_size = 100
@@ -93,9 +93,6 @@ while True:
         ser.write(b'r')
         input_bytes = ser.readline()
         counter += 1
-        #
-        # if counter < 5:
-        #     continue
 
         decoded_bytes = np.array(input_bytes.decode().replace('\r','').replace('\n','').split('\t'), dtype='float32')
         ay, ax, az, gy, gx, gz, mx, my, mz, T = decoded_bytes.tolist()

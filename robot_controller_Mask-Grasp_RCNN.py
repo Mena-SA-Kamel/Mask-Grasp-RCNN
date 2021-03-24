@@ -64,8 +64,10 @@ def arm_orientation_imu_9250(serial_object, command='r'):
     theta_pitch, theta_roll, theta_yaw = decoded_bytes.tolist()
     return ([theta_pitch, theta_roll, theta_yaw])
 
-def select_ROI(mouseX, mouseY, r):
+def select_ROI(mouseX, mouseY, r, resize_factor):
     # Uses the X, Y coordinates that the user selected to fetch the underlying detection
+    mouseX = mouseX/resize_factor[1]
+    mouseY = mouseY/resize_factor[0]
     rois = r['rois']
     grasping_deltas = r['grasp_boxes']
     grasping_probs = r['grasp_probs']
@@ -248,9 +250,6 @@ def derive_motor_angles_v0(orientation_matrix):
     # theta_1, theta_2, theta_3 = joint_combinations[np.argmin(join_sum)] # Choosing the angle combo with the least
                                                                         # deviation required
     theta_1, theta_2, theta_3 = joint_combinations[0]  # Choosing the angle combo with the least
-
-    fe_home = -35
-    theta_3 = theta_3 - fe_home
     return [theta_1, theta_2, theta_3]
 
 # def derive_motor_angles_v0(orientation_matrix):
@@ -298,7 +297,7 @@ def orient_wrist(theta1, theta2, theta3):
     # Joint center positions as an 8 bit integer
     ps_home = 155 #102
     ur_home = 180
-    fe_home = 162
+    fe_home = 150
 
     # Defining the physical joint limits
     pronate_supinate_limit = [-95, 90]
@@ -445,13 +444,14 @@ open_hand = False
 aperture_command = 0
 hand_preshaped = False
 button_pressed = False
+grasp_config_correct = False
+window_resize_factor = np.array([2, 2])
 
 # Streaming loop
 for i in list(range(20)):
     frames = pipeline.wait_for_frames()
 cv2.namedWindow('MASK-GRASP RCNN OUTPUT', cv2.WINDOW_AUTOSIZE)
 cv2.setMouseCallback('MASK-GRASP RCNN OUTPUT', onMouse)
-
 try:
     while True:
         start_time = time.time()
@@ -484,6 +484,8 @@ try:
                                                  square_size=center_crop_size)
         rgb_image_resized = rgbd_image_resized[:, :, 0:3].astype('uint8')
         color_image_to_display = cv2.cvtColor(rgb_image_resized, cv2.COLOR_RGB2BGR)
+        new_shape = tuple(window_resize_factor * np.shape(color_image_to_display)[:2])
+        resized_color_image_to_display = cv2.resize(color_image_to_display, new_shape, interpolation=cv2.INTER_AREA)
 
         # Computing time between frames
         previous_millis, dt = compute_dt(previous_millis, frame_count)
@@ -498,7 +500,7 @@ try:
             # c -> Read IMU and increment finger positions
             arm_angles_t = np.array(arm_orientation_imu_9250(ser, 'c'))
         elif open_hand and hand_preshaped:
-            # o -> Read and decrement finger positions
+            # o -> Read IMU and decrement finger positions
             arm_angles_t = np.array(arm_orientation_imu_9250(ser, 'o'))
         else:
             arm_angles_t = np.array(arm_orientation_imu_9250(ser))
@@ -514,14 +516,19 @@ try:
         else:
             arm_angles_t[2] -= yaw_resting
 
+        cam_pitch, cam_yaw, cam_roll = cam_angles_t
+        arm_pitch, arm_roll, arm_yaw = arm_angles_t
+
         if not selection_flag:
             # Running Mask-Grasp R-CNN on the frame
             mask_grasp_results = mask_grasp_model.detect([rgbd_image_resized], verbose=0, task=mode)[0]
             # Capture input from user about which object to interact with
-            selected_ROI = select_ROI(mouseX, mouseY, mask_grasp_results)
+            selected_ROI = select_ROI(mouseX, mouseY, mask_grasp_results, window_resize_factor)
             rois, grasping_deltas, grasping_probs, masks, roi_scores, selection_flag = selected_ROI
             masked_image, colors = dataset_object.get_mask_overlay(color_image_to_display, masks, roi_scores, threshold=0)
             image_to_display = masked_image
+            new_shape = tuple(window_resize_factor * np.shape(image_to_display)[:2])
+            resized_image_to_display = cv2.resize(image_to_display, new_shape, interpolation=cv2.INTER_AREA)
             state = "roi_selection"
         else:
             if state == "roi_selection":
@@ -600,7 +607,7 @@ try:
                     approach_vector_orientation = np.dot(V, rotation_z)
 
                     # Defining rotation matrix to go from the shoulder to camera frame
-                    cam_pitch, cam_yaw, cam_roll = cam_angles_t
+
 
                     R_shoulder_camera = R.from_euler('xyz', [[cam_pitch, 0, cam_roll]],
                                                      degrees=True).as_matrix().squeeze()
@@ -609,7 +616,6 @@ try:
 
                 joint_deviations = np.zeros(potential_grasps.shape[0])
                 joint_angles = np.zeros((potential_grasps.shape[0], 3))
-                arm_pitch, arm_roll, arm_yaw = arm_angles_t
                 for i, grasp_orientation_shoulder in enumerate(potential_grasps):
                     grasp_orientation_shoulder_2 = grasp_orientation_shoulder.copy()
                     grasp_orientation_shoulder_2[:, :2] = grasp_orientation_shoulder_2[:, :2] * -1  # Equivalent graspbox
@@ -628,7 +634,13 @@ try:
                 grasp_box_index = np.argmin(joint_deviations)
 
                 state = "display"
-            if state == "display":
+                color_image_with_grasp = plot_selected_box(color_image_with_grasp, post_nms_predictions,
+                                                           grasp_box_index)
+                new_shape = tuple(window_resize_factor * np.shape(color_image_with_grasp)[:2])
+                resized_color_image_with_grasp = cv2.resize(color_image_with_grasp, new_shape,
+                                                            interpolation=cv2.INTER_AREA)
+
+            if state == "display" and grasp_config_correct:
                 # theta1 : pronate/supinate
                 # theta2 : ulnar/radial
                 # theta3 : extension/flexion
@@ -638,25 +650,33 @@ try:
                                               degrees=True).as_matrix().squeeze()
                 R_shoulder_arm_inv = np.linalg.inv(R_shoulder_arm)
                 theta1_t, theta2_t, theta3_t = derive_motor_angles_v0(np.dot(R_shoulder_arm_inv, potential_grasps[grasp_box_index]))
+                fe_home = -28
+                theta3_t = theta3_t - fe_home
 
                 joint1, joint2, joint3 = orient_wrist(theta1_t, theta2_t, theta3_t).tolist()
 
                 print('ps', theta1_t, 'ur', theta2_t, 'ef', theta3_t)
-                if display_counter == 0:
-                    time.sleep(5)
                 if initiate_grasp and not hand_preshaped:
                     preshape_hand(real_width, real_height, ser)
                     hand_preshaped = True
                 if not initiate_grasp:
                     string_command = 'w %d %d %d' % (joint3, joint2, joint1)
                     ser.write(string_command.encode())
-                color_image_with_grasp = plot_selected_box(color_image_with_grasp, post_nms_predictions, grasp_box_index)
                 display_counter += 1
 
-            image_to_display = images = np.hstack((color_image_to_display, color_image_with_grasp))
+            resized_image_to_display = images = np.hstack((resized_color_image_to_display, resized_color_image_with_grasp))
         frame_count += 1
         mouseX, mouseY = [0, 0]
-        cv2.imshow('MASK-GRASP RCNN OUTPUT', image_to_display)
+
+        font = cv2.FONT_HERSHEY_SIMPLEX
+        cam_orientation_text = "CAMERA ORIENTATION - Pitch : %d, Roll: %d, Yaw: %d" % (cam_pitch, cam_roll, cam_yaw)
+        cam_orientation_location = (10, resized_image_to_display.shape[0] - 40)
+        cv2.putText(resized_image_to_display, cam_orientation_text, cam_orientation_location, font, 0.5, (0, 0, 255))
+
+        arm_orientation_text = "ARM ORIENTATION - Pitch : %d, Roll: %d, Yaw: %d" % (arm_pitch, arm_roll, arm_yaw)
+        arm_orientation_location = (10, resized_image_to_display.shape[0] - 20)
+        cv2.putText(resized_image_to_display, arm_orientation_text, arm_orientation_location, font, 0.5, (0, 0, 255))
+        cv2.imshow('MASK-GRASP RCNN OUTPUT', resized_image_to_display)
         key = cv2.waitKey(1)
 
 
@@ -668,6 +688,18 @@ try:
             ser.write(b'h')
             time.sleep(1)
             break
+        if key & 0xFF == ord('n'): # Grasp another object if n is pressed
+            time.sleep(1)
+            ser.write(b'h')
+            time.sleep(1)
+            hand_preshaped = False
+            button_pressed = False
+            open_hand = False
+            grasp_config_correct = False
+            selection_flag = False
+            initiate_grasp = False
+        if key == 13:
+            grasp_config_correct = True
         if key == 8: # If backspace is pressed then open the hand
             open_hand = True
         else:
