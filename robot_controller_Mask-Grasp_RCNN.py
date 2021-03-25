@@ -446,6 +446,11 @@ hand_preshaped = False
 button_pressed = False
 grasp_config_correct = False
 window_resize_factor = np.array([2, 2])
+theta1_t, theta2_t, theta3_t = [0,0,0]
+fe_home = -18 #-28
+d_theta = 0 ##stores the change in theta between frames
+prev_thetas = np.array([theta1_t, theta2_t, theta3_t])
+error_msg = ""
 
 # Streaming loop
 for i in list(range(20)):
@@ -644,14 +649,22 @@ try:
                 # theta1 : pronate/supinate
                 # theta2 : ulnar/radial
                 # theta3 : extension/flexion
-                print('arm_pitch, arm_roll, arm_yaw: ', arm_pitch, arm_roll, arm_yaw)
+                # print('arm_pitch, arm_roll, arm_yaw: ', arm_pitch, arm_roll, arm_yaw)
                 arm_pitch, arm_roll, arm_yaw = arm_angles_t
                 R_shoulder_arm = R.from_euler('xyz', [[arm_pitch, arm_yaw, arm_roll]],
                                               degrees=True).as_matrix().squeeze()
                 R_shoulder_arm_inv = np.linalg.inv(R_shoulder_arm)
                 theta1_t, theta2_t, theta3_t = derive_motor_angles_v0(np.dot(R_shoulder_arm_inv, potential_grasps[grasp_box_index]))
-                fe_home = -28
                 theta3_t = theta3_t - fe_home
+                d_theta = np.sum(np.abs(np.array([theta1_t, theta2_t, theta3_t]) - prev_thetas))
+
+                if d_theta > 100 and display_counter !=0:
+                    theta1_t, theta2_t, theta3_t = prev_thetas
+                    error_msg = "CAUTION: delta theta was larger than limit"
+                else:
+                    error_msg = ""
+                prev_thetas = np.array([theta1_t, theta2_t, theta3_t])
+
 
                 joint1, joint2, joint3 = orient_wrist(theta1_t, theta2_t, theta3_t).tolist()
 
@@ -670,12 +683,22 @@ try:
 
         font = cv2.FONT_HERSHEY_SIMPLEX
         cam_orientation_text = "CAMERA ORIENTATION - Pitch : %d, Roll: %d, Yaw: %d" % (cam_pitch, cam_roll, cam_yaw)
-        cam_orientation_location = (10, resized_image_to_display.shape[0] - 40)
+        cam_orientation_location = (10, resized_image_to_display.shape[0] - 60)
         cv2.putText(resized_image_to_display, cam_orientation_text, cam_orientation_location, font, 0.5, (0, 0, 255))
 
         arm_orientation_text = "ARM ORIENTATION - Pitch : %d, Roll: %d, Yaw: %d" % (arm_pitch, arm_roll, arm_yaw)
-        arm_orientation_location = (10, resized_image_to_display.shape[0] - 20)
+        arm_orientation_location = (10, resized_image_to_display.shape[0] - 40)
         cv2.putText(resized_image_to_display, arm_orientation_text, arm_orientation_location, font, 0.5, (0, 0, 255))
+
+        desired_arm_angles_text = "DESIRED ARM ANGLES - PS : %d, UR: %d, EF: %d" % (theta1_t, theta2_t, theta3_t)
+        desired_arm_angles_location = (10, resized_image_to_display.shape[0] - 20)
+        cv2.putText(resized_image_to_display, desired_arm_angles_text, desired_arm_angles_location, font, 0.5, (0, 0, 255))
+
+        desired_arm_angles_text = "D_THETA: %d %s " % (d_theta, error_msg)
+        desired_arm_angles_location = (10, resized_image_to_display.shape[0] - 80)
+        cv2.putText(resized_image_to_display, desired_arm_angles_text, desired_arm_angles_location, font, 0.5,
+                    (0, 0, 255))
+
         cv2.imshow('MASK-GRASP RCNN OUTPUT', resized_image_to_display)
         key = cv2.waitKey(1)
 
@@ -698,6 +721,8 @@ try:
             grasp_config_correct = False
             selection_flag = False
             initiate_grasp = False
+            display_counter = 0
+            theta1_t, theta2_t, theta3_t = [0, 0, 0]
         if key == 13:
             grasp_config_correct = True
         if key == 8: # If backspace is pressed then open the hand
@@ -709,6 +734,15 @@ try:
             button_pressed = True
         else:
             button_pressed = False
+
+        if key & 0xFF == ord('a'): # For fine tuning the home extension position (fe_home)
+            fe_home += 1
+            print(fe_home)
+
+        if key & 0xFF == ord('s'):
+            fe_home -= 1
+            print(fe_home)
+
         end_time = time.time()
 
 finally:
