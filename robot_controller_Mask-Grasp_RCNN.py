@@ -289,21 +289,37 @@ def derive_motor_angles_v0(orientation_matrix):
 #     theta_3_wrapped = dataset_object.wrap_angle_around_90(np.array([theta_3]))[0]
 #     return [theta_1_wrapped, theta_2_wrapped, theta_3_wrapped]
 
+def get_joint_home_values_8bits():
+    FE_MIN = 260
+    FE_MAX = 540
+    FE_HOME = 390
+
+    UR_MIN = 320
+    UR_MAX = 490
+    UR_HOME = 440
+
+    SP_MIN = 120
+    SP_MAX = 480
+    SP_HOME = 340
+
+    FE_HOME_8_bits = ((FE_HOME - FE_MIN) / (FE_MAX - FE_MIN))*255
+    UR_HOME_8_bits = ((UR_HOME - UR_MIN) / (UR_MAX - UR_MIN))*255
+    SP_HOME_8_bits = ((SP_HOME - SP_MIN) / (SP_MAX - SP_MIN))*255
+
+    return ([SP_HOME_8_bits, UR_HOME_8_bits, FE_HOME_8_bits])
+
 def orient_wrist(theta1, theta2, theta3):
     # This function takes the joint angles, theta1, theta2, theta3, for
     # pronate/supinate, ulnar/radial, and flexion/extension, respectively, and computes the 8 bit integers
     # needed to drive the hand
 
     # Joint center positions as an 8 bit integer
-    ps_home = 155 #102
-    ur_home = 180
-    fe_home = 150
+    ps_home, ur_home, fe_home = get_joint_home_values_8bits()
 
     # Defining the physical joint limits
-    pronate_supinate_limit = [-95, 90]
-    ulnar_radial_limit = [-13, 21]
-    # flexion_extension_limit = [-42, 30]
-    flexion_extension_limit = [-35, 55]
+    pronate_supinate_limit = [-90, 80]
+    ulnar_radial_limit = [-8, 15]
+    flexion_extension_limit = [-47, 62]
 
     # Clipping angles to the physical joint limits
     theta1 = np.minimum(theta1, pronate_supinate_limit[1])
@@ -448,9 +464,11 @@ grasp_config_correct = False
 window_resize_factor = np.array([2, 2])
 theta1_t, theta2_t, theta3_t = [0,0,0]
 fe_home = -18 #-28
+ur_home = -10
 d_theta = 0 ##stores the change in theta between frames
 prev_thetas = np.array([theta1_t, theta2_t, theta3_t])
 error_msg = ""
+skip_counter = 0
 
 # Streaming loop
 for i in list(range(20)):
@@ -656,15 +674,17 @@ try:
                 R_shoulder_arm_inv = np.linalg.inv(R_shoulder_arm)
                 theta1_t, theta2_t, theta3_t = derive_motor_angles_v0(np.dot(R_shoulder_arm_inv, potential_grasps[grasp_box_index]))
                 theta3_t = theta3_t - fe_home
+                theta2_t = theta2_t - ur_home
                 d_theta = np.sum(np.abs(np.array([theta1_t, theta2_t, theta3_t]) - prev_thetas))
 
-                if d_theta > 100 and display_counter !=0:
+                if d_theta > 100 and skip_counter <= 50 and display_counter !=0:
                     theta1_t, theta2_t, theta3_t = prev_thetas
                     error_msg = "CAUTION: delta theta was larger than limit"
+                    skip_counter +=1
                 else:
                     error_msg = ""
+                    skip_counter = 0
                 prev_thetas = np.array([theta1_t, theta2_t, theta3_t])
-
 
                 joint1, joint2, joint3 = orient_wrist(theta1_t, theta2_t, theta3_t).tolist()
 
