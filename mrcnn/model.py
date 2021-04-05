@@ -2453,6 +2453,8 @@ def grasp_loss_graph(config, target_bbox, target_class, bbox, class_logits, roi_
         N_repeats = tf.cast(tf.tile(N, [1, config.GRASP_ANCHORS_PER_ROI]), dtype=tf.float32)
         N_repeats = tf.expand_dims(N_repeats, axis=-1)
 
+        # num_negatives = K.minimum(N * 3, num_anchors - N)
+
         top_negative_losses_sum = tf.cond(
             tf.greater(tf.shape(N)[0], 0),
             true_fn=lambda: tf.map_fn(cumpute_top_negative_losses_graph, tf.concat([negative_anchor_losses, N_repeats], axis=-1)),
