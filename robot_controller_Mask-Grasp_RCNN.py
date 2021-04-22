@@ -18,6 +18,9 @@ import serial
 import time
 import os
 import intel_realsense_IMU
+import zmq
+import msgpack
+import threading
 
 def onMouse(event, x, y, flags, param):
     global mouseX, mouseY
@@ -372,6 +375,13 @@ def preshape_hand(real_width, real_height, ser):
     string_command = 'g %d %d' % (grasp_type, int(aperture_command))
     ser.write(string_command.encode())
 
+def fetch_gaze_vector(subscriber, avg_gaze):
+    while True:
+        topic, payload = subscriber.recv_multipart()
+        message = msgpack.loads(payload)
+        gaze_point_3d = message[b'gaze_point_3d']
+        avg_gaze[:] = gaze_point_3d
+
 # Variables that store where the subject pointed
 mouseX, mouseY = [0, 0]
 
@@ -431,6 +441,36 @@ d_theta = 0 ##stores the change in theta between frames
 prev_thetas = np.array([theta1_t, theta2_t, theta3_t])
 error_msg = ""
 skip_counter = 0
+avg_gaze = [0,0,0]
+M_t = np.array([[0.98323309, -0.03063463,  0.17976155, -0.05710686],
+                [ 0.03361795,  0.9993426,  -0.01357236, -0.02003963],
+                [-0.17922759,  0.01938801,  0.98361658,  0.01666406]])
+tvec = M_t[:,-1]
+rvec, jacobian = cv2.Rodrigues(M_t[:,:3])
+realsense_intrinsics_matrix = np.array([[609.87304688,   0.        , 332.6171875 ],
+                                        [  0.        , 608.84387207, 248.34165955],
+                                        [  0.        ,   0.        ,   1.        ]])
+
+ctx = zmq.Context()
+# The REQ talks to Pupil remote and receives the session unique IPC SUB PORT
+pupil_remote = ctx.socket(zmq.REQ)
+ip = 'localhost'  # If you talk to a different machine use its IP.
+port = 50020  # The port defaults to 50020. Set in Pupil Capture GUI.
+pupil_remote.connect(f'tcp://{ip}:{port}')
+# Request 'SUB_PORT' for reading data
+pupil_remote.send_string('SUB_PORT')
+
+sub_port = pupil_remote.recv_string()
+# Request 'PUB_PORT' for writing dataYour location
+pupil_remote.send_string('PUB_PORT')
+pub_port = pupil_remote.recv_string()
+subscriber = ctx.socket(zmq.SUB)
+subscriber.connect(f'tcp://{ip}:{sub_port}')
+subscriber.subscribe('gaze.')  # receive all gaze messages
+
+# Thread runs infinetly
+t1 = threading.Thread(target=fetch_gaze_vector, args=(subscriber, avg_gaze))
+t1.start()
 
 # Streaming loop
 for i in list(range(20)):
@@ -469,6 +509,18 @@ try:
                                                  square_size=center_crop_size)
         rgb_image_resized = rgbd_image_resized[:, :, 0:3].astype('uint8')
         color_image_to_display = cv2.cvtColor(rgb_image_resized, cv2.COLOR_RGB2BGR)
+
+        # Adding the gaze data
+        # Notes: Images are center croped to be center_crop_size x center_crop_size, so we need to correct for this
+        gaze_points = np.array(avg_gaze).reshape(-1, 1, 3)
+        gaze_points_realsense_image, jacobian = cv2.projectPoints(gaze_points, rvec, tvec, realsense_intrinsics_matrix,None)
+        gaze_x_realsense, gaze_y_realsense = gaze_points_realsense_image.squeeze().astype('uint16')
+        gaze_x_realsense = int(gaze_x_realsense - (image_width - center_crop_size)/2)
+        gaze_y_realsense = int(gaze_y_realsense - (image_height - center_crop_size)/2)
+        color_image_to_display = cv2.circle(color_image_to_display, (gaze_x_realsense, gaze_y_realsense), 20, (0, 0, 255),3)
+        color_image_to_display = cv2.circle(color_image_to_display, (gaze_x_realsense, gaze_y_realsense), 2, (0, 0, 255),2)
+
+
         new_shape = tuple(window_resize_factor * np.shape(color_image_to_display)[:2])
         resized_color_image_to_display = cv2.resize(color_image_to_display, new_shape, interpolation=cv2.INTER_AREA)
 
