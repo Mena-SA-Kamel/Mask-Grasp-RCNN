@@ -77,30 +77,29 @@ def select_ROI(mouseX, mouseY, r, resize_factor):
     masks = r['masks']
     roi_scores = r['scores']
     selection_success = False
-    if mouseY + mouseX != 0:
-        print('x = %d, y = %d' % (mouseX, mouseY))
-        # Here we need to find the detected BBOX that contains <mouseX, mouseY>. then pass those bbox coords to
-        # the tracking loop
-        y1, x1, y2, x2 = np.split(rois, indices_or_sections=4, axis=-1)
-        y_condition = np.logical_and(y1 < mouseY, y2 > mouseY)
-        x_condition = np.logical_and(x1 < mouseX, x2 > mouseX)
-        selected_roi_ix = np.where(np.logical_and(x_condition, y_condition))[0]
-        if selected_roi_ix.shape[0] > 0:
-            selection_success = True
-            selected_roi = rois[selected_roi_ix[0]]
-            # Case when the coordinates of the cursor lies in two bounding boxes, if that is the case, we choose the
-            # box with the smaller area
-            if selected_roi_ix.shape[0] > 1:
-                possible_rois = rois[selected_roi_ix]
-                y1, x1, y2, x2 = np.split(possible_rois, indices_or_sections=4, axis=-1)
-                box_areas = (y2 - y1) * (x2 - x1)
-                selected_roi_ix = np.array([np.argmin(box_areas)])
-                selected_roi = possible_rois[selected_roi_ix[0]]
-            rois = selected_roi.reshape(1, 4)
-            grasping_deltas = grasping_deltas[selected_roi_ix]
-            grasping_probs = grasping_probs[selected_roi_ix]
-            masks = masks[:,:,selected_roi_ix]
-            roi_scores = roi_scores[selected_roi_ix]
+    if rois.shape[0] > 0 and (mouseY + mouseX) != 0:
+        # y1, x1, y2, x2
+        box_centers_x = ((rois[:, 1] + rois[:, 3])/2).reshape(-1, 1)
+        box_centers_y = ((rois[:, 0] + rois[:, 2])/2).reshape(-1, 1)
+        w = np.abs(rois[:, 1] - rois[:, 3]).reshape(-1, 1)
+        h = np.abs(rois[:, 0] - rois[:, 2]).reshape(-1, 1)
+        delta = 1.5
+
+        thresholds = (np.sqrt((w/2)**2 + (h/2)**2) * delta).squeeze()
+        box_centers = np.concatenate([box_centers_x, box_centers_y], axis=-1)
+        gaze_point = np.array([mouseX, mouseY])
+        gaze_point_repeats = np.tile(gaze_point, [np.shape(box_centers)[0], 1])
+        distances = np.sqrt((gaze_point_repeats[:, 0] - box_centers[:, 0]) ** 2 + (gaze_point_repeats[:,1] - box_centers[:, 1]) ** 2)
+
+        selected_ROI_ix = np.argmin(distances)
+        if distances[selected_ROI_ix] < thresholds[selected_ROI_ix]:
+            rois = rois[selected_ROI_ix].reshape(-1, 4)
+            grasping_deltas = np.expand_dims(grasping_deltas[selected_ROI_ix], axis=0)
+            grasping_probs = np.expand_dims(grasping_probs[selected_ROI_ix], axis=0)
+            masks = np.expand_dims(masks[:, :, selected_ROI_ix], axis=-1)
+            roi_scores = np.expand_dims(roi_scores[selected_ROI_ix], axis=0)
+            # selection_success = True
+
     return rois, grasping_deltas, grasping_probs, masks, roi_scores, selection_success
 
 def generate_mask_from_polygon(image_shape, polygon_vertices):
@@ -162,9 +161,13 @@ def de_project_point(intrinsics, depth_frame, point):
     de_projected_point = rs.rs2_deproject_pixel_to_point(intrinsics, [x, y], distance_to_point)
     return de_projected_point
 
-def compute_distance(P1, P2):
+def compute_distance_3D(P1, P2):
     # This function computes the euclidean distance between two 3D points
     return np.sqrt((P1[0] - P2[0]) ** 2 + (P1[1] - P2[1]) ** 2 + (P1[2] - P2[2]) ** 2)
+
+def compute_distance_2D(p1, p2):
+    # This function computes the euclidean distance between two 2D points
+    return np.sqrt((p1[0] - p2[0]) ** 2 + (p1[1] - p2[1]) ** 2)
 
 def get_camera_frame_box_coords(intrinsics, depth_frame, box_vertices):
     # This function deprojects the vertex points that make up the grasp box from the image plane to the camera frame
@@ -190,8 +193,8 @@ def compute_real_box_size(intrinsics, aligned_depth_frame, rect):
     P2 = rect_camera_frame[2]
     P3 = rect_camera_frame[3]
 
-    real_width = np.mean([compute_distance(P1, P2), compute_distance(P0, P3)])
-    real_height = np.mean([compute_distance(P0, P1), compute_distance(P2, P3)])
+    real_width = np.mean([compute_distance_3D(P1, P2), compute_distance_3D(P0, P3)])
+    real_height = np.mean([compute_distance_3D(P0, P1), compute_distance_3D(P2, P3)])
     # print('Grasp Width: ', real_width, 'Grasp Height: ', real_height)
     return [real_width, real_height]
 
@@ -218,6 +221,7 @@ def compute_wrist_orientation(approach_vector, theta):
     vz = vz.reshape([3, 1])
     V = np.concatenate([vx, vy, vz], axis=-1)
     return V
+
 def derive_motor_angles_v0(orientation_matrix):
     orientation_matrix = np.around(orientation_matrix, decimals=2)
 
@@ -418,6 +422,27 @@ mask_grasp_model.load_weights(mask_grasp_model_path, by_name=True)
 dataset_object = GraspMaskRCNNDataset()
 center_crop_size = inference_config.IMAGE_MAX_DIM
 
+# Establishing connection to eye tracker
+ctx = zmq.Context()
+# The REQ talks to Pupil remote and receives the session unique IPC SUB PORT
+pupil_remote = ctx.socket(zmq.REQ)
+ip = 'localhost'  # If you talk to a different machine use its IP.
+port = 50020  # The port defaults to 50020. Set in Pupil Capture GUI.
+pupil_remote.connect(f'tcp://{ip}:{port}')
+# Request 'SUB_PORT' for reading data
+pupil_remote.send_string('SUB_PORT')
+sub_port = pupil_remote.recv_string()
+# Request 'PUB_PORT' for writing dataYour location
+pupil_remote.send_string('PUB_PORT')
+pub_port = pupil_remote.recv_string()
+subscriber = ctx.socket(zmq.SUB)
+subscriber.connect(f'tcp://{ip}:{sub_port}')
+subscriber.subscribe('gaze.')  # receive all gaze messages
+# Thread runs infinetly
+avg_gaze = [0,0,0]
+t1 = threading.Thread(target=fetch_gaze_vector, args=(subscriber, avg_gaze))
+t1.start()
+
 # Defining variables for robot execution loop
 frame_count = 0 # Stores the number of frames that have been run so far
 cam_angles_t_1 = np.zeros(3,) # Stores the camera angles in frame t-1
@@ -441,37 +466,20 @@ d_theta = 0 ##stores the change in theta between frames
 prev_thetas = np.array([theta1_t, theta2_t, theta3_t])
 error_msg = ""
 skip_counter = 0
-avg_gaze = [0,0,0]
-M_t = np.array([[0.98323309, -0.03063463,  0.17976155, -0.05710686],
-                [ 0.03361795,  0.9993426,  -0.01357236, -0.02003963],
-                [-0.17922759,  0.01938801,  0.98361658,  0.01666406]])
+
+M_t = np.array([[ 0.99965041, -0.00963443, -0.0246218,  -0.02286312],
+ [ 0.00733296,  0.99574031, -0.0919101,   0.03205968],
+ [ 0.02540242,  0.09169741,  0.99546286, -0.00386647]])
 tvec = M_t[:,-1]
 rvec, jacobian = cv2.Rodrigues(M_t[:,:3])
 realsense_intrinsics_matrix = np.array([[609.87304688,   0.        , 332.6171875 ],
                                         [  0.        , 608.84387207, 248.34165955],
                                         [  0.        ,   0.        ,   1.        ]])
-
-ctx = zmq.Context()
-# The REQ talks to Pupil remote and receives the session unique IPC SUB PORT
-pupil_remote = ctx.socket(zmq.REQ)
-ip = 'localhost'  # If you talk to a different machine use its IP.
-port = 50020  # The port defaults to 50020. Set in Pupil Capture GUI.
-pupil_remote.connect(f'tcp://{ip}:{port}')
-# Request 'SUB_PORT' for reading data
-pupil_remote.send_string('SUB_PORT')
-
-sub_port = pupil_remote.recv_string()
-# Request 'PUB_PORT' for writing dataYour location
-pupil_remote.send_string('PUB_PORT')
-pub_port = pupil_remote.recv_string()
-subscriber = ctx.socket(zmq.SUB)
-subscriber.connect(f'tcp://{ip}:{sub_port}')
-subscriber.subscribe('gaze.')  # receive all gaze messages
-
-# Thread runs infinetly
-t1 = threading.Thread(target=fetch_gaze_vector, args=(subscriber, avg_gaze))
-t1.start()
-
+o3d_intrinsics = o3d.camera.PinholeCameraIntrinsic(width=image_width, height=image_height,
+                                                   fx=realsense_intrinsics_matrix[0,0],
+                                                   fy=realsense_intrinsics_matrix[1,1],
+                                                   cx=realsense_intrinsics_matrix[0,2],
+                                                   cy=realsense_intrinsics_matrix[1,2])
 # Streaming loop
 for i in list(range(20)):
     frames = pipeline.wait_for_frames()
@@ -485,23 +493,16 @@ try:
         aligned_frames = align.process(frames)
         aligned_depth_frame = aligned_frames.get_depth_frame()  # aligned_depth_frame is a 640x480 depth image
         color_frame = aligned_frames.get_color_frame()
+        # Hole filling to get a clean depth image
+        hole_filling = rs.hole_filling_filter()
+        aligned_depth_frame = hole_filling.process(aligned_depth_frame)
+        if not aligned_depth_frame or not color_frame:
+            continue
+
         intrinsics = color_frame.profile.as_video_stream_profile().intrinsics
         intrinsics_matrix = np.array([[intrinsics.fx, 0, intrinsics.ppx],
                                       [0, intrinsics.fy, intrinsics.ppy],
                                       [0, 0, 1]])
-
-
-        # Defining the RealSense camera intrinsics as an Open3D object
-        o3d_intrinsics = o3d.camera.PinholeCameraIntrinsic(width=intrinsics.width, height=intrinsics.height,
-                                                           fx=intrinsics.fx, fy=intrinsics.fy,
-                                                           cx=intrinsics.ppx,
-                                                           cy=intrinsics.ppy)
-        # Hole filling to get a clean depth image
-        hole_filling = rs.hole_filling_filter()
-        aligned_depth_frame = hole_filling.process(aligned_depth_frame)
-
-        if not aligned_depth_frame or not color_frame:
-            continue
 
         color_image = np.asanyarray(color_frame.get_data())
         depth_image = np.asanyarray(aligned_depth_frame.get_data())
@@ -517,9 +518,9 @@ try:
         gaze_x_realsense, gaze_y_realsense = gaze_points_realsense_image.squeeze().astype('uint16')
         gaze_x_realsense = int(gaze_x_realsense - (image_width - center_crop_size)/2)
         gaze_y_realsense = int(gaze_y_realsense - (image_height - center_crop_size)/2)
+        mouseX, mouseY = [gaze_x_realsense, gaze_y_realsense]
         color_image_to_display = cv2.circle(color_image_to_display, (gaze_x_realsense, gaze_y_realsense), 20, (0, 0, 255),3)
         color_image_to_display = cv2.circle(color_image_to_display, (gaze_x_realsense, gaze_y_realsense), 2, (0, 0, 255),2)
-
 
         new_shape = tuple(window_resize_factor * np.shape(color_image_to_display)[:2])
         resized_color_image_to_display = cv2.resize(color_image_to_display, new_shape, interpolation=cv2.INTER_AREA)
@@ -532,7 +533,8 @@ try:
         # Getting Camera Orientation [theta_pitch, theta_yaw, theta_roll]
         cam_angles_t = intel_realsense_IMU.camera_orientation_realsense(frames, dt, cam_angles_t_1)
         cam_angles_t_1 = np.array(cam_angles_t)
-        # Getting Arm pose [theta_pitch, theta_roll, theta_yaw]
+
+       # Opening / Closing hand
         if button_pressed and hand_preshaped:
             # c -> Read IMU and increment finger positions
             arm_angles_t = np.array(arm_orientation_imu_9250(ser, 'c'))
@@ -558,11 +560,12 @@ try:
 
         if not selection_flag:
             # Running Mask-Grasp R-CNN on the frame
-            mask_grasp_results = mask_grasp_model.detect([rgbd_image_resized], verbose=0, task=mode)[0]
+            mask_grasp_results = mask_grasp_model.detect([rgbd_image_resized], verbose=0, task=mode)[0] # slow step
             # Capture input from user about which object to interact with
             selected_ROI = select_ROI(mouseX, mouseY, mask_grasp_results, window_resize_factor)
             rois, grasping_deltas, grasping_probs, masks, roi_scores, selection_flag = selected_ROI
             masked_image, colors = dataset_object.get_mask_overlay(color_image_to_display, masks, roi_scores, threshold=0)
+
             image_to_display = masked_image
             new_shape = tuple(window_resize_factor * np.shape(image_to_display)[:2])
             resized_image_to_display = cv2.resize(image_to_display, new_shape, interpolation=cv2.INTER_AREA)
