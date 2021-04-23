@@ -412,6 +412,7 @@ baud_rate = 115200
 time_out = 0.05
 ser = serial.Serial('COM6', baud_rate, timeout=time_out)
 ser.write(b'h') # Homing the arm at the beginning of execution
+
 # Loading the Mask-Grasp R-CNN Model
 mode = "mask_grasp_rcnn"
 MODEL_DIR = "models"
