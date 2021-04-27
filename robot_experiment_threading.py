@@ -472,22 +472,29 @@ def plot_to_UI(rgbd_image_resized, avg_gaze, mask_grasp_results, window_resize_f
         try:
             bgr_image = cv2.cvtColor(rgbd_image_resized[0].astype('uint8'), cv2.COLOR_RGB2BGR)
             gaze_x_realsense, gaze_y_realsense = avg_gaze
-            # Capture input from user about which object to interact with
-            selected_ROI = select_ROI(gaze_x_realsense, gaze_y_realsense, mask_grasp_results[0], window_resize_factor)
-            rois, grasping_deltas, grasping_probs, masks, roi_scores, selection_flag = selected_ROI
-            masked_image, colors = dataset_object.get_mask_overlay(bgr_image, masks, roi_scores, threshold=0)
-            image_with_gaze = display_gaze_on_image(masked_image, gaze_x_realsense, gaze_y_realsense)
+            image_to_display = bgr_image
+            if mask_grasp_results != [None]:
+                # Capture input from user about which object to interact with
+                selected_ROI = select_ROI(gaze_x_realsense, gaze_y_realsense, mask_grasp_results[0], window_resize_factor)
+                rois, grasping_deltas, grasping_probs, masks, roi_scores, selection_flag = selected_ROI
+                masked_image, colors = dataset_object.get_mask_overlay(bgr_image, masks, roi_scores, threshold=0)
+                image_to_display = masked_image
+            image_with_gaze = display_gaze_on_image(image_to_display, gaze_x_realsense, gaze_y_realsense)
             resized_color_image_to_display = resize_image(image_with_gaze, window_resize_factor)
 
             display_output = resized_color_image_to_display
             cv2.imshow('MASK-GRASP RCNN OUTPUT', display_output)
-            key = cv2.waitKey(10)
+            key = cv2.waitKey(100)
 
             if key & 0xFF == ord('q') or key == 27:
                 cv2.destroyAllWindows()
                 terminate[0] = True
                 break
         except:
+            # terminate[0] = True
+            # import code;
+            # code.interact(local=dict(globals(), **locals()))
+
             continue
 
 def main():
@@ -534,8 +541,8 @@ def main():
     # Thread T1 - Running the eye tracker
     subscriber = initialize_pupil_tracker()
     t1 = threading.Thread(target=fetch_gaze_vector,
-                          args=(subscriber, avg_gaze, terminate, rvec, tvec, realsense_intrinsics_matrix, image_width, image_height,
-                                center_crop_size))
+                          args=(subscriber, avg_gaze, terminate, rvec, tvec, realsense_intrinsics_matrix, image_width,
+                                image_height, center_crop_size))
     t1.start()
 
     # Thread T2 - Running Intel RealSense camera
@@ -554,7 +561,7 @@ def main():
     while not terminate[0]:
         try:
             rgbd_image_temp = rgbd_image_resized[0]
-            mask_grasp_results[:] = mask_grasp_model.detect([rgbd_image_temp], verbose=0, task=mode)[0]  # slow step
+            mask_grasp_results[0] = mask_grasp_model.detect([rgbd_image_temp], verbose=0, task=mode)[0]  # slow step
 
         except:
             continue
