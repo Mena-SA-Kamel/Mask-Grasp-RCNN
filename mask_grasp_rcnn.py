@@ -581,7 +581,10 @@ class GraspMaskRCNNDataset(Dataset):
 
     def get_mask_overlay(self, image, masks, scores, threshold=0.90):
         num_masks = masks.shape[-1]
-        colors = visualize.random_colors(num_masks)
+        if num_masks == 1:
+            colors = [(0,0,1.0)]
+        else:
+            colors = visualize.random_colors(num_masks)
         masked_image = np.copy(image)
         for i in list(range(num_masks)):
             if (scores[i] < threshold):

@@ -67,16 +67,18 @@ def arm_orientation_imu_9250(serial_object, command='r'):
     theta_pitch, theta_roll, theta_yaw = decoded_bytes.tolist()
     return ([theta_pitch, theta_roll, theta_yaw])
 
-def select_ROI(mouseX, mouseY, r, resize_factor):
+def select_ROI(mouseX, mouseY, r):
     # Uses the X, Y coordinates that the user selected to fetch the underlying detection
-    mouseX = mouseX/resize_factor[1]
-    mouseY = mouseY/resize_factor[0]
     rois = r['rois']
     grasping_deltas = r['grasp_boxes']
     grasping_probs = r['grasp_probs']
     masks = r['masks']
     roi_scores = r['scores']
+    image_size = np.shape(masks[:, :, 0])
+    mouseX = mouseX
+    # mouseY = image_size[0] - mouseY
     selection_success = False
+
     if rois.shape[0] > 0 and (mouseY + mouseX) != 0:
         # y1, x1, y2, x2
         box_centers_x = ((rois[:, 1] + rois[:, 3])/2).reshape(-1, 1)
@@ -92,13 +94,14 @@ def select_ROI(mouseX, mouseY, r, resize_factor):
         distances = np.sqrt((gaze_point_repeats[:, 0] - box_centers[:, 0]) ** 2 + (gaze_point_repeats[:,1] - box_centers[:, 1]) ** 2)
 
         selected_ROI_ix = np.argmin(distances)
-        if distances[selected_ROI_ix] < thresholds[selected_ROI_ix]:
+        # if distances[selected_ROI_ix] < thresholds[selected_ROI_ix]:
+        if True:
             rois = rois[selected_ROI_ix].reshape(-1, 4)
             grasping_deltas = np.expand_dims(grasping_deltas[selected_ROI_ix], axis=0)
             grasping_probs = np.expand_dims(grasping_probs[selected_ROI_ix], axis=0)
             masks = np.expand_dims(masks[:, :, selected_ROI_ix], axis=-1)
             roi_scores = np.expand_dims(roi_scores[selected_ROI_ix], axis=0)
-            # selection_success = True
+            selection_success = True
 
     return rois, grasping_deltas, grasping_probs, masks, roi_scores, selection_success
 
@@ -475,7 +478,7 @@ def plot_to_UI(rgbd_image_resized, avg_gaze, mask_grasp_results, window_resize_f
             image_to_display = bgr_image
             if mask_grasp_results != [None]:
                 # Capture input from user about which object to interact with
-                selected_ROI = select_ROI(gaze_x_realsense, gaze_y_realsense, mask_grasp_results[0], window_resize_factor)
+                selected_ROI = select_ROI(gaze_x_realsense, gaze_y_realsense, mask_grasp_results[0])
                 rois, grasping_deltas, grasping_probs, masks, roi_scores, selection_flag = selected_ROI
                 masked_image, colors = dataset_object.get_mask_overlay(bgr_image, masks, roi_scores, threshold=0)
                 image_to_display = masked_image
@@ -491,10 +494,6 @@ def plot_to_UI(rgbd_image_resized, avg_gaze, mask_grasp_results, window_resize_f
                 terminate[0] = True
                 break
         except:
-            # terminate[0] = True
-            # import code;
-            # code.interact(local=dict(globals(), **locals()))
-
             continue
 
 def main():
@@ -512,9 +511,9 @@ def main():
     display_output = np.array([image_height, image_width, 1]).astype('uint8')
 
     # Defining calibration parameters between RealSense and Pupil Trackers
-    M_t = np.array([[0.99910821, -0.04218108, -0.00188153, -0.07552082],
-                    [ 0.04201855,  0.99766232, -0.05389199,  0.02547804],
-                    [ 0.00415036,  0.05376487,  0.998545,   -0.02066621]])
+    M_t = np.array([[ 0.99891844, -0.0402869,   0.02321457, -0.08542229],
+ [ 0.03949054,  0.99864817,  0.03379828, -0.06768186],
+ [-0.02454482, -0.03284497,  0.99915903,  0.015576012]])
     tvec = M_t[:, -1]
     rvec, jacobian = cv2.Rodrigues(M_t[:, :3])
     realsense_intrinsics_matrix = np.array([[609.87304688, 0., 332.6171875],
