@@ -379,12 +379,16 @@ def preshape_hand(real_width, real_height, ser):
     string_command = 'g %d %d' % (grasp_type, int(aperture_command))
     ser.write(string_command.encode())
 
-def fetch_gaze_vector(subscriber, avg_gaze, terminate):
+def fetch_gaze_vector(subscriber, avg_gaze, terminate, rvec, tvec, realsense_intrinsics_matrix, image_width, image_height,
+                      center_crop_size):
     while not terminate[0]:
         topic, payload = subscriber.recv_multipart()
         message = msgpack.loads(payload)
         gaze_point_3d = message[b'gaze_point_3d']
-        avg_gaze[:] = gaze_point_3d
+        avg_gaze[:] = get_gaze_points_in_realsense_frame(gaze_point_3d, rvec, tvec,
+                                                         realsense_intrinsics_matrix,
+                                                         image_width, center_crop_size,
+                                                         image_height)
 
 def initialize_pupil_tracker():
     # Establishing connection to eye tracker
@@ -421,7 +425,8 @@ def initialize_realsense(image_width, image_height, fps):
     colorizer = rs.colorizer()
     return [pipeline, profile, align, colorizer]
 
-def fetch_realsense_frame(pipeline, align, aligned_depth_frame, color_frame, intrinsics, terminate):
+def fetch_realsense_frame(pipeline, align, aligned_depth_frame, color_frame, intrinsics, center_crop_size,
+                          rgbd_image_resized, terminate):
     while not terminate[0]:
         # Gets a color and depth image
         frames = pipeline.wait_for_frames()
@@ -432,6 +437,9 @@ def fetch_realsense_frame(pipeline, align, aligned_depth_frame, color_frame, int
         hole_filling = rs.hole_filling_filter()
         aligned_depth_frame[0] = hole_filling.process(aligned_depth_frame_object)
         intrinsics[0] = color_frame[0].profile.as_video_stream_profile().intrinsics
+        color_image, depth_image = get_images_from_frames(color_frame, aligned_depth_frame)
+        rgbd_image_resized[0] = generate_rgbd_image(color_image, depth_image, center_crop=True,
+                                                    square_size=center_crop_size)
 
 def get_images_from_frames(color_frame, aligned_depth_frame):
     color_image = np.asanyarray(color_frame[0].get_data())
@@ -457,9 +465,34 @@ def resize_image(image, resize_factor):
     new_shape = tuple(resize_factor * np.shape(image)[:2])
     return cv2.resize(image, new_shape, interpolation=cv2.INTER_AREA)
 
+def plot_to_UI(rgbd_image_resized, avg_gaze, mask_grasp_results, window_resize_factor, dataset_object, terminate):
+    cv2.namedWindow('MASK-GRASP RCNN OUTPUT', cv2.WINDOW_AUTOSIZE)
+    cv2.setMouseCallback('MASK-GRASP RCNN OUTPUT', onMouse)
+    while not terminate[0]:
+        try:
+            bgr_image = cv2.cvtColor(rgbd_image_resized[0].astype('uint8'), cv2.COLOR_RGB2BGR)
+            gaze_x_realsense, gaze_y_realsense = avg_gaze
+            # Capture input from user about which object to interact with
+            selected_ROI = select_ROI(gaze_x_realsense, gaze_y_realsense, mask_grasp_results[0], window_resize_factor)
+            rois, grasping_deltas, grasping_probs, masks, roi_scores, selection_flag = selected_ROI
+            masked_image, colors = dataset_object.get_mask_overlay(bgr_image, masks, roi_scores, threshold=0)
+            image_with_gaze = display_gaze_on_image(masked_image, gaze_x_realsense, gaze_y_realsense)
+            resized_color_image_to_display = resize_image(image_with_gaze, window_resize_factor)
+
+            display_output = resized_color_image_to_display
+            cv2.imshow('MASK-GRASP RCNN OUTPUT', display_output)
+            key = cv2.waitKey(10)
+
+            if key & 0xFF == ord('q') or key == 27:
+                cv2.destroyAllWindows()
+                terminate[0] = True
+                break
+        except:
+            continue
+
 def main():
     # Defining variable to store the gaze location
-    avg_gaze = [0, 0, 0]
+    avg_gaze = [0, 0]
 
     # Defining variables for Intel RealSense Feed
     image_width = 640
@@ -488,48 +521,41 @@ def main():
     mode = "mask_grasp_rcnn"
     MODEL_DIR = "models"
     mask_grasp_model_path = 'models/colab_result_id#1/MASK_GRASP_RCNN_MODEL.h5'
-
-    # Initializing the eye tracker and storing the subscriber object to fetch gaze values as they update
-    subscriber = initialize_pupil_tracker()
-    # Thread T1 - Running the eye tracker
-    t1 = threading.Thread(target=fetch_gaze_vector, args=(subscriber, avg_gaze, terminate))
-    t1.start()
-
-    # Thread T2 - Running Intel RealSense camera
-    pipeline, profile, align, colorizer = initialize_realsense(image_width, image_height, fps)
-    t2 = threading.Thread(target=fetch_realsense_frame,
-                          args=(pipeline, align, aligned_depth_frame, color_frame, intrinsics, terminate))
-    t2.start()
-
     # Loading the Mask-Grasp R-CNN Model
     inference_config = GraspMaskRCNNInferenceConfig()
     mask_grasp_model = modellib.MaskRCNN(mode="inference", config=inference_config, model_dir=MODEL_DIR, task=mode)
     mask_grasp_model.load_weights(mask_grasp_model_path, by_name=True)
     dataset_object = GraspMaskRCNNDataset()
     center_crop_size = inference_config.IMAGE_MAX_DIM
+    rgbd_image_resized = [None]
+    mask_grasp_results = [None]
 
-    cv2.namedWindow('MASK-GRASP RCNN OUTPUT', cv2.WINDOW_AUTOSIZE)
-    cv2.setMouseCallback('MASK-GRASP RCNN OUTPUT', onMouse)
+    # Initializing the eye tracker and storing the subscriber object to fetch gaze values as they update
+    # Thread T1 - Running the eye tracker
+    subscriber = initialize_pupil_tracker()
+    t1 = threading.Thread(target=fetch_gaze_vector,
+                          args=(subscriber, avg_gaze, terminate, rvec, tvec, realsense_intrinsics_matrix, image_width, image_height,
+                                center_crop_size))
+    t1.start()
+
+    # Thread T2 - Running Intel RealSense camera
+    pipeline, profile, align, colorizer = initialize_realsense(image_width, image_height, fps)
+    t2 = threading.Thread(target=fetch_realsense_frame,
+                          args=(pipeline, align, aligned_depth_frame, color_frame, intrinsics, center_crop_size,
+                                rgbd_image_resized, terminate))
+    t2.start()
+
+    # Thread T3 - Plotting the results to UI
+    t3 = threading.Thread(target=plot_to_UI,
+                          args=(rgbd_image_resized, avg_gaze, mask_grasp_results, window_resize_factor, dataset_object,
+                                terminate))
+    t3.start()
+
     while not terminate[0]:
-        if color_frame != [None]: # Checking if a frame is received
-            color_image, depth_image = get_images_from_frames(color_frame, aligned_depth_frame)
-            rgbd_image_resized = generate_rgbd_image(color_image, depth_image, center_crop=True,
-                                                     square_size=center_crop_size)
-            rgb_image_resized = rgbd_image_resized[:, :, 0:3].astype('uint8')
-            bgr_image_resized = cv2.cvtColor(rgb_image_resized, cv2.COLOR_RGB2BGR)
+        try:
+            rgbd_image_temp = rgbd_image_resized[0]
+            mask_grasp_results[:] = mask_grasp_model.detect([rgbd_image_temp], verbose=0, task=mode)[0]  # slow step
 
-            # Adding gaze data
-            gaze_x_realsense, gaze_y_realsense = get_gaze_points_in_realsense_frame(avg_gaze, rvec, tvec,
-                                               realsense_intrinsics_matrix, image_width, center_crop_size, image_height)
-            color_image_to_display = display_gaze_on_image(bgr_image_resized, gaze_x_realsense, gaze_y_realsense)
-
-            resized_color_image_to_display = resize_image(color_image_to_display, window_resize_factor)
-
-            display_output = resized_color_image_to_display
-        cv2.imshow('MASK-GRASP RCNN OUTPUT', display_output)
-        key = cv2.waitKey(1)
-        if key & 0xFF == ord('q') or key == 27:
-            cv2.destroyAllWindows()
-            terminate[0] = True
-
+        except:
+            continue
 main()
