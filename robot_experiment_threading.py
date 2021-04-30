@@ -12,40 +12,14 @@ from scipy.spatial.transform import Rotation as R
 import mrcnn.utils as utils
 import mrcnn.model as modellib
 from mask_grasp_rcnn import GraspMaskRCNNInferenceConfig, GraspMaskRCNNDataset
-import open3d as o3d
-from matplotlib.path import Path
-import serial
 import time
 import os
-import intel_realsense_IMU
 import zmq
 import msgpack
 import threading
+from helpers.thread2 import thread2
+from helpers.grasp_selector import *
 
-def onMouse(event, x, y, flags, param):
-    global mouseX, mouseY
-    if event == cv2.EVENT_LBUTTONDBLCLK:
-       mouseX, mouseY = [x, y]
-
-def center_crop_frame(image, new_size):
-    # This function center crops the image into a square of size w = h = new_size
-    original_shape = image.shape
-    diff_x = (original_shape[1] - new_size) // 2
-    diff_y = (original_shape[0] - new_size) // 2
-    new_image = image[diff_y:original_shape[0]-diff_y, diff_x:original_shape[1]-diff_x, :]
-    return new_image
-
-def generate_rgbd_image(color_image, depth_image, center_crop=True, square_size=384):
-    # Constructs an RGBD image out of an RGB and depth image that are aligned
-    depth_image = depth_image * (depth_image < 2000)
-    depth_scaled = np.interp(depth_image, (depth_image.min(), depth_image.max()), (0, 1)) * 255
-    rgbd_image = np.zeros([color_image.shape[0], color_image.shape[1], 4])
-    rgbd_image[:, :, 0:3] = color_image[:, :, 0:3]
-    rgbd_image[:, :, 3] = depth_scaled
-    rgbd_image = rgbd_image.astype('uint8')
-    if center_crop:
-        rgbd_image = center_crop_frame(rgbd_image, square_size)
-    return rgbd_image
 
 def compute_dt(previous_millis, frame_number, zero_timer=False):
     # This function computes the time difference between two consecutive frames
@@ -67,200 +41,10 @@ def arm_orientation_imu_9250(serial_object, command='r'):
     theta_pitch, theta_roll, theta_yaw = decoded_bytes.tolist()
     return ([theta_pitch, theta_roll, theta_yaw])
 
-def select_ROI(mouseX, mouseY, r):
-    # Uses the X, Y coordinates that the user selected to fetch the underlying detection
-    rois = r['rois']
-    grasping_deltas = r['grasp_boxes']
-    grasping_probs = r['grasp_probs']
-    masks = r['masks']
-    roi_scores = r['scores']
-    image_size = np.shape(masks[:, :, 0])
-    mouseX = mouseX
-    # mouseY = image_size[0] - mouseY
-    selection_success = False
-
-    if rois.shape[0] > 0 and (mouseY + mouseX) != 0:
-        # y1, x1, y2, x2
-        box_centers_x = ((rois[:, 1] + rois[:, 3])/2).reshape(-1, 1)
-        box_centers_y = ((rois[:, 0] + rois[:, 2])/2).reshape(-1, 1)
-        w = np.abs(rois[:, 1] - rois[:, 3]).reshape(-1, 1)
-        h = np.abs(rois[:, 0] - rois[:, 2]).reshape(-1, 1)
-        delta = 1.5
-
-        thresholds = (np.sqrt((w/2)**2 + (h/2)**2) * delta).squeeze()
-        box_centers = np.concatenate([box_centers_x, box_centers_y], axis=-1)
-        gaze_point = np.array([mouseX, mouseY])
-        gaze_point_repeats = np.tile(gaze_point, [np.shape(box_centers)[0], 1])
-        distances = np.sqrt((gaze_point_repeats[:, 0] - box_centers[:, 0]) ** 2 + (gaze_point_repeats[:,1] - box_centers[:, 1]) ** 2)
-
-        selected_ROI_ix = np.argmin(distances)
-        # if distances[selected_ROI_ix] < thresholds[selected_ROI_ix]:
-        if True:
-            rois = rois[selected_ROI_ix].reshape(-1, 4)
-            grasping_deltas = np.expand_dims(grasping_deltas[selected_ROI_ix], axis=0)
-            grasping_probs = np.expand_dims(grasping_probs[selected_ROI_ix], axis=0)
-            masks = np.expand_dims(masks[:, :, selected_ROI_ix], axis=-1)
-            roi_scores = np.expand_dims(roi_scores[selected_ROI_ix], axis=0)
-            selection_success = True
-
-    return rois, grasping_deltas, grasping_probs, masks, roi_scores, selection_success
-
-def generate_mask_from_polygon(image_shape, polygon_vertices):
-    # This function returns a mask defined by some vertices
-    ny, nx = image_shape[:2]
-    x, y = np.meshgrid(np.arange(nx), np.arange(ny))
-    x, y = x.flatten(), y.flatten()
-    points = np.vstack((x, y)).T
-    path = Path(polygon_vertices)
-    grid = path.contains_points(points)
-    grid = grid.reshape((ny, nx))
-    return grid
-
-def generate_pointcloud_from_rgbd(color_image, depth_image):
-    # Creates an Open3D point cloud
-    color_stream = o3d.geometry.Image(color_image)
-    depth_stream = o3d.geometry.Image(depth_image)
-    o3d_rgbd_image = o3d.geometry.RGBDImage.create_from_color_and_depth(
-        color_stream, depth_stream, depth_trunc=2.0)
-    pcd = o3d.geometry.PointCloud.create_from_rgbd_image(o3d_rgbd_image, o3d_intrinsics)
-    return pcd
-
-def compute_approach_vector(grasping_box):
-    # This function computes the approach vector for a given grasping box in 5-dimensional coordinates
-    # [x, y, w, h, theta].
-    # Returns the camera frame coordinates of the
-    x, y, w, h, theta = grasping_box
-    # Cropping the point cloud at the central 1/3 of the grasping box
-    extraction_mask_vertices = cv2.boxPoints(((x, y), (w, h / 3), theta))
-    grasp_box_mask = generate_mask_from_polygon([image_height, image_width, 3], extraction_mask_vertices)
-    # Masking the color and depth frames with the grasp_box_mask
-    masked_color = color_image * np.repeat(grasp_box_mask[..., None], 3, axis=2)
-    masked_depth = depth_image * grasp_box_mask
-    # Generating a point cloud by open3D for the grasping region as defined by the newly cropped color
-    # and depth channels
-    pcd = generate_pointcloud_from_rgbd(masked_color, masked_depth)
-    # Estimating surface normals
-    pcd.estimate_normals(search_param=o3d.geometry.KDTreeSearchParamHybrid(radius=0.2, max_nn=50))
-    # Pointing the surface normala towards the camera
-    pcd.orient_normals_towards_camera_location()
-    normals = np.array(pcd.normals)
-    points = np.array(pcd.points)
-    # Finding the point with the minumum depth - point with lowest distance in the Z direction
-    min_depth_ix = np.argmin(points[:, -1])
-    # approach_vector = normals[min_depth_ix]
-    # Defining approach vector as the average normal vector of the central 1/3 of the grasping box
-    approach_vector = np.mean(normals, axis=0)
-    min_depth_point = points[min_depth_ix]
-    # Approach vector needs to be pointing in the opposite direction - ie into the object because that is
-    # how we plan on approaching it
-    approach_vector = -1 * approach_vector
-    return approach_vector
-
-def de_project_point(intrinsics, depth_frame, point):
-    # This function deprojects point from the image plane to the camera frame of reference using camera intrinsic
-    # parameters
-    x, y = point
-    distance_to_point = depth_frame.as_depth_frame().get_distance(x, y)
-    de_projected_point = rs.rs2_deproject_pixel_to_point(intrinsics, [x, y], distance_to_point)
-    return de_projected_point
-
-def compute_distance_3D(P1, P2):
-    # This function computes the euclidean distance between two 3D points
-    return np.sqrt((P1[0] - P2[0]) ** 2 + (P1[1] - P2[1]) ** 2 + (P1[2] - P2[2]) ** 2)
-
-def compute_distance_2D(p1, p2):
-    # This function computes the euclidean distance between two 2D points
-    return np.sqrt((p1[0] - p2[0]) ** 2 + (p1[1] - p2[1]) ** 2)
-
-def get_camera_frame_box_coords(intrinsics, depth_frame, box_vertices):
-    # This function deprojects the vertex points that make up the grasp box from the image plane to the camera frame
-    de_projected_points = []
-    for point in box_vertices:
-        de_projected_point = de_project_point(intrinsics, depth_frame, point)
-        de_projected_points.append(de_projected_point)
-    return np.array(de_projected_points)
-
-def compute_real_box_size(intrinsics, aligned_depth_frame, rect):
-    rect_camera_frame = get_camera_frame_box_coords(intrinsics, aligned_depth_frame, rect)
-    # Need to find the width and height of the bounding box in the world/ camera frames
-    # real_width is the average of the distance between P1-P2 and P0-P3
-    # real_height is the average of the distance between P0-P1 and P2-P3
-    #           w
-    # P2 ---------------------- P1
-    # ||                        ||
-    # ||            .           || h
-    # ||          (0,0,0)       ||
-    # P3 ---------------------- P0
-    P0 = rect_camera_frame[0]
-    P1 = rect_camera_frame[1]
-    P2 = rect_camera_frame[2]
-    P3 = rect_camera_frame[3]
-
-    real_width = np.mean([compute_distance_3D(P1, P2), compute_distance_3D(P0, P3)])
-    real_height = np.mean([compute_distance_3D(P0, P1), compute_distance_3D(P2, P3)])
-    # print('Grasp Width: ', real_width, 'Grasp Height: ', real_height)
-    return [real_width, real_height]
-
-def generate_points_in_world_frame(real_width, real_height):
-    # This function generates the points in the world frame of reference
-    return np.array([[real_width/2, -real_height/2, 0],
-                    [real_width/2, real_height/2, 0],
-                    [-real_width/2, real_height/2, 0],
-                    [-real_width/2, -real_height/2, 0]])
-
-def compute_wrist_orientation(approach_vector, theta):
-    # Computes the wrist orientation in the camera frame
-    # Need to get the projection of vx onto the approach vector (normal), to get the projection of vx on
-    # the plane perperndicular to the surface normal
-    vz = approach_vector
-    vx = np.array([1, 0, 0])
-    proj_n_vx = (np.dot(vx, approach_vector) / (np.linalg.norm(approach_vector) ** 2)) * approach_vector
-    vx = vx - proj_n_vx
-    vx = vx / np.linalg.norm(vx)
-    vy = np.cross(vz, vx)
-    vy = vy / np.linalg.norm(vy)
-    vx = vx.reshape([3, 1])
-    vy = vy.reshape([3, 1])
-    vz = vz.reshape([3, 1])
-    V = np.concatenate([vx, vy, vz], axis=-1)
-    return V
-
-def derive_motor_angles_v0(orientation_matrix):
-    orientation_matrix = np.around(orientation_matrix, decimals=2)
-
-    b = orientation_matrix[0, 1]
-    e = orientation_matrix[1, 1]
-    i = orientation_matrix[2, 2]
-    g = orientation_matrix[2, 0]
-    h = orientation_matrix[2, 1]
-
-    s2 = h
-    c2 = np.sqrt(1 - s2 ** 2) # c2 is either a positive or negative angle. We need to try those angle combinations,
-                                # and choose the angle combination with the lowest sum of angles
-    angle_signs = [1, -1]
-    join_sum = []
-    joint_combinations = np.zeros((2,3))
-    for j, angle_sign in enumerate(angle_signs):
-        c2_i = c2 * angle_sign
-        if c2_i == 0:
-            print("Potentially Gimbal lock")
-        sign = np.sign(c2_i)
-        if sign == 0:
-            sign = 1
-        c2_i = sign*np.maximum(0.0001, np.abs(c2_i)) # Gimbal lock case - Need to look into this
-        s1 = -b / c2_i
-        c1 = e / c2_i
-        s3 = -i / c2_i
-        c3 = g / c2_i
-        theta_1 = np.arctan2(s1, c1) / (np.pi / 180)
-        theta_2 = np.arctan2(s2, c2_i) / (np.pi / 180)
-        theta_3 = np.arctan2(s3, c3) / (np.pi / 180)
-        joint_combinations[j,:] = np.array([theta_1,theta_2, theta_3])
-        join_sum.append(np.sum(np.abs(np.array([theta_1,theta_2, theta_3]))))
-    # theta_1, theta_2, theta_3 = joint_combinations[np.argmin(join_sum)] # Choosing the angle combo with the least
-                                                                        # deviation required
-    theta_1, theta_2, theta_3 = joint_combinations[0]  # Choosing the angle combo with the least
-    return [theta_1, theta_2, theta_3]
+def get_images_from_frames(color_frame, aligned_depth_frame):
+    color_image = np.asanyarray(color_frame[0].get_data())
+    depth_image = np.asanyarray(aligned_depth_frame[0].get_data())
+    return [color_image, depth_image]
 
 def get_joint_home_values_8bits():
     FE_MIN = 260
@@ -412,54 +196,6 @@ def initialize_pupil_tracker():
     subscriber.subscribe('gaze.')  # receive all gaze messages
     return subscriber
 
-def initialize_realsense(image_width, image_height, fps):
-    # Create an Intel RealSense pipeline
-    pipeline = rs.pipeline()
-    config = rs.config()
-    config.enable_stream(rs.stream.depth, image_width, image_height, rs.format.z16, fps)
-    config.enable_stream(rs.stream.color, image_width, image_height, rs.format.rgb8, fps)
-    config.enable_stream(rs.stream.accel)
-    config.enable_stream(rs.stream.gyro)
-    profile = pipeline.start(config)
-    # Create an align object: rs.align allows us to perform alignment of depth frames to others frames
-    # The "align_to" is the stream type to which we plan to align depth frames.
-    align_to = rs.stream.color
-    align = rs.align(align_to)
-    colorizer = rs.colorizer()
-    return [pipeline, profile, align, colorizer]
-
-def fetch_realsense_frame(pipeline, align, aligned_depth_frame, color_frame, intrinsics, center_crop_size,
-                          rgbd_image_resized, realsense_orientation, terminate):
-    previous_millis = 0
-    frame_count = 0
-    cam_angles_t_1 = np.zeros(3, )
-    while not terminate[0]:
-        # Gets a color and depth image
-        frames = pipeline.wait_for_frames()
-        aligned_frames = align.process(frames)
-        aligned_depth_frame_object = aligned_frames.get_depth_frame()
-        color_frame[0] = aligned_frames.get_color_frame()
-        # Hole filling to get a clean depth image
-        hole_filling = rs.hole_filling_filter()
-        aligned_depth_frame[0] = hole_filling.process(aligned_depth_frame_object)
-        intrinsics[0] = color_frame[0].profile.as_video_stream_profile().intrinsics
-        color_image, depth_image = get_images_from_frames(color_frame, aligned_depth_frame)
-        rgbd_image_resized[0] = generate_rgbd_image(color_image, depth_image, center_crop=True,
-                                                    square_size=center_crop_size)
-
-        previous_millis, dt = compute_dt(previous_millis, frame_count)
-        if dt> 2:
-            previous_millis, dt = compute_dt(previous_millis, frame_count, zero_timer=True)
-        cam_angles_t = intel_realsense_IMU.camera_orientation_realsense(frames, dt, cam_angles_t_1)
-        realsense_orientation[0] = cam_angles_t
-        cam_angles_t_1 = np.array(cam_angles_t)
-        frame_count += 1
-
-def get_images_from_frames(color_frame, aligned_depth_frame):
-    color_image = np.asanyarray(color_frame[0].get_data())
-    depth_image = np.asanyarray(aligned_depth_frame[0].get_data())
-    return [color_image, depth_image]
-
 def get_gaze_points_in_realsense_frame(avg_gaze, rvec, tvec, realsense_intrinsics_matrix,
                                        image_width, center_crop_size, image_height):
     gaze_points = np.array(avg_gaze).reshape(-1, 1, 3)
@@ -469,52 +205,6 @@ def get_gaze_points_in_realsense_frame(avg_gaze, rvec, tvec, realsense_intrinsic
     gaze_x_realsense = int(gaze_x_realsense - (image_width - center_crop_size) / 2)
     gaze_y_realsense = int(gaze_y_realsense - (image_height - center_crop_size) / 2)
     return [gaze_x_realsense, gaze_y_realsense]
-
-def display_gaze_on_image(image, x, y, color=(0,0,255)):
-    image = cv2.circle(image, (x, y), 20, color, 3)
-    image = cv2.circle(image, (x, y), 2, color, 2)
-    return image
-
-def resize_image(image, resize_factor):
-    new_shape = tuple(resize_factor * np.shape(image)[:2])
-    return cv2.resize(image, new_shape, interpolation=cv2.INTER_AREA)
-
-def plot_to_UI(rgbd_image_resized, avg_gaze, mask_grasp_results, window_resize_factor, dataset_object,
-               realsense_orientation, selected_roi, initiate_grasp, terminate):
-    cv2.namedWindow('MASK-GRASP RCNN OUTPUT', cv2.WINDOW_AUTOSIZE)
-    cv2.setMouseCallback('MASK-GRASP RCNN OUTPUT', onMouse)
-    font = cv2.FONT_HERSHEY_SIMPLEX
-    while not terminate[0]:
-        try:
-            bgr_image = cv2.cvtColor(rgbd_image_resized[0].astype('uint8'), cv2.COLOR_RGB2BGR)
-            gaze_x_realsense, gaze_y_realsense = avg_gaze
-            image_to_display = bgr_image
-            if mask_grasp_results != [None] and not initiate_grasp[0]:
-                # Capture input from user about which object to interact with
-                selected_roi[0] = select_ROI(gaze_x_realsense, gaze_y_realsense, mask_grasp_results[0])
-                rois, grasping_deltas, grasping_probs, masks, roi_scores, selection_flag = selected_roi[0]
-                masked_image, colors = dataset_object.get_mask_overlay(bgr_image, masks, roi_scores, threshold=0)
-                image_to_display = masked_image
-            image_with_gaze = display_gaze_on_image(image_to_display, gaze_x_realsense, gaze_y_realsense)
-            resized_color_image_to_display = resize_image(image_with_gaze, window_resize_factor)
-            display_output = resized_color_image_to_display
-            cam_pitch, cam_roll, cam_yaw = realsense_orientation[0]
-            cam_orientation_text = "CAMERA ORIENTATION - Pitch : %d, Roll: %d, Yaw: %d" % (cam_pitch, cam_yaw, cam_roll)
-            cam_orientation_location = (10, display_output.shape[0] - 60)
-            cv2.putText(display_output, cam_orientation_text, cam_orientation_location, font, 0.5, (0, 0, 255))
-            key = cv2.waitKey(10)
-            cv2.imshow('MASK-GRASP RCNN OUTPUT', display_output)
-
-            if key & 0xFF == ord('q') or key == 27:
-                cv2.destroyAllWindows()
-                terminate[0] = True
-                break
-
-            # 'Enter' pressed means initiate grasp for now
-            if key == 13:
-                initiate_grasp[0] = True
-        except:
-            continue
 
 def extract_top_grasp_boxes(selected_roi, inference_config, grasp_prob_thresh, dataset_object):
     roi, grasping_deltas, grasping_probs, masks, roi_score, _ = selected_roi[0]
@@ -545,85 +235,35 @@ def extract_top_grasp_boxes(selected_roi, inference_config, grasp_prob_thresh, d
         filtered_predictions = post_nms_predictions[0].reshape((1, 5))
     return filtered_predictions
 
-def robot_execution(initiate_grasp, top_grasp_boxes, color_frame, aligned_depth_frame, realsense_intrinsics,
-                    realsense_orientation, dataset_object, image_width, center_crop_size, image_height, terminate):
-    while not terminate[0]:
-        # Run this code if initiating grasp
-        if initiate_grasp[0]:
-            try:
-                # realsense_intrinsics_matrix = np.array([[realsense_intrinsics.fx, 0, realsense_intrinsics.ppx],
-                #                                         [0, realsense_intrinsics.fy, realsense_intrinsics.ppy],
-                #                                         [0, 0, 1]])
-                #
-                # o3d_intrinsics = o3d.camera.PinholeCameraIntrinsic(width=image_width, height=image_height,
-                #                                                    fx=realsense_intrinsics_matrix[0, 0],
-                #                                                    fy=realsense_intrinsics_matrix[1, 1],
-                #                                                    cx=realsense_intrinsics_matrix[0, 2],
-                #                                                    cy=realsense_intrinsics_matrix[1, 2])
-
-                # cam_pitch, _ , cam_roll = realsense_orientation
-
-                print ("robot loop")
-
-                # # Need to select the box that requires the least deviation from current arm orientation
-                # # Storing the high probability grasp orientations in Direction Cosine Matrix Format (DCM)
-                # potential_grasps = np.zeros((top_grasp_boxes.shape[0], 3, 3))
-                # for k, five_dim_box in enumerate(top_grasp_boxes):
-                #     # Need to crop out the point cloud at the oriented rectangle bounds
-                #     # Create a mask to specify the region to extract the surface normals from. Based on Lenz et al.,
-                #     # the approach vector is estimated as the surface normal calculated at the point of minumum depth in
-                #     # the central one third (horizontally) of the rectangle
-                #     x, y, w, h, theta = five_dim_box
-                #     # Undoing the center cropping of the image
-                #     x = int(x + (image_width - center_crop_size) // 2)
-                #     y = int(y + (image_height - center_crop_size) // 2)
-                #     # Getting grasping box vertices in the image plane
-                #     rect_vertices = cv2.boxPoints(((x, y), (w, h), theta))
-                #     # Calculating the approach vector for the grasp box
-                #     approach_vector = compute_approach_vector(color_frame[0], aligned_depth_frame[0], image_height,
-                #                                               image_width, o3d_intrinsics, [x, y, w, h, theta])
-                #     # Getting the XYZ coordinates of the grasping box center <x, y>
-                #     box_center = de_project_point(realsense_intrinsics[0], aligned_depth_frame[0], [x, y])
-                #     # Wrapping angles so they are in [-90, 90] range
-                #     theta = dataset_object.wrap_angle_around_90(np.array([theta]))[0]
-                #     theta = theta * (np.pi / 180)  # network outputs positive angles in bottom right quadrant
-                #     # Computing the grasp box size in camera coordinates, size in meters
-                #     real_width, real_height = compute_real_box_size(realsense_intrinsics[0], aligned_depth_frame[0],
-                #                                                     rect_vertices)
-                #     box_vert_obj_frame = generate_points_in_world_frame(real_width, real_height)
-                #     # visualize_wrist_in_camera_frame(color_image, depth_image, box_center, approach_vector, intrinsics,
-                #     #                                 aligned_depth_frame, rect_vertices, approach_vector_orientation)
-                #
-                #     # Computing the desired wrist orientation in the camera frame
-                #     V = compute_wrist_orientation(approach_vector, theta)
-                #     rotation_z = np.array([[np.cos(theta), -np.sin(theta), 0],
-                #                            [np.sin(theta), np.cos(theta), 0],
-                #                            [0, 0, 1]])
-                #     approach_vector_orientation = np.dot(V, rotation_z)
-                #
-                #     # Defining rotation matrix to go from the shoulder to camera frame
-                #
-                #     R_shoulder_camera = R.from_euler('xyz', [[cam_pitch, 0, cam_roll]],
-                #                                      degrees=True).as_matrix().squeeze()
-                #     grasp_orientation_shoulder = np.dot(R_shoulder_camera, approach_vector_orientation)
-                #     potential_grasps[k] = grasp_orientation_shoulder
-            except:
-                "ERROR: robot_execution"
-                continue
+def initialize_realsense(image_width, image_height, fps):
+    # Create an Intel RealSense pipeline
+    pipeline = rs.pipeline()
+    config = rs.config()
+    config.enable_stream(rs.stream.depth, image_width, image_height, rs.format.z16, fps)
+    config.enable_stream(rs.stream.color, image_width, image_height, rs.format.rgb8, fps)
+    config.enable_stream(rs.stream.accel)
+    config.enable_stream(rs.stream.gyro)
+    profile = pipeline.start(config)
+    # Create an align object: rs.align allows us to perform alignment of depth frames to others frames
+    # The "align_to" is the stream type to which we plan to align depth frames.
+    align_to = rs.stream.color
+    align = rs.align(align_to)
+    colorizer = rs.colorizer()
+    return [pipeline, profile, align, colorizer]
 
 def main():
-    # Defining variable to store the gaze location
-    avg_gaze = [0, 0]
 
     # Defining variables for Intel RealSense Feed
     image_width = 640
     image_height = 480
     fps = 15
+
+    # Defining variable to store the gaze location
+    avg_gaze = [0, 0]
     aligned_depth_frame = [None]
     color_frame = [None]
     intrinsics = [None]
     terminate = [False]
-    display_output = np.array([image_height, image_width, 1]).astype('uint8')
     realsense_orientation = [None]
 
     # Defining calibration parameters between RealSense and Pupil Trackers
@@ -635,9 +275,13 @@ def main():
     realsense_intrinsics_matrix = np.array([[609.87304688, 0., 332.6171875],
                                             [0., 608.84387207, 248.34165955],
                                             [0., 0., 1.]])
+    o3d_intrinsics = o3d.camera.PinholeCameraIntrinsic(width=image_width, height=image_height,
+                                                       fx=realsense_intrinsics_matrix[0, 0],
+                                                       fy=realsense_intrinsics_matrix[1, 1],
+                                                       cx=realsense_intrinsics_matrix[0, 2],
+                                                       cy=realsense_intrinsics_matrix[1, 2])
 
-    # Defining Display parameters
-    window_resize_factor = np.array([2, 2])
+    pipeline, profile, align, colorizer = initialize_realsense(image_width, image_height, fps)
 
     # Defining variables for Mask-Grasp R-CNN
     mode = "mask_grasp_rcnn"
@@ -656,7 +300,6 @@ def main():
     selected_roi = [None]
     initiate_grasp = [False]
     grasp_prob_thresh = 0.5
-    top_grasp_boxes = [None]
 
     # Initializing the eye tracker and storing the subscriber object to fetch gaze values as they update
     # Thread T1 - Running the eye tracker
@@ -666,36 +309,28 @@ def main():
                                 image_height, center_crop_size))
     t1.start()
 
-    # Thread T2 - Running Intel RealSense camera
-    pipeline, profile, align, colorizer = initialize_realsense(image_width, image_height, fps)
-    t2 = threading.Thread(target=fetch_realsense_frame,
-                          args=(pipeline, align, aligned_depth_frame, color_frame, intrinsics, center_crop_size,
-                                rgbd_image_resized, realsense_orientation, terminate))
+    # Thread T2 - Running Intel RealSense camera + UI
+    t2 = threading.Thread(target=thread2,
+                          args=(pipeline, profile, align, colorizer, image_width, image_height, fps, selected_roi,
+                                realsense_orientation, center_crop_size,
+                                color_frame, aligned_depth_frame, rgbd_image_resized, intrinsics, dataset_object,
+                                mask_grasp_results, initiate_grasp, avg_gaze, terminate))
     t2.start()
-
-    # Thread T3 - Plotting the results to UI
-    t3 = threading.Thread(target=plot_to_UI,
-                          args=(rgbd_image_resized, avg_gaze, mask_grasp_results, window_resize_factor, dataset_object,
-                                realsense_orientation, selected_roi, initiate_grasp, terminate))
-    t3.start()
-
-    # Thread T4 - Robot Execution
-    t4 = threading.Thread(target=robot_execution,
-                          args=(initiate_grasp, top_grasp_boxes, color_frame, aligned_depth_frame, intrinsics,
-                                realsense_orientation, dataset_object, image_width, center_crop_size, image_height, terminate))
-
 
     while not terminate[0]:
         try:
             if not initiate_grasp[0]:
                 rgbd_image_temp = rgbd_image_resized[0]
                 mask_grasp_results[0] = mask_grasp_model.detect([rgbd_image_temp], verbose=0, task=mode)[0]  # slow step
-                top_grasp_boxes[0] = extract_top_grasp_boxes(selected_roi, inference_config, grasp_prob_thresh,
+                top_grasp_boxes = extract_top_grasp_boxes(selected_roi, inference_config, grasp_prob_thresh,
                                                           dataset_object)
             else:
-                t4.start()
-                break
+                cam_pitch, _, cam_roll = realsense_orientation[0]
+                grasp_DCM = select_grasp_box(realsense_orientation, top_grasp_boxes, image_width, image_height,
+                                             center_crop_size, color_frame, aligned_depth_frame, o3d_intrinsics,
+                                             dataset_object, intrinsics)
+                print (grasp_DCM)
 
         except:
-            continue
+          continue
 main()
