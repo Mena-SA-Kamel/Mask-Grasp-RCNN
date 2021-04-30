@@ -14,10 +14,10 @@ import mrcnn.model as modellib
 from mask_grasp_rcnn import GraspMaskRCNNInferenceConfig, GraspMaskRCNNDataset
 import time
 import os
-import zmq
-import msgpack
+
 import threading
 from helpers.thread_2 import thread2
+from helpers.thread_1 import *
 from helpers.grasp_selector import *
 
 
@@ -134,7 +134,6 @@ def compute_hand_aperture(grasp_box_width):
         np.savetxt(coef_path, coeffs)
     return np.polynomial.polynomial.polyval(grasp_box_width, coeffs)
 
-
 def preshape_hand(real_width, real_height, ser):
     grasp_width = real_width * 1000
     grasp_width = np.minimum(grasp_width, 83)
@@ -144,46 +143,6 @@ def preshape_hand(real_width, real_height, ser):
     grasp_type = compute_grasp_type(real_height * 1000)
     string_command = 'g %d %d' % (grasp_type, int(aperture_command))
     ser.write(string_command.encode())
-
-def fetch_gaze_vector(subscriber, avg_gaze, terminate, rvec, tvec, realsense_intrinsics_matrix, image_width, image_height,
-                      center_crop_size):
-    while not terminate[0]:
-        topic, payload = subscriber.recv_multipart()
-        message = msgpack.loads(payload)
-        gaze_point_3d = message[b'gaze_point_3d']
-        avg_gaze[:] = get_gaze_points_in_realsense_frame(gaze_point_3d, rvec, tvec,
-                                                         realsense_intrinsics_matrix,
-                                                         image_width, center_crop_size,
-                                                         image_height)
-
-def initialize_pupil_tracker():
-    # Establishing connection to eye tracker
-    ctx = zmq.Context()
-    # The REQ talks to Pupil remote and receives the session unique IPC SUB PORT
-    pupil_remote = ctx.socket(zmq.REQ)
-    ip = 'localhost'  # If you talk to a different machine use its IP.
-    port = 50020  # The port defaults to 50020. Set in Pupil Capture GUI.
-    pupil_remote.connect(f'tcp://{ip}:{port}')
-    # Request 'SUB_PORT' for reading data
-    pupil_remote.send_string('SUB_PORT')
-    sub_port = pupil_remote.recv_string()
-    # Request 'PUB_PORT' for writing dataYour location
-    pupil_remote.send_string('PUB_PORT')
-    pub_port = pupil_remote.recv_string()
-    subscriber = ctx.socket(zmq.SUB)
-    subscriber.connect(f'tcp://{ip}:{sub_port}')
-    subscriber.subscribe('gaze.')  # receive all gaze messages
-    return subscriber
-
-def get_gaze_points_in_realsense_frame(avg_gaze, rvec, tvec, realsense_intrinsics_matrix,
-                                       image_width, center_crop_size, image_height):
-    gaze_points = np.array(avg_gaze).reshape(-1, 1, 3)
-    gaze_points_realsense_image, jacobian = cv2.projectPoints(gaze_points, rvec, tvec,
-                                                              realsense_intrinsics_matrix, None)
-    gaze_x_realsense, gaze_y_realsense = gaze_points_realsense_image.squeeze().astype('uint16')
-    gaze_x_realsense = int(gaze_x_realsense - (image_width - center_crop_size) / 2)
-    gaze_y_realsense = int(gaze_y_realsense - (image_height - center_crop_size) / 2)
-    return [gaze_x_realsense, gaze_y_realsense]
 
 def extract_top_grasp_boxes(selected_roi, inference_config, grasp_prob_thresh, dataset_object):
     roi, grasping_deltas, grasping_probs, masks, roi_score, _ = selected_roi[0]
@@ -285,7 +244,7 @@ def main():
     # Initializing the eye tracker and storing the subscriber object to fetch gaze values as they update
     # Thread T1 - Running the eye tracker
     subscriber = initialize_pupil_tracker()
-    t1 = threading.Thread(target=fetch_gaze_vector,
+    t1 = threading.Thread(target=thread1,
                           args=(subscriber, avg_gaze, terminate, rvec, tvec, realsense_intrinsics_matrix, image_width,
                                 image_height, center_crop_size))
     t1.start()
@@ -309,9 +268,10 @@ def main():
             else:
                 cam_pitch, _, cam_roll = realsense_orientation[0]
                 grasp_DCM, grasp_box_index[0] = select_grasp_box(realsense_orientation, top_grasp_boxes[0], image_width,
-                                                              image_height, center_crop_size, color_frame,
-                                                              aligned_depth_frame, o3d_intrinsics, dataset_object,
-                                                              intrinsics)
+                                                                 image_height, center_crop_size, color_frame,
+                                                                 aligned_depth_frame, o3d_intrinsics, dataset_object,
+                                                                 intrinsics)
+
 
         except:
           continue
