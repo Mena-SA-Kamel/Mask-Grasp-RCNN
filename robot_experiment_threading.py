@@ -17,7 +17,7 @@ import os
 import zmq
 import msgpack
 import threading
-from helpers.thread2 import thread2
+from helpers.thread_2 import thread2
 from helpers.grasp_selector import *
 
 
@@ -134,27 +134,6 @@ def compute_hand_aperture(grasp_box_width):
         np.savetxt(coef_path, coeffs)
     return np.polynomial.polynomial.polyval(grasp_box_width, coeffs)
 
-def plot_selected_box(image, boxes, box_index):
-    color = np.array([[0, 255, 0]])
-    color = np.repeat(color, boxes.shape[0], axis=0)
-
-    for j, five_dim_box in enumerate(boxes):
-        col = tuple([int(x) for x in color[j]])
-        rect = cv2.boxPoints(
-            ((five_dim_box[0], five_dim_box[1]), (five_dim_box[2], five_dim_box[3]), five_dim_box[4]))
-        image = cv2.drawContours(image, [np.int0(rect)], 0, (0, 0, 0), 2)
-        image = cv2.drawContours(image, [np.int0(rect[:2])], 0, col, 2)
-        image = cv2.drawContours(image, [np.int0(rect[2:])], 0, col, 2)
-
-    color[box_index] = [0, 0, 255]
-    five_dim_box = boxes[box_index]
-    col = tuple([int(x) for x in color[box_index]])
-    rect = cv2.boxPoints(
-        ((five_dim_box[0], five_dim_box[1]), (five_dim_box[2], five_dim_box[3]), five_dim_box[4]))
-    image = cv2.drawContours(image, [np.int0(rect)], 0, (0, 0, 0), 2)
-    image = cv2.drawContours(image, [np.int0(rect[:2])], 0, col, 2)
-    image = cv2.drawContours(image, [np.int0(rect[2:])], 0, col, 2)
-    return image
 
 def preshape_hand(real_width, real_height, ser):
     grasp_width = real_width * 1000
@@ -295,6 +274,8 @@ def main():
     center_crop_size = inference_config.IMAGE_MAX_DIM
     rgbd_image_resized = [None]
     mask_grasp_results = [None]
+    top_grasp_boxes = [None]
+    grasp_box_index = [None]
 
     # Robot execution variables
     selected_roi = [None]
@@ -314,7 +295,8 @@ def main():
                           args=(pipeline, profile, align, colorizer, image_width, image_height, fps, selected_roi,
                                 realsense_orientation, center_crop_size,
                                 color_frame, aligned_depth_frame, rgbd_image_resized, intrinsics, dataset_object,
-                                mask_grasp_results, initiate_grasp, avg_gaze, terminate))
+                                mask_grasp_results, initiate_grasp, avg_gaze, top_grasp_boxes, grasp_box_index,
+                                terminate))
     t2.start()
 
     while not terminate[0]:
@@ -322,14 +304,14 @@ def main():
             if not initiate_grasp[0]:
                 rgbd_image_temp = rgbd_image_resized[0]
                 mask_grasp_results[0] = mask_grasp_model.detect([rgbd_image_temp], verbose=0, task=mode)[0]  # slow step
-                top_grasp_boxes = extract_top_grasp_boxes(selected_roi, inference_config, grasp_prob_thresh,
+                top_grasp_boxes[0] = extract_top_grasp_boxes(selected_roi, inference_config, grasp_prob_thresh,
                                                           dataset_object)
             else:
                 cam_pitch, _, cam_roll = realsense_orientation[0]
-                grasp_DCM = select_grasp_box(realsense_orientation, top_grasp_boxes, image_width, image_height,
-                                             center_crop_size, color_frame, aligned_depth_frame, o3d_intrinsics,
-                                             dataset_object, intrinsics)
-                print (grasp_DCM)
+                grasp_DCM, grasp_box_index[0] = select_grasp_box(realsense_orientation, top_grasp_boxes[0], image_width,
+                                                              image_height, center_crop_size, color_frame,
+                                                              aligned_depth_frame, o3d_intrinsics, dataset_object,
+                                                              intrinsics)
 
         except:
           continue

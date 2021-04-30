@@ -91,9 +91,32 @@ def resize_image(image, resize_factor):
     new_shape = tuple(resize_factor * np.shape(image)[:2])
     return cv2.resize(image, new_shape, interpolation=cv2.INTER_AREA)
 
+def plot_selected_box(image, boxes, box_index):
+    color = np.array([[0, 255, 0]])
+    color = np.repeat(color, boxes.shape[0], axis=0)
+
+    for j, five_dim_box in enumerate(boxes):
+        col = tuple([int(x) for x in color[j]])
+        rect = cv2.boxPoints(
+            ((five_dim_box[0], five_dim_box[1]), (five_dim_box[2], five_dim_box[3]), five_dim_box[4]))
+        image = cv2.drawContours(image, [np.int0(rect)], 0, (0, 0, 0), 2)
+        image = cv2.drawContours(image, [np.int0(rect[:2])], 0, col, 2)
+        image = cv2.drawContours(image, [np.int0(rect[2:])], 0, col, 2)
+
+    color[box_index] = [0, 0, 255]
+    five_dim_box = boxes[box_index]
+    col = tuple([int(x) for x in color[box_index]])
+    rect = cv2.boxPoints(
+        ((five_dim_box[0], five_dim_box[1]), (five_dim_box[2], five_dim_box[3]), five_dim_box[4]))
+    image = cv2.drawContours(image, [np.int0(rect)], 0, (0, 0, 0), 2)
+    image = cv2.drawContours(image, [np.int0(rect[:2])], 0, col, 2)
+    image = cv2.drawContours(image, [np.int0(rect[2:])], 0, col, 2)
+    return image
+
+
 def thread2(pipeline, profile, align, colorizer, image_width, image_height, fps, selected_roi, realsense_orientation,
             center_crop_size, color_frame, aligned_depth_frame, rgbd_image_resized, intrinsics, dataset_object,
-            mask_grasp_results, initiate_grasp, avg_gaze, terminate):
+            mask_grasp_results, initiate_grasp, avg_gaze, top_grasp_boxes, grasp_box_index, terminate):
 
     display_output = np.array([image_height, image_width, 1]).astype('uint8')
     # Defining Display parameters
@@ -105,6 +128,7 @@ def thread2(pipeline, profile, align, colorizer, image_width, image_height, fps,
     previous_millis = 0
     frame_count = 0
     cam_angles_t_1 = np.zeros(3, )
+    image_to_display = np.zeros((image_height, image_width, 3))
 
     # Streaming loop
 
@@ -133,14 +157,16 @@ def thread2(pipeline, profile, align, colorizer, image_width, image_height, fps,
 
             bgr_image = cv2.cvtColor(rgbd_image_resized[0].astype('uint8'), cv2.COLOR_RGB2BGR)
             gaze_x_realsense, gaze_y_realsense = avg_gaze
-            image_to_display = bgr_image
             if mask_grasp_results != [None] and not initiate_grasp[0]:
+                image_to_display = bgr_image # Displaying the current frame
                 # Capture input from user about which object to interact with
                 selected_roi[0] = select_ROI(gaze_x_realsense, gaze_y_realsense, mask_grasp_results[0])
                 rois, grasping_deltas, grasping_probs, masks, roi_scores, selection_flag = selected_roi[0]
                 masked_image, colors = dataset_object.get_mask_overlay(bgr_image, masks, roi_scores, threshold=0)
                 image_to_display = masked_image
-            image_with_gaze = display_gaze_on_image(image_to_display, gaze_x_realsense, gaze_y_realsense)
+            elif initiate_grasp[0]:
+                image_to_display = plot_selected_box(image_to_display, top_grasp_boxes[0], grasp_box_index[0])
+            image_with_gaze = display_gaze_on_image(image_to_display.copy(), gaze_x_realsense, gaze_y_realsense)
             resized_color_image_to_display = resize_image(image_with_gaze, window_resize_factor)
             display_output = resized_color_image_to_display
             cam_pitch, cam_roll, cam_yaw = realsense_orientation[0]

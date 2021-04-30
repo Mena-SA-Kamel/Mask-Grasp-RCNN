@@ -239,4 +239,4 @@ def select_grasp_box(realsense_orientation, top_grasp_boxes, image_width, image_
 
     grasp_box_index = np.argmin(joint_deviations)
     grasp_DCM = potential_grasps[grasp_box_index]
-    return grasp_DCM
+    return [grasp_DCM, grasp_box_index]
