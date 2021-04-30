@@ -480,7 +480,7 @@ def resize_image(image, resize_factor):
     return cv2.resize(image, new_shape, interpolation=cv2.INTER_AREA)
 
 def plot_to_UI(rgbd_image_resized, avg_gaze, mask_grasp_results, window_resize_factor, dataset_object,
-               realsense_orientation, terminate):
+               realsense_orientation, selected_roi, initiate_grasp, terminate):
     cv2.namedWindow('MASK-GRASP RCNN OUTPUT', cv2.WINDOW_AUTOSIZE)
     cv2.setMouseCallback('MASK-GRASP RCNN OUTPUT', onMouse)
     font = cv2.FONT_HERSHEY_SIMPLEX
@@ -489,10 +489,10 @@ def plot_to_UI(rgbd_image_resized, avg_gaze, mask_grasp_results, window_resize_f
             bgr_image = cv2.cvtColor(rgbd_image_resized[0].astype('uint8'), cv2.COLOR_RGB2BGR)
             gaze_x_realsense, gaze_y_realsense = avg_gaze
             image_to_display = bgr_image
-            if mask_grasp_results != [None]:
+            if mask_grasp_results != [None] and not initiate_grasp[0]:
                 # Capture input from user about which object to interact with
-                selected_ROI = select_ROI(gaze_x_realsense, gaze_y_realsense, mask_grasp_results[0])
-                rois, grasping_deltas, grasping_probs, masks, roi_scores, selection_flag = selected_ROI
+                selected_roi[0] = select_ROI(gaze_x_realsense, gaze_y_realsense, mask_grasp_results[0])
+                rois, grasping_deltas, grasping_probs, masks, roi_scores, selection_flag = selected_roi[0]
                 masked_image, colors = dataset_object.get_mask_overlay(bgr_image, masks, roi_scores, threshold=0)
                 image_to_display = masked_image
             image_with_gaze = display_gaze_on_image(image_to_display, gaze_x_realsense, gaze_y_realsense)
@@ -502,15 +502,114 @@ def plot_to_UI(rgbd_image_resized, avg_gaze, mask_grasp_results, window_resize_f
             cam_orientation_text = "CAMERA ORIENTATION - Pitch : %d, Roll: %d, Yaw: %d" % (cam_pitch, cam_yaw, cam_roll)
             cam_orientation_location = (10, display_output.shape[0] - 60)
             cv2.putText(display_output, cam_orientation_text, cam_orientation_location, font, 0.5, (0, 0, 255))
-            key = cv2.waitKey(100)
+            key = cv2.waitKey(10)
             cv2.imshow('MASK-GRASP RCNN OUTPUT', display_output)
 
             if key & 0xFF == ord('q') or key == 27:
                 cv2.destroyAllWindows()
                 terminate[0] = True
                 break
+
+            # 'Enter' pressed means initiate grasp for now
+            if key == 13:
+                initiate_grasp[0] = True
         except:
             continue
+
+def extract_top_grasp_boxes(selected_roi, inference_config, grasp_prob_thresh, dataset_object):
+    roi, grasping_deltas, grasping_probs, masks, roi_score, _ = selected_roi[0]
+    normalized_roi = utils.norm_boxes(roi[0], inference_config.IMAGE_SHAPE[:2])
+    y1, x1, y2, x2 = np.split(normalized_roi, indices_or_sections=4, axis=-1)
+    w = x2 - x1
+    h = y2 - y1
+    ROI_shape = np.array([h, w])
+    pooled_feature_stride = np.array(ROI_shape / inference_config.GRASP_POOL_SIZE)
+    grasping_anchors = utils.generate_grasping_anchors(inference_config.GRASP_ANCHOR_SIZE,
+                                                       inference_config.GRASP_ANCHOR_RATIOS,
+                                                       [inference_config.GRASP_POOL_SIZE,
+                                                        inference_config.GRASP_POOL_SIZE],
+                                                       pooled_feature_stride,
+                                                       1,
+                                                       inference_config.GRASP_ANCHOR_ANGLES,
+                                                       normalized_roi,
+                                                       inference_config)
+    # Choosing grasp box that has the highest probability
+    refined_results = dataset_object.refine_results(grasping_probs[0], grasping_deltas[0],
+                                                    grasping_anchors, inference_config, filter_mode='top_k',
+                                                    k=grasping_anchors.shape[0], nms=False)
+    post_nms_predictions, top_box_probabilities, pre_nms_predictions, pre_nms_scores = refined_results
+    # Selecting the grasp boxes with a grasp probability higher than grasp_prob_thresh
+    filtered_predictions = post_nms_predictions[top_box_probabilities > grasp_prob_thresh]
+    if filtered_predictions.shape[0] == 0:
+        # If no grasp box is above the threshold, get the highest probability box, regardless of the threshold
+        filtered_predictions = post_nms_predictions[0].reshape((1, 5))
+    return filtered_predictions
+
+def robot_execution(initiate_grasp, top_grasp_boxes, color_frame, aligned_depth_frame, realsense_intrinsics,
+                    realsense_orientation, dataset_object, image_width, center_crop_size, image_height, terminate):
+    while not terminate[0]:
+        # Run this code if initiating grasp
+        if initiate_grasp[0]:
+            try:
+                # realsense_intrinsics_matrix = np.array([[realsense_intrinsics.fx, 0, realsense_intrinsics.ppx],
+                #                                         [0, realsense_intrinsics.fy, realsense_intrinsics.ppy],
+                #                                         [0, 0, 1]])
+                #
+                # o3d_intrinsics = o3d.camera.PinholeCameraIntrinsic(width=image_width, height=image_height,
+                #                                                    fx=realsense_intrinsics_matrix[0, 0],
+                #                                                    fy=realsense_intrinsics_matrix[1, 1],
+                #                                                    cx=realsense_intrinsics_matrix[0, 2],
+                #                                                    cy=realsense_intrinsics_matrix[1, 2])
+
+                # cam_pitch, _ , cam_roll = realsense_orientation
+
+                print ("robot loop")
+
+                # # Need to select the box that requires the least deviation from current arm orientation
+                # # Storing the high probability grasp orientations in Direction Cosine Matrix Format (DCM)
+                # potential_grasps = np.zeros((top_grasp_boxes.shape[0], 3, 3))
+                # for k, five_dim_box in enumerate(top_grasp_boxes):
+                #     # Need to crop out the point cloud at the oriented rectangle bounds
+                #     # Create a mask to specify the region to extract the surface normals from. Based on Lenz et al.,
+                #     # the approach vector is estimated as the surface normal calculated at the point of minumum depth in
+                #     # the central one third (horizontally) of the rectangle
+                #     x, y, w, h, theta = five_dim_box
+                #     # Undoing the center cropping of the image
+                #     x = int(x + (image_width - center_crop_size) // 2)
+                #     y = int(y + (image_height - center_crop_size) // 2)
+                #     # Getting grasping box vertices in the image plane
+                #     rect_vertices = cv2.boxPoints(((x, y), (w, h), theta))
+                #     # Calculating the approach vector for the grasp box
+                #     approach_vector = compute_approach_vector(color_frame[0], aligned_depth_frame[0], image_height,
+                #                                               image_width, o3d_intrinsics, [x, y, w, h, theta])
+                #     # Getting the XYZ coordinates of the grasping box center <x, y>
+                #     box_center = de_project_point(realsense_intrinsics[0], aligned_depth_frame[0], [x, y])
+                #     # Wrapping angles so they are in [-90, 90] range
+                #     theta = dataset_object.wrap_angle_around_90(np.array([theta]))[0]
+                #     theta = theta * (np.pi / 180)  # network outputs positive angles in bottom right quadrant
+                #     # Computing the grasp box size in camera coordinates, size in meters
+                #     real_width, real_height = compute_real_box_size(realsense_intrinsics[0], aligned_depth_frame[0],
+                #                                                     rect_vertices)
+                #     box_vert_obj_frame = generate_points_in_world_frame(real_width, real_height)
+                #     # visualize_wrist_in_camera_frame(color_image, depth_image, box_center, approach_vector, intrinsics,
+                #     #                                 aligned_depth_frame, rect_vertices, approach_vector_orientation)
+                #
+                #     # Computing the desired wrist orientation in the camera frame
+                #     V = compute_wrist_orientation(approach_vector, theta)
+                #     rotation_z = np.array([[np.cos(theta), -np.sin(theta), 0],
+                #                            [np.sin(theta), np.cos(theta), 0],
+                #                            [0, 0, 1]])
+                #     approach_vector_orientation = np.dot(V, rotation_z)
+                #
+                #     # Defining rotation matrix to go from the shoulder to camera frame
+                #
+                #     R_shoulder_camera = R.from_euler('xyz', [[cam_pitch, 0, cam_roll]],
+                #                                      degrees=True).as_matrix().squeeze()
+                #     grasp_orientation_shoulder = np.dot(R_shoulder_camera, approach_vector_orientation)
+                #     potential_grasps[k] = grasp_orientation_shoulder
+            except:
+                "ERROR: robot_execution"
+                continue
 
 def main():
     # Defining variable to store the gaze location
@@ -529,8 +628,8 @@ def main():
 
     # Defining calibration parameters between RealSense and Pupil Trackers
     M_t = np.array([[ 0.99891844, -0.0402869,   0.02321457, -0.08542229],
- [ 0.03949054,  0.99864817,  0.03379828, -0.06768186],
- [-0.02454482, -0.03284497,  0.99915903,  0.015576012]])
+                    [ 0.03949054,  0.99864817,  0.03379828, -0.06768186],
+                    [-0.02454482, -0.03284497,  0.99915903,  0.015576012]])
     tvec = M_t[:, -1]
     rvec, jacobian = cv2.Rodrigues(M_t[:, :3])
     realsense_intrinsics_matrix = np.array([[609.87304688, 0., 332.6171875],
@@ -553,6 +652,12 @@ def main():
     rgbd_image_resized = [None]
     mask_grasp_results = [None]
 
+    # Robot execution variables
+    selected_roi = [None]
+    initiate_grasp = [False]
+    grasp_prob_thresh = 0.5
+    top_grasp_boxes = [None]
+
     # Initializing the eye tracker and storing the subscriber object to fetch gaze values as they update
     # Thread T1 - Running the eye tracker
     subscriber = initialize_pupil_tracker()
@@ -571,13 +676,25 @@ def main():
     # Thread T3 - Plotting the results to UI
     t3 = threading.Thread(target=plot_to_UI,
                           args=(rgbd_image_resized, avg_gaze, mask_grasp_results, window_resize_factor, dataset_object,
-                                realsense_orientation, terminate))
+                                realsense_orientation, selected_roi, initiate_grasp, terminate))
     t3.start()
+
+    # Thread T4 - Robot Execution
+    t4 = threading.Thread(target=robot_execution,
+                          args=(initiate_grasp, top_grasp_boxes, color_frame, aligned_depth_frame, intrinsics,
+                                realsense_orientation, dataset_object, image_width, center_crop_size, image_height, terminate))
+
 
     while not terminate[0]:
         try:
-            rgbd_image_temp = rgbd_image_resized[0]
-            mask_grasp_results[0] = mask_grasp_model.detect([rgbd_image_temp], verbose=0, task=mode)[0]  # slow step
+            if not initiate_grasp[0]:
+                rgbd_image_temp = rgbd_image_resized[0]
+                mask_grasp_results[0] = mask_grasp_model.detect([rgbd_image_temp], verbose=0, task=mode)[0]  # slow step
+                top_grasp_boxes[0] = extract_top_grasp_boxes(selected_roi, inference_config, grasp_prob_thresh,
+                                                          dataset_object)
+            else:
+                t4.start()
+                break
 
         except:
             continue
