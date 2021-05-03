@@ -14,7 +14,7 @@ import mrcnn.model as modellib
 from mask_grasp_rcnn import GraspMaskRCNNInferenceConfig, GraspMaskRCNNDataset
 import time
 import os
-
+import serial
 import threading
 from helpers.thread_2 import thread2
 from helpers.thread_1 import *
@@ -190,7 +190,6 @@ def initialize_realsense(image_width, image_height, fps):
     return [pipeline, profile, align, colorizer]
 
 def main():
-
     # Defining variables for Intel RealSense Feed
     image_width = 640
     image_height = 480
@@ -237,9 +236,28 @@ def main():
     grasp_box_index = [None]
 
     # Robot execution variables
+    arm_orientation = [None]
     selected_roi = [None]
     initiate_grasp = [False]
+    confirm_selection = [False]
     grasp_prob_thresh = 0.5
+    # Starting serial link to prosthetic arm
+    baud_rate = 115200
+    time_out = 0.05
+    ser = serial.Serial('COM6', baud_rate, timeout=time_out)
+    ser.write(b'h')  # Homing the arm at the beginning of execution
+    frame_count = 0  # Stores the number of frames that have been run so far
+    num_samples_for_yaw = 500  # Number of frames to average to get the home heading angle
+    yaw_sum = 0  # Stores the cumulative sum of yaw angles for the first num_samples_for_yaw frames
+    fe_home = -45  # -18
+    d_theta = 0  # Stores the change in theta between frames
+    theta1_t, theta2_t, theta3_t = [0, 0, 0]
+    prev_thetas = np.array([theta1_t, theta2_t, theta3_t])
+    skip_counter = 0
+    display_counter = 0
+    error_msg = [None]
+    hand_preshaped = False
+    UI_operations = [False, False, False, False] # Confirm Selection, Initiate Grasp, Open Hand, Close Hand
 
     # Initializing the eye tracker and storing the subscriber object to fetch gaze values as they update
     # Thread T1 - Running the eye tracker
@@ -252,25 +270,83 @@ def main():
     # Thread T2 - Running Intel RealSense camera + UI
     t2 = threading.Thread(target=thread2,
                           args=(pipeline, profile, align, colorizer, image_width, image_height, fps, selected_roi,
-                                realsense_orientation, center_crop_size,
+                                realsense_orientation, arm_orientation, error_msg, center_crop_size,
                                 color_frame, aligned_depth_frame, rgbd_image_resized, intrinsics, dataset_object,
-                                mask_grasp_results, initiate_grasp, avg_gaze, top_grasp_boxes, grasp_box_index,
+                                mask_grasp_results, avg_gaze, top_grasp_boxes, grasp_box_index, UI_operations,
                                 terminate))
     t2.start()
 
     while not terminate[0]:
         try:
-            if not initiate_grasp[0]:
+            confirm_selection, initiate_grasp, open_hand, close_hand = UI_operations
+            print("confirm_selection, initiate_grasp, open_hand, close_hand: ", UI_operations)
+            # Opening / Closing hand, and Reading IMU
+            if close_hand and hand_preshaped:
+                # c -> Read IMU and increment finger positions
+                arm_orientation[0] = np.array(arm_orientation_imu_9250(ser, 'c'))
+                print("Closing Hand")
+            elif open_hand and hand_preshaped:
+                # o -> Read IMU and decrement finger positions
+                arm_orientation[0] = np.array(arm_orientation_imu_9250(ser, 'o'))
+                print ("Opening Hand")
+            else:
+                arm_orientation[0] = np.array(arm_orientation_imu_9250(ser))
+
+            if frame_count < num_samples_for_yaw:
+                yaw_sum += arm_orientation[0][2]
+                frame_count += 1
+                print("WARNING: ZEROING MAGNETOMETER!...")
+                continue
+            elif frame_count == num_samples_for_yaw:
+                yaw_resting = yaw_sum / (num_samples_for_yaw)
+                print('DONE CALIBRATION')
+            else:
+                arm_orientation[0][2] -= yaw_resting
+            frame_count += 1
+
+            if not confirm_selection:
                 rgbd_image_temp = rgbd_image_resized[0]
                 mask_grasp_results[0] = mask_grasp_model.detect([rgbd_image_temp], verbose=0, task=mode)[0]  # slow step
                 top_grasp_boxes[0] = extract_top_grasp_boxes(selected_roi, inference_config, grasp_prob_thresh,
                                                           dataset_object)
+                selected_grasp = select_grasp_box(realsense_orientation, top_grasp_boxes[0], image_width,
+                                                  image_height, center_crop_size, color_frame,
+                                                  aligned_depth_frame, o3d_intrinsics, dataset_object,
+                                                  intrinsics)
             else:
+                arm_pitch, arm_roll, arm_yaw = arm_orientation[0]
                 cam_pitch, _, cam_roll = realsense_orientation[0]
-                grasp_DCM, grasp_box_index[0] = select_grasp_box(realsense_orientation, top_grasp_boxes[0], image_width,
-                                                                 image_height, center_crop_size, color_frame,
-                                                                 aligned_depth_frame, o3d_intrinsics, dataset_object,
-                                                                 intrinsics)
+                grasp_DCM, grasp_box_index[0], real_width, real_height = selected_grasp
+
+                R_shoulder_arm = R.from_euler('xyz', [[arm_pitch, arm_yaw, arm_roll]],
+                                              degrees=True).as_matrix().squeeze()
+                R_shoulder_arm_inv = np.linalg.inv(R_shoulder_arm)
+                theta1_t, theta2_t, theta3_t = derive_motor_angles_v0(np.dot(R_shoulder_arm_inv, grasp_DCM))
+                theta3_t = theta3_t - fe_home
+                d_theta = np.sum(np.abs(np.array([theta1_t, theta2_t, theta3_t]) - prev_thetas))
+
+                if d_theta > 100 and skip_counter <= 50 and display_counter !=0:
+                    theta1_t, theta2_t, theta3_t = prev_thetas
+                    error_msg[0] = "CAUTION: delta theta was larger than limit"
+                    skip_counter +=1
+                else:
+                    error_msg[0] = ""
+                    skip_counter = 0
+                prev_thetas = np.array([theta1_t, theta2_t, theta3_t])
+                joint1, joint2, joint3 = orient_wrist(theta1_t, theta2_t, theta3_t).tolist()
+
+
+                # Preshape hand if not already preshaped
+                if not hand_preshaped:
+                    preshape_hand(real_width, real_height, ser)
+                    hand_preshaped = True
+
+                # Orient the wrist if user initiated grasp
+                if initiate_grasp:
+                    string_command = 'w %d %d %d' % (joint3, joint2, joint1)
+                    print ("Initiated Grasp: ", 'ps', theta1_t, 'ur', theta2_t, 'ef', theta3_t)
+                    # ser.write(string_command.encode())
+                display_counter += 1
 
 
         except:

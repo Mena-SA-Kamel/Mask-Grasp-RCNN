@@ -43,3 +43,4 @@ def thread1(subscriber, avg_gaze, terminate, rvec, tvec, realsense_intrinsics_ma
                                                          realsense_intrinsics_matrix,
                                                          image_width, center_crop_size,
                                                          image_height)
+        # avg_gaze = [int(image_width / 2), int(image_height / 2)]

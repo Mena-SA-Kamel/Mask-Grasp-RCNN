@@ -115,8 +115,9 @@ def plot_selected_box(image, boxes, box_index):
 
 
 def thread2(pipeline, profile, align, colorizer, image_width, image_height, fps, selected_roi, realsense_orientation,
-            center_crop_size, color_frame, aligned_depth_frame, rgbd_image_resized, intrinsics, dataset_object,
-            mask_grasp_results, initiate_grasp, avg_gaze, top_grasp_boxes, grasp_box_index, terminate):
+            arm_orientation, error_msg, center_crop_size, color_frame, aligned_depth_frame,
+            rgbd_image_resized, intrinsics, dataset_object, mask_grasp_results, avg_gaze,
+            top_grasp_boxes, grasp_box_index, UI_operations, terminate):
 
     display_output = np.array([image_height, image_width, 1]).astype('uint8')
     # Defining Display parameters
@@ -134,6 +135,8 @@ def thread2(pipeline, profile, align, colorizer, image_width, image_height, fps,
 
     while not terminate[0]:
         try:
+            confirm_selection, initiate_grasp, open_hand, close_hand = UI_operations
+
             # Gets a color and depth image
             frames = pipeline.wait_for_frames()
             aligned_frames = align.process(frames)
@@ -157,14 +160,14 @@ def thread2(pipeline, profile, align, colorizer, image_width, image_height, fps,
 
             bgr_image = cv2.cvtColor(rgbd_image_resized[0].astype('uint8'), cv2.COLOR_RGB2BGR)
             gaze_x_realsense, gaze_y_realsense = avg_gaze
-            if mask_grasp_results != [None] and not initiate_grasp[0]:
+            if mask_grasp_results != [None] and not confirm_selection:
                 image_to_display = bgr_image # Displaying the current frame
                 # Capture input from user about which object to interact with
                 selected_roi[0] = select_ROI(gaze_x_realsense, gaze_y_realsense, mask_grasp_results[0])
                 rois, grasping_deltas, grasping_probs, masks, roi_scores, selection_flag = selected_roi[0]
                 masked_image, colors = dataset_object.get_mask_overlay(bgr_image, masks, roi_scores, threshold=0)
                 image_to_display = masked_image
-            elif initiate_grasp[0]:
+            elif confirm_selection:
                 image_to_display = plot_selected_box(image_to_display, top_grasp_boxes[0], grasp_box_index[0])
             image_with_gaze = display_gaze_on_image(image_to_display.copy(), gaze_x_realsense, gaze_y_realsense)
             resized_color_image_to_display = resize_image(image_with_gaze, window_resize_factor)
@@ -173,6 +176,17 @@ def thread2(pipeline, profile, align, colorizer, image_width, image_height, fps,
             cam_orientation_text = "CAMERA ORIENTATION - Pitch : %d, Roll: %d, Yaw: %d" % (cam_pitch, cam_yaw, cam_roll)
             cam_orientation_location = (10, display_output.shape[0] - 60)
             cv2.putText(display_output, cam_orientation_text, cam_orientation_location, font, 0.5, (0, 0, 255))
+
+            arm_pitch, arm_roll, arm_yaw = arm_orientation[0]
+            arm_orientation_text = "ARM ORIENTATION - Pitch : %d, Roll: %d, Yaw: %d" % (arm_pitch, arm_roll, arm_yaw)
+            arm_orientation_location = (10, display_output.shape[0] - 40)
+            cv2.putText(display_output, arm_orientation_text, arm_orientation_location, font, 0.5, (0, 0, 255))
+
+            desired_arm_angles_text = "EEROR: %s " % (error_msg)
+            desired_arm_angles_location = (10, display_output.shape[0] - 80)
+            cv2.putText(display_output, desired_arm_angles_text, desired_arm_angles_location, font, 0.5,
+                        (0, 0, 255))
+
             key = cv2.waitKey(10)
             cv2.imshow('MASK-GRASP RCNN OUTPUT', display_output)
 
@@ -180,8 +194,22 @@ def thread2(pipeline, profile, align, colorizer, image_width, image_height, fps,
                 cv2.destroyAllWindows()
                 terminate[0] = True
                 break
-            # 'Enter' pressed means initiate grasp for now
+            # 'Enter' pressed means confirm object selection and grasp for now
             if key == 13:
-                initiate_grasp[0] = True
+                UI_operations[0] = True
+
+            # confirm_selection, initiate_grasp, open_hand, close_hand = UI_operations
+            if key == 32:  # If space bar is pressed, initiate grasp and close hand while button is pressed
+                UI_operations[1] = True #initiate_grasp
+                UI_operations[3] = True #close_hand
+            else:
+                UI_operations[3] = False #close_hand
+
+            if key == 8:  # If backspace is pressed then open the hand
+                UI_operations[2] = True #open_hand
+            else:
+                UI_operations[2] = False #open_hand
+
+
         except:
             continue

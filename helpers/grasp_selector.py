@@ -180,6 +180,7 @@ def select_grasp_box(realsense_orientation, top_grasp_boxes, image_width, image_
     # Need to select the box that requires the least deviation from current arm orientation
     # Storing the high probability grasp orientations in Direction Cosine Matrix Format (DCM)
     potential_grasps = np.zeros((top_grasp_boxes.shape[0], 3, 3))
+    box_sizes = np.zeros((top_grasp_boxes.shape[0], 2))
     for k, five_dim_box in enumerate(top_grasp_boxes):
         # Need to crop out the point cloud at the oriented rectangle bounds
         # Create a mask to specify the region to extract the surface normals from. Based on Lenz et al.,
@@ -219,6 +220,7 @@ def select_grasp_box(realsense_orientation, top_grasp_boxes, image_width, image_
                                          degrees=True).as_matrix().squeeze()
         grasp_orientation_shoulder = np.dot(R_shoulder_camera, approach_vector_orientation)
         potential_grasps[k] = grasp_orientation_shoulder
+        box_sizes[k] = np.array([real_width, real_height])
 
     joint_deviations = np.zeros(potential_grasps.shape[0])
     joint_angles = np.zeros((potential_grasps.shape[0], 3))
@@ -239,4 +241,5 @@ def select_grasp_box(realsense_orientation, top_grasp_boxes, image_width, image_
 
     grasp_box_index = np.argmin(joint_deviations)
     grasp_DCM = potential_grasps[grasp_box_index]
-    return [grasp_DCM, grasp_box_index]
+    real_width, real_height = box_sizes[grasp_box_index]
+    return [grasp_DCM, grasp_box_index, real_width, real_height]
