@@ -257,7 +257,7 @@ def main():
     display_counter = 0
     error_msg = [None]
     hand_preshaped = False
-    UI_operations = [False, False, False, False] # Confirm Selection, Initiate Grasp, Open Hand, Close Hand
+    UI_operations = [False, False, False, False, True] # Confirm Selection, Initiate Grasp, Open Hand, Close Hand, Home arm joints
 
     # Initializing the eye tracker and storing the subscriber object to fetch gaze values as they update
     # Thread T1 - Running the eye tracker
@@ -278,17 +278,15 @@ def main():
 
     while not terminate[0]:
         try:
-            confirm_selection, initiate_grasp, open_hand, close_hand = UI_operations
-            print("confirm_selection, initiate_grasp, open_hand, close_hand: ", UI_operations)
+            confirm_selection, move_wrist, open_hand, close_hand, home_arm = UI_operations
+            print("confirm_selection, orient_wrist, open_hand, close_hand: ", UI_operations)
             # Opening / Closing hand, and Reading IMU
             if close_hand and hand_preshaped:
                 # c -> Read IMU and increment finger positions
                 arm_orientation[0] = np.array(arm_orientation_imu_9250(ser, 'c'))
-                print("Closing Hand")
             elif open_hand and hand_preshaped:
                 # o -> Read IMU and decrement finger positions
                 arm_orientation[0] = np.array(arm_orientation_imu_9250(ser, 'o'))
-                print ("Opening Hand")
             else:
                 arm_orientation[0] = np.array(arm_orientation_imu_9250(ser))
 
@@ -313,10 +311,10 @@ def main():
                                                   image_height, center_crop_size, color_frame,
                                                   aligned_depth_frame, o3d_intrinsics, dataset_object,
                                                   intrinsics)
+                grasp_DCM, grasp_box_index[0], real_width, real_height = selected_grasp
             else:
                 arm_pitch, arm_roll, arm_yaw = arm_orientation[0]
                 cam_pitch, _, cam_roll = realsense_orientation[0]
-                grasp_DCM, grasp_box_index[0], real_width, real_height = selected_grasp
 
                 R_shoulder_arm = R.from_euler('xyz', [[arm_pitch, arm_yaw, arm_roll]],
                                               degrees=True).as_matrix().squeeze()
@@ -335,17 +333,25 @@ def main():
                 prev_thetas = np.array([theta1_t, theta2_t, theta3_t])
                 joint1, joint2, joint3 = orient_wrist(theta1_t, theta2_t, theta3_t).tolist()
 
-
                 # Preshape hand if not already preshaped
                 if not hand_preshaped:
                     preshape_hand(real_width, real_height, ser)
                     hand_preshaped = True
 
                 # Orient the wrist if user initiated grasp
-                if initiate_grasp:
+                # We want to keep orienting the wrist until the user decides to close their hand
+                if move_wrist:
                     string_command = 'w %d %d %d' % (joint3, joint2, joint1)
                     print ("Initiated Grasp: ", 'ps', theta1_t, 'ur', theta2_t, 'ef', theta3_t)
-                    # ser.write(string_command.encode())
+                    ser.write(string_command.encode())
+
+                # Homing arm if "h" is pressed
+                if UI_operations[4]:
+                    # print ("HOMING ARM")
+                    time.sleep(1)
+                    ser.write(b'h')
+                    time.sleep(1)
+                    UI_operations[4] = False
                 display_counter += 1
 
 

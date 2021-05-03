@@ -124,6 +124,8 @@ def thread2(pipeline, profile, align, colorizer, image_width, image_height, fps,
     window_resize_factor = np.array([2, 2])
 
     cv2.namedWindow('MASK-GRASP RCNN OUTPUT', cv2.WINDOW_AUTOSIZE)
+    # cv2.namedWindow('MASK-GRASP RCNN OUTPUT', cv2.WINDOW_NORMAL)
+    # cv2.setWindowProperty('MASK-GRASP RCNN OUTPUT', cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
     cv2.setMouseCallback('MASK-GRASP RCNN OUTPUT', onMouse)
     font = cv2.FONT_HERSHEY_SIMPLEX
     previous_millis = 0
@@ -135,7 +137,7 @@ def thread2(pipeline, profile, align, colorizer, image_width, image_height, fps,
 
     while not terminate[0]:
         try:
-            confirm_selection, initiate_grasp, open_hand, close_hand = UI_operations
+            confirm_selection, move_Wrist, open_hand, close_hand, home_arm = UI_operations
 
             # Gets a color and depth image
             frames = pipeline.wait_for_frames()
@@ -190,26 +192,41 @@ def thread2(pipeline, profile, align, colorizer, image_width, image_height, fps,
             key = cv2.waitKey(10)
             cv2.imshow('MASK-GRASP RCNN OUTPUT', display_output)
 
+            #confirm_selection, initiate_grasp, open_hand, close_hand, home_arm
+            # Press q to quit
             if key & 0xFF == ord('q') or key == 27:
                 cv2.destroyAllWindows()
                 terminate[0] = True
                 break
+
+            if key & 0xFF == ord('h'):
+                UI_operations[4] = True # home_arm
+
             # 'Enter' pressed means confirm object selection and grasp for now
             if key == 13:
-                UI_operations[0] = True
+                UI_operations[0] = True #confirm_selection
 
-            # confirm_selection, initiate_grasp, open_hand, close_hand = UI_operations
-            if key == 32:  # If space bar is pressed, initiate grasp and close hand while button is pressed
-                UI_operations[1] = True #initiate_grasp
-                UI_operations[3] = True #close_hand
+            if key & 0xFF == ord('n'): # Press n to go back to select another object
+                UI_operations[0] = False #confirm_selection
+                UI_operations[1] = False #confirm_selection
+                UI_operations[4] = True  # home_arm
+
+            if key == 32:  # If space bar is pressed, initiate grasp
+                UI_operations[1] = True #orient_wrist
+                UI_operations[4] = False  # home_arm
+
+
+            if key == 9: # If tab is pressed then close the hand
+                UI_operations[3] = True  # close_hand
+                UI_operations[1] = False  # orient_wrist
             else:
-                UI_operations[3] = False #close_hand
+                UI_operations[3] = False  # close_hand
+
 
             if key == 8:  # If backspace is pressed then open the hand
                 UI_operations[2] = True #open_hand
             else:
                 UI_operations[2] = False #open_hand
-
 
         except:
             continue
