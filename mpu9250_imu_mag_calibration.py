@@ -125,7 +125,7 @@ while True:
                 print("Progress: ", (counter / num_meas ) * 100, "% DONE")
             magnetomer_readings[counter] = np.array([mx, my, mz])
         else:
-            np.savetxt('magnetometer_calibration-Mar12-Calibration_with_case_imu_power_ON_new_home.txt', magnetomer_readings)
+            np.savetxt('magnetometer_calibration-May4.txt', magnetomer_readings)
             fig = plt.figure()
             ax = Axes3D(fig)
             ax.scatter(magnetomer_readings[:, 0], magnetomer_readings[:, 1], magnetomer_readings[:, 2])

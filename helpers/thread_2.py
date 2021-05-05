@@ -83,6 +83,10 @@ def select_ROI(mouseX, mouseY, r):
     return rois, grasping_deltas, grasping_probs, masks, roi_scores, selection_success
 
 def display_gaze_on_image(image, x, y, color=(0,0,255)):
+
+    # image_shape = np.shape(image)
+    # # CV2 reference is the bottom left corner, therefore y = image_height - y
+    # y = image_shape[0] - y
     image = cv2.circle(image, (x, y), 20, color, 3)
     image = cv2.circle(image, (x, y), 2, color, 2)
     return image

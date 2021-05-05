@@ -204,9 +204,9 @@ def main():
     realsense_orientation = [None]
 
     # Defining calibration parameters between RealSense and Pupil Trackers
-    M_t = np.array([[ 0.99891844, -0.0402869,   0.02321457, -0.08542229],
-                    [ 0.03949054,  0.99864817,  0.03379828, -0.06768186],
-                    [-0.02454482, -0.03284497,  0.99915903,  0.015576012]])
+    M_t = np.array([[   0.99504285, -0.03983597,  0.0911198 , -0.11259388],
+                    [ 0.0435523,   0.99828312, -0.03916633, -0.01442502],
+                    [-0.08940313,  0.04294065,  0.99506943,  0.02834942]])
     tvec = M_t[:, -1]
     rvec, jacobian = cv2.Rodrigues(M_t[:, :3])
     realsense_intrinsics_matrix = np.array([[609.87304688, 0., 332.6171875],
