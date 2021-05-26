@@ -173,7 +173,6 @@ def derive_motor_angles_v0(orientation_matrix):
     theta_1, theta_2, theta_3 = joint_combinations[0]  # Choosing the angle combo with the least
     return [theta_1, theta_2, theta_3]
 
-
 def select_grasp_box(realsense_orientation, top_grasp_boxes, image_width, image_height, center_crop_size, color_frame,
                      aligned_depth_frame, o3d_intrinsics, dataset_object, intrinsics):
     cam_pitch, _, cam_roll = realsense_orientation[0]
@@ -204,9 +203,6 @@ def select_grasp_box(realsense_orientation, top_grasp_boxes, image_width, image_
         # Computing the grasp box size in camera coordinates, size in meters
         real_width, real_height = compute_real_box_size(intrinsics[0], aligned_depth_frame[0], rect_vertices)
         box_vert_obj_frame = generate_points_in_world_frame(real_width, real_height)
-        # visualize_wrist_in_camera_frame(color_image, depth_image, box_center, approach_vector, intrinsics,
-        #                                 aligned_depth_frame, rect_vertices, approach_vector_orientation)
-
         # Computing the desired wrist orientation in the camera frame
         V = compute_wrist_orientation(approach_vector, theta)
         rotation_z = np.array([[np.cos(theta), -np.sin(theta), 0],
