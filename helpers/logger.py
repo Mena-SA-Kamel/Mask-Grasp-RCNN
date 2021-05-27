@@ -1,12 +1,14 @@
 import json
 from datetime import datetime
+import os
 
-def log_new_trial(objects, experiment_ID=0):
+def log_new_trial(objects, trial_name):
     now = datetime.now()
     date_time = now.strftime("%m_%d_%Y_%H_%M_%S")
     data = {"objects": objects,
             "date": date_time,
-            "experiment_ID": experiment_ID}
+            "num_objects": len(objects),
+            "experiment_ID": trial_name}
     for object in objects:
         data[object] = { "t_start": 0,
                          "t_select": 0,
@@ -27,8 +29,9 @@ def load_from_json(json_file):
         return json.load(read_file)
 
 def write_to_json(data):
+    log_dir = "helpers/Experiment Logs"
     file_name = data["experiment_ID"] + "_" + data["date"] + '.json'
-    with open(file_name, "w") as write_file:
+    with open(os.path.join(log_dir,file_name), "w") as write_file:
         json.dump(data, write_file)
 
 

@@ -1,6 +1,5 @@
 import os
 import numpy as np
-import logger
 import random
 
 def get_num_objects_per_image(mean=6, std=2):
@@ -20,15 +19,19 @@ def load_data(file_name):
 
 def generate_experiment_basket(objects):
     num_objects = get_num_objects_per_image()
+    # Sampling without replacement
     basket_contents = random.sample(objects, num_objects)
     return basket_contents
-
-
-objects = load_data("all_objects.txt")
-basket_contents = generate_experiment_basket(objects)
-
-import code; code.interact(local=dict(globals(), **locals()))
-
-data = logger.log_new_trial(objects, experiment_ID="Experiment_0")
-
-logger.write_to_json(data)
+#
+# experiment_ID = 0
+# num_baskets = 10
+# trial_ID = 0 # 0, 1, 2
+# object_ID = 0 # num objects in basket
+# objects = load_data("all_objects.txt")
+# data = []
+# for i in range(num_baskets):
+#     basket_contents = generate_experiment_basket(objects)
+#     trial_name = "Experiment_" + str(experiment_ID) + "_Basket_" + str(i)
+#     data.append(logger.log_new_trial(basket_contents, trial_name))
+#     # data[basket_contents[0]]['t_start']
+#     logger.write_to_json(data[i])

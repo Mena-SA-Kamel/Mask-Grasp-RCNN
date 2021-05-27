@@ -339,6 +339,16 @@ def compute_approach_vector(grasping_box):
     # Approach vector needs to be pointing in the opposite direction - ie into the object because that is
     # how we plan on approaching it
     approach_vector = -1 * approach_vector
+    # approach_vector_points = [min_depth_point, min_depth_point + (approach_vector * 0.2)]
+    # lines = [[0, 1]]
+    # colors = [[1, 0, 0] for i in range(len(lines))]
+    # line_set = o3d.geometry.LineSet()
+    # line_set.points = o3d.utility.Vector3dVector(approach_vector_points)
+    # line_set.lines = o3d.utility.Vector2iVector(lines)
+    # line_set.colors = o3d.utility.Vector3dVector(colors)
+    # import code;
+    # code.interact(local=dict(globals(), **locals()))
+    # o3d.visualization.draw_geometries([pcd, line_set])
     return approach_vector
 
 def visualize_wrist_in_camera_frame(color_image, depth_image, box_center, approach_vector, intrinsics,
@@ -751,8 +761,7 @@ try:
                 # Computing the grasp box size in camera coordinates
                 real_width, real_height = compute_real_box_size(intrinsics, aligned_depth_frame, rect_vertices)
                 box_vert_obj_frame = generate_points_in_world_frame(real_width, real_height)
-                # visualize_wrist_in_camera_frame(color_image, depth_image, box_center, approach_vector, intrinsics,
-                #                                 aligned_depth_frame, rect_vertices, approach_vector_orientation)
+
 
                 # Computing the desired wrist orientation in the camera frame
                 V = compute_wrist_orientation(approach_vector, theta)
@@ -760,7 +769,8 @@ try:
                                        [np.sin(theta), np.cos(theta), 0],
                                        [0, 0, 1]])
                 approach_vector_orientation = np.dot(V, rotation_z)
-
+                visualize_wrist_in_camera_frame(color_image, depth_image, box_center, approach_vector, intrinsics,
+                                                aligned_depth_frame, rect_vertices, approach_vector_orientation)
                 # Defining rotation matrix to go from the shoulder to camera frame
                 cam_pitch, cam_yaw, cam_roll = cam_angles_t
 
