@@ -32,8 +32,6 @@ def write_to_json(data):
         json.dump(data, write_file)
 
 
-objects = ["carrot", "bottle", "eraser"]
-data = log_new_trial(objects, experiment_ID="Experiment_0")
-write_to_json(data)
-import code; code.interact(local=dict(globals(), **locals()))
+
+
 
