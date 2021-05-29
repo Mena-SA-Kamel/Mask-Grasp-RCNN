@@ -304,7 +304,8 @@ def thread2(pipeline, profile, align, colorizer, image_width, image_height, fps,
                     data[basket_iterator][object_type]["NAC"] += 1
                 if last_hand_command == "home":
                     # First time the close hand command is published
-                    data[basket_iterator][object_type]["t_close"] = current_time()
+                    t_close =  current_time()
+                    data[basket_iterator][object_type]["t_close"] = t_close
                 last_hand_command = "closed"
             else:
                 UI_operations[3] = False  # close_hand

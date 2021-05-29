@@ -1,7 +1,7 @@
 import os
 import numpy as np
 import random
-import logger
+# import logger
 
 def get_num_objects_per_image(mean=6, std=2):
     num_objects = int(np.random.normal(mean, std, 1))
@@ -37,5 +37,5 @@ def generate_experiment_basket(objects):
 #     for object_type in data[i]['objects']:
 #         logger.user_pop_up(data[i], object_type)
 #     logger.write_to_json(data[i])
-
+#
 

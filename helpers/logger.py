@@ -34,8 +34,8 @@ def load_from_json(json_file):
         return json.load(read_file)
 
 def write_to_json(data):
-    # log_dir = "helpers/Experiment Logs"
-    log_dir = "Experiment Logs"
+    log_dir = "helpers/Experiment Logs"
+    # log_dir = "Experiment Logs"
     file_name = data["experiment_ID"] + "_" + data["date"] + '.json'
     with open(os.path.join(log_dir,file_name), "w") as write_file:
         json.dump(data, write_file)
@@ -69,12 +69,17 @@ def user_pop_up(trial_data, object_name):
         write_to_json(trial_data)
         root.destroy()
 
-    tk.Label(root, text="""Trial Outcome:""", justify=tk.LEFT).pack(anchor=tk.W)
+    label_font = 'Helvetica 10 bold'
+    tk.Label(root, text="Trial ID: " + trial_data["experiment_ID"], justify=tk.LEFT, font=label_font).pack(anchor=tk.N)
+    tk.Label(root, text="Trial Date: "  + trial_data["date"], justify=tk.LEFT, font=label_font).pack(anchor=tk.N)
+    tk.Label(root, text="Object Type: " + object_name, justify=tk.LEFT, font=label_font).pack(anchor=tk.N)
+    tk.Label(root, text="", justify=tk.LEFT, font=label_font).pack(anchor=tk.N)
 
+    tk.Label(root, text="Trial Outcome:", justify=tk.LEFT, font=label_font).pack(anchor=tk.W)
     for result, val in result_outcomes:
         tk.Radiobutton(root, text=result, padx=20, variable=v, value=val).pack(anchor=tk.W)
 
-    tk.Label(root, text="""Fail Reason (If Applicable):""", justify=tk.LEFT).pack(anchor=tk.W)
+    tk.Label(root, text="""Fail Reason (If Applicable):""", justify=tk.LEFT, font=label_font).pack(anchor=tk.W)
     var1 = tk.IntVar()
     var2 = tk.IntVar()
     var3 = tk.IntVar()
@@ -86,13 +91,12 @@ def user_pop_up(trial_data, object_name):
     c4 = tk.Checkbutton(root, text='Incorrect Aperture', variable=var4, onvalue=1, offvalue=0, padx=20)
 
     log_results = tk.Button(root, text='Log Results', command=log_results, padx=20)
-
     c1.pack(anchor=tk.W)
     c2.pack(anchor=tk.W)
     c3.pack(anchor=tk.W)
     c4.pack(anchor=tk.W)
-    log_results.pack(anchor=tk.W)
-    root.geometry("300x400")
+    log_results.pack(anchor=tk.S)
+    root.geometry("500x400")
     root.mainloop()
 
 
