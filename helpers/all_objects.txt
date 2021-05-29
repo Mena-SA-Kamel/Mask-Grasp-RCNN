@@ -1,6 +1,4 @@
-eraser
 water bottle
-chips
 towels
 headphones
 tshirts
@@ -24,7 +22,6 @@ running shoes
 glue gun
 airpods
 cans
-transparent mug
 water jug
 orange
 Tooth brush
@@ -34,3 +31,4 @@ ipad charger
 screw driver
 tripod
 white out
+cigar

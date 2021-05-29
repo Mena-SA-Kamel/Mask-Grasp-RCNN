@@ -249,7 +249,7 @@ def main():
     frame_count = 0  # Stores the number of frames that have been run so far
     num_samples_for_yaw = 500  # Number of frames to average to get the home heading angle
     yaw_sum = 0  # Stores the cumulative sum of yaw angles for the first num_samples_for_yaw frames
-    fe_home = -45  # -18
+    fe_home = -25  # -18 -45
     d_theta = 0  # Stores the change in theta between frames
     theta1_t, theta2_t, theta3_t = [0, 0, 0]
     prev_thetas = np.array([theta1_t, theta2_t, theta3_t])

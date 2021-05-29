@@ -145,7 +145,7 @@ def thread2(pipeline, profile, align, colorizer, image_width, image_height, fps,
 
     ########### Experiment Logging
     experiment_ID = 0
-    num_baskets = 10
+    num_baskets = 3
     objects = experiment_planner.load_data("helpers/all_objects.txt")
     data = []
     for i in range(num_baskets):
@@ -161,6 +161,8 @@ def thread2(pipeline, profile, align, colorizer, image_width, image_height, fps,
     frequency = 2500  # Set Frequency To 2500 Hertz
     duration = 1000  # Set Duration To 1000 ms == 1 second
     t_start = t_complete = t_select = t_close = 0
+    object_type = ""
+    last_hand_command = "home"
     ###############################
 
 
@@ -218,6 +220,12 @@ def thread2(pipeline, profile, align, colorizer, image_width, image_height, fps,
             cv2.putText(display_output, desired_arm_angles_text, desired_arm_angles_location, font, 0.5,
                         (0, 0, 255))
 
+            # when this is clicked, need to display the object type to the subject
+            object_type_text = "GRAB: %s " % (object_type)
+            object_type_location = (10, display_output.shape[0] - 100)
+            cv2.putText(display_output, object_type_text, object_type_location, font, 0.7,
+                        (0, 0, 255))
+
             key = cv2.waitKey(10)
 
 
@@ -237,7 +245,7 @@ def thread2(pipeline, profile, align, colorizer, image_width, image_height, fps,
                 object_type = basket_objects[object_iterator]
                 t_select = current_time()
                 data[basket_iterator][object_type]["t_select"] = t_select
-                data[basket_iterator][object_type]["t_OSS"] = t_select - t_start
+                data[basket_iterator][object_type]["OST"] = t_select - t_start
 
             if key & 0xFF == ord('n'): # Press n to go back to select another object
                 UI_operations[0] = False #confirm_selection
@@ -247,10 +255,14 @@ def thread2(pipeline, profile, align, colorizer, image_width, image_height, fps,
                 object_type = basket_objects[object_iterator]
                 t_complete = current_time()
                 data[basket_iterator][object_type]["t_completion"] = t_complete
+                data[basket_iterator][object_type]["TTA"] = t_close - t_select
+                data[basket_iterator][object_type]["TTG"] = t_close - t_start
+                data[basket_iterator][object_type]["TTT"] = t_complete - t_start
+                # logger.user_pop_up(data[basket_iterator], object_type)
 
                 object_iterator += 1
+                logger.write_to_json(data[basket_iterator])
                 if object_iterator == num_objects_in_basket:
-                    logger.write_to_json(data[basket_iterator])
                     object_iterator = 0
                     basket_iterator += 1
                     num_objects_in_basket = data[basket_iterator]["num_objects"]
@@ -264,14 +276,10 @@ def thread2(pipeline, profile, align, colorizer, image_width, image_height, fps,
             if key & 0xFF == ord('b'): # Press b to begin timer
                 object_type = basket_objects[object_iterator]
                 t_start = current_time()
-                data[basket_iterator][object_type]["t_start"] = t_start
-                # when this is clicked, need to display the object type to the subject
-                object_type_text = "GRAB: %s " % (object_type)
-                object_type_location = (10, display_output.shape[0] - 100)
-                cv2.putText(display_output, object_type_text, object_type_location, font, 0.7,
-                            (0, 0, 255))
-                winsound.Beep(frequency, duration)
                 t_complete = t_select = t_close = 0
+                data[basket_iterator][object_type]["t_start"] = t_start
+                winsound.Beep(frequency, duration)
+                last_hand_command = "home"
 
             if key & 0xFF == ord('o'): # Press o to go back to reselect object
                 UI_operations[0] = False #confirm_selection
@@ -281,22 +289,29 @@ def thread2(pipeline, profile, align, colorizer, image_width, image_height, fps,
                 t_select = current_time()
                 data[basket_iterator][object_type]["NOSC"] += 1
                 data[basket_iterator][object_type]["t_select"] = t_select
-                data[basket_iterator][object_type]["t_OSS"] = t_select - t_start
+                data[basket_iterator][object_type]["OST"] = t_select - t_start
 
             if key == 32:  # If space bar is pressed, initiate grasp - disable in experiment #1
                 UI_operations[1] = True #orient_wrist
                 UI_operations[4] = False  # home_arm
 
-
             if key == 9: # If tab is pressed then close the hand
                 UI_operations[3] = True  # close_hand
                 UI_operations[1] = False  # orient_wrist
+                object_type = basket_objects[object_iterator]
+                if last_hand_command == "opened":
+                    # Increment the aperture corrections counter: defined as going from an opened hand to a closed hand
+                    data[basket_iterator][object_type]["NAC"] += 1
+                if last_hand_command == "home":
+                    # First time the close hand command is published
+                    data[basket_iterator][object_type]["t_close"] = current_time()
+                last_hand_command = "closed"
             else:
                 UI_operations[3] = False  # close_hand
 
-
             if key == 8:  # If backspace is pressed then open the hand
                 UI_operations[2] = True #open_hand
+                last_hand_command = "opened"
             else:
                 UI_operations[2] = False #open_hand
 
