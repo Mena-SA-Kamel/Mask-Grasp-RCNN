@@ -259,10 +259,7 @@ def thread2(pipeline, profile, align, colorizer, image_width, image_height, fps,
                 data[basket_iterator][object_type]["TTA"] = t_close - t_select
                 data[basket_iterator][object_type]["TTG"] = t_close - t_start
                 data[basket_iterator][object_type]["TTT"] = t_complete - t_start
-                terminate[0] = True
-                import code;
-                code.interact(local=dict(globals(), **locals()))
-                data[basket_iterator][object_type]["roi_bounds"] = list(rois.squeeze())
+                data[basket_iterator][object_type]["roi_bounds"] = list(map(int, list(rois.squeeze())))
                 data[basket_iterator][object_type]["gaze_x"] = gaze_x_realsense
                 data[basket_iterator][object_type]["gaze_y"] = gaze_y_realsense
                 log_obj_type = object_type; log_basket_id = basket_iterator
