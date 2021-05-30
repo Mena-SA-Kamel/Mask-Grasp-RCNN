@@ -7,6 +7,7 @@ import helpers.experiment_planner as experiment_planner
 import helpers.logger as logger
 import winsound
 import threading
+import random
 
 
 def onMouse(event, x, y, flags, param):
@@ -164,6 +165,7 @@ def thread2(pipeline, profile, align, colorizer, image_width, image_height, fps,
     t_start = t_complete = t_select = t_close = 0
     object_type = ""
     last_hand_command = "home"
+    winsound.Beep(int(frequency / 2), duration * 2)
     ###############################
 
 
@@ -223,10 +225,15 @@ def thread2(pipeline, profile, align, colorizer, image_width, image_height, fps,
 
             # when this is clicked, need to display the object type to the subject
             object_type_text = "GRAB: %s Object Iterator: %d" % (object_type, object_iterator)
-            object_type_location = (10, display_output.shape[0] - 100)
-            cv2.putText(display_output, object_type_text, object_type_location, font, 0.7,
-                        (0, 0, 255))
+            object_type_location = (10, 40)
+            cv2.putText(display_output, object_type_text, object_type_location, font, 0.8,
+                        (255, 255, 0))
 
+            # Printing the basket contents at the top of the window in random order
+            basket_contents_text = "Contents: " + str(basket_objects)
+            basket_contents_location = (10, 20)
+            cv2.putText(display_output, basket_contents_text, basket_contents_location, font, 0.8,
+                        (255, 255, 0))
             key = cv2.waitKey(10)
 
 
@@ -269,6 +276,7 @@ def thread2(pipeline, profile, align, colorizer, image_width, image_height, fps,
                 object_iterator += 1
 
                 if object_iterator == num_objects_in_basket:
+                    winsound.Beep(int(frequency/2), duration*2)
                     object_iterator = 0
                     basket_iterator += 1
                     if basket_iterator == num_baskets:
@@ -278,7 +286,6 @@ def thread2(pipeline, profile, align, colorizer, image_width, image_height, fps,
                     else:
                         num_objects_in_basket = data[basket_iterator]["num_objects"]
                         basket_objects = data[basket_iterator]["objects"]
-
 
             if key & 0xFF == ord('b'): # Press b to begin timer
                 object_type = basket_objects[object_iterator]
@@ -323,6 +330,10 @@ def thread2(pipeline, profile, align, colorizer, image_width, image_height, fps,
 
             if key == 8:  # If backspace is pressed then open the hand
                 UI_operations[2] = True #open_hand
+                if last_hand_command == "home":
+                    # First time the close hand command is published
+                    t_close =  current_time()
+                    data[basket_iterator][object_type]["t_close"] = t_close
                 last_hand_command = "opened"
             else:
                 UI_operations[2] = False #open_hand

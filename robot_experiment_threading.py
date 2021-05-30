@@ -76,15 +76,19 @@ def orient_wrist(theta1, theta2, theta3):
     # Defining the physical joint limits
     pronate_supinate_limit = [-90, 80]
     ulnar_radial_limit = [-8, 15]
-    flexion_extension_limit = [-47, 62]
+    # flexion_extension_limit = [-47, 62]
+    extension_flexion_limit = [-62, 47]
 
     # Clipping angles to the physical joint limits
     theta1 = np.minimum(theta1, pronate_supinate_limit[1])
     theta1 = np.maximum(theta1, pronate_supinate_limit[0])
     theta2 = np.minimum(theta2, ulnar_radial_limit[1])
     theta2 = np.maximum(theta2, ulnar_radial_limit[0])
-    theta3 = np.minimum(theta3, flexion_extension_limit[1])
-    theta3 = np.maximum(theta3, flexion_extension_limit[0])
+    # theta3 = np.minimum(theta3, flexion_extension_limit[1])
+    # theta3 = np.maximum(theta3, flexion_extension_limit[0])
+
+    theta3 = np.minimum(theta3, extension_flexion_limit[1])
+    theta3 = np.maximum(theta3, extension_flexion_limit[0])
 
     if np.sign(theta1) == 1:
         joint1 = np.interp(theta1, (0, pronate_supinate_limit[1]), (ps_home, 255))
@@ -95,13 +99,21 @@ def orient_wrist(theta1, theta2, theta3):
         joint2 = np.interp(theta2, (0, ulnar_radial_limit[1]), (ur_home, 0))
     else:
         joint2 = np.interp(theta2, (ulnar_radial_limit[0], 0), (255, ur_home))
+    # if np.sign(theta3) == 1:  # flexion
+    #     # [-47, 62] - flex/extend limits
+    #     # joint3 = np.interp(theta3, (0, flexion_extension_limit[1]), (fe_home, 255))
+    #     joint3 = np.interp(theta3, (0, flexion_extension_limit[1]), (fe_home, 0))
+    # else:
+    #     # joint3 = np.interp(theta3, (flexion_extension_limit[0], 0), (0, fe_home))
+    #     joint3 = np.interp(theta3, (flexion_extension_limit[0], 0), (255, fe_home))
 
     if np.sign(theta3) == 1: # flexion
+        # [-47, 62] - flex/extend limits
         # joint3 = np.interp(theta3, (0, flexion_extension_limit[1]), (fe_home, 255))
-        joint3 = np.interp(theta3, (0, flexion_extension_limit[1]), (fe_home, 0))
+        joint3 = np.interp(theta3, (0, extension_flexion_limit[1]), (fe_home, 0))
     else:
         # joint3 = np.interp(theta3, (flexion_extension_limit[0], 0), (0, fe_home))
-        joint3 = np.interp(theta3, (flexion_extension_limit[0], 0), (255, fe_home))
+        joint3 = np.interp(theta3, (extension_flexion_limit[0], 0), (255, fe_home))
 
     joint_output = np.array([joint1, joint2, joint3]).astype('uint8')
     return joint_output
@@ -249,7 +261,7 @@ def main():
     frame_count = 0  # Stores the number of frames that have been run so far
     num_samples_for_yaw = 500  # Number of frames to average to get the home heading angle
     yaw_sum = 0  # Stores the cumulative sum of yaw angles for the first num_samples_for_yaw frames
-    fe_home = -45  # -18 -45
+    fe_home = 25  # -18 -45
     d_theta = 0  # Stores the change in theta between frames
     theta1_t, theta2_t, theta3_t = [0, 0, 0]
     prev_thetas = np.array([theta1_t, theta2_t, theta3_t])
