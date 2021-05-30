@@ -2,6 +2,7 @@ import json
 from datetime import datetime
 import os
 import tkinter as tk
+from PIL import Image
 
 def log_new_trial(objects, trial_name):
     now = datetime.now()
@@ -38,9 +39,13 @@ def load_from_json(json_file):
 
 def write_to_json(data):
     log_dir = "helpers/Experiment Logs"
+    trial_name = data["experiment_ID"] + "_" + data["date"]
+    trial_log_dir = os.path.join(log_dir, trial_name)
+    if not os.path.exists(trial_log_dir):
+        os.mkdir(trial_log_dir)
     # log_dir = "Experiment Logs"
-    file_name = data["experiment_ID"] + "_" + data["date"] + '.json'
-    with open(os.path.join(log_dir,file_name), "w") as write_file:
+    file_name = trial_name + '.json'
+    with open(os.path.join(trial_log_dir, file_name), "w") as write_file:
         json.dump(data, write_file)
 
 def user_pop_up(trial_data, object_name):
@@ -102,5 +107,14 @@ def user_pop_up(trial_data, object_name):
     root.geometry("500x400")
     root.mainloop()
 
+def log_image(data, object_name, image):
+    log_dir = "helpers/Experiment Logs"
+    trial_name = data["experiment_ID"] + "_" + data["date"]
+    trial_log_dir = os.path.join(log_dir, trial_name)
+    if not os.path.exists(trial_log_dir):
+        os.mkdir(trial_log_dir)
+    file_name = data["experiment_ID"] + "_" + data["date"] + '_' + object_name +'.png'
+    im = Image.fromarray(image)
+    im.save(os.path.join(trial_log_dir, file_name))
 
 

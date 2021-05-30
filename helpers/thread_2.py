@@ -262,8 +262,9 @@ def thread2(pipeline, profile, align, colorizer, image_width, image_height, fps,
                 data[basket_iterator][object_type]["roi_bounds"] = list(map(int, list(rois.squeeze())))
                 data[basket_iterator][object_type]["gaze_x"] = gaze_x_realsense
                 data[basket_iterator][object_type]["gaze_y"] = gaze_y_realsense
-                log_obj_type = object_type; log_basket_id = basket_iterator
-                pop_up = threading.Thread(logger.user_pop_up(data[log_basket_id], log_obj_type)).start()
+                logged_img = cv2.cvtColor(display_output.astype('uint8'), cv2.COLOR_BGR2RGB)
+                logger.log_image(data[basket_iterator], object_type, logged_img)
+                pop_up = threading.Thread(logger.user_pop_up(data[basket_iterator], object_type)).start()
 
                 object_iterator += 1
 
