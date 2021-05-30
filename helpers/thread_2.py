@@ -259,6 +259,12 @@ def thread2(pipeline, profile, align, colorizer, image_width, image_height, fps,
                 data[basket_iterator][object_type]["TTA"] = t_close - t_select
                 data[basket_iterator][object_type]["TTG"] = t_close - t_start
                 data[basket_iterator][object_type]["TTT"] = t_complete - t_start
+                terminate[0] = True
+                import code;
+                code.interact(local=dict(globals(), **locals()))
+                data[basket_iterator][object_type]["roi_bounds"] = list(rois.squeeze())
+                data[basket_iterator][object_type]["gaze_x"] = gaze_x_realsense
+                data[basket_iterator][object_type]["gaze_y"] = gaze_y_realsense
                 log_obj_type = object_type; log_basket_id = basket_iterator
                 pop_up = threading.Thread(logger.user_pop_up(data[log_basket_id], log_obj_type)).start()
 
@@ -284,13 +290,16 @@ def thread2(pipeline, profile, align, colorizer, image_width, image_height, fps,
                 winsound.Beep(frequency, duration)
                 last_hand_command = "home"
 
-            if key & 0xFF == ord('o'): # Press o to go back to reselect object
+            if key & 0xFF == ord('o') or key & 0xFF == ord('g'): # Press o to go back to reselect object
                 UI_operations[0] = False #confirm_selection
                 UI_operations[1] = False #initiate_grasp
                 UI_operations[4] = True  # home_arm
                 object_type = basket_objects[object_iterator]
                 t_select = current_time()
-                data[basket_iterator][object_type]["NOSC"] += 1
+                if key & 0xFF == ord('o'):
+                    data[basket_iterator][object_type]["NOSC"] += 1
+                else:
+                    data[basket_iterator][object_type]["NGSC"] += 1
                 data[basket_iterator][object_type]["t_select"] = t_select
                 data[basket_iterator][object_type]["OST"] = t_select - t_start
                 last_hand_command = "home"

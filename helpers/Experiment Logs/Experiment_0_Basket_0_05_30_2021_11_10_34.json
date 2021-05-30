@@ -1,0 +1,1 @@
+{"objects": ["cigar", "hand sanitizer", "Tooth brush"], "date": "05_30_2021_11_10_34", "num_objects": 3, "experiment_ID": "Experiment_0_Basket_0", "cigar": {"t_start": 1622387446946, "t_select": 1622387448340, "t_close": 1622387453116, "t_completion": 1622387464544, "roi_bounds": [

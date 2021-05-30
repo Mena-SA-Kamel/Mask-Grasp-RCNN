@@ -11,7 +11,10 @@ def log_new_trial(objects, trial_name):
             "num_objects": len(objects),
             "experiment_ID": trial_name}
     for object in objects:
-        data[object] = { "t_start": 0,
+        data[object] = { "roi_bounds": 0,
+                         "gaze_x": 0,
+                         "gaze_y": 0,
+                         "t_start": 0,
                          "t_select": 0,
                          "t_close": 0,
                          "t_completion": 0,
