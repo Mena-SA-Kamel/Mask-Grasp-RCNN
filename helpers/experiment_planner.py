@@ -3,7 +3,7 @@ import numpy as np
 import random
 # import logger
 
-def get_num_objects_per_image(mean=6, std=2):
+def get_num_objects_per_image(mean=3, std=1):#6, 2
     num_objects = int(np.random.normal(mean, std, 1))
     if num_objects < 0:
         num_objects = 0

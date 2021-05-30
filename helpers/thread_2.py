@@ -6,6 +6,7 @@ import time
 import helpers.experiment_planner as experiment_planner
 import helpers.logger as logger
 import winsound
+import threading
 
 
 def onMouse(event, x, y, flags, param):
@@ -215,13 +216,13 @@ def thread2(pipeline, profile, align, colorizer, image_width, image_height, fps,
             arm_orientation_location = (10, display_output.shape[0] - 40)
             cv2.putText(display_output, arm_orientation_text, arm_orientation_location, font, 0.5, (0, 0, 255))
 
-            desired_arm_angles_text = "EEROR: %s " % (error_msg)
+            desired_arm_angles_text = "EEROR: %s" % (error_msg)
             desired_arm_angles_location = (10, display_output.shape[0] - 80)
             cv2.putText(display_output, desired_arm_angles_text, desired_arm_angles_location, font, 0.5,
                         (0, 0, 255))
 
             # when this is clicked, need to display the object type to the subject
-            object_type_text = "GRAB: %s " % (object_type)
+            object_type_text = "GRAB: %s Object Iterator: %d" % (object_type, object_iterator)
             object_type_location = (10, display_output.shape[0] - 100)
             cv2.putText(display_output, object_type_text, object_type_location, font, 0.7,
                         (0, 0, 255))
@@ -258,20 +259,22 @@ def thread2(pipeline, profile, align, colorizer, image_width, image_height, fps,
                 data[basket_iterator][object_type]["TTA"] = t_close - t_select
                 data[basket_iterator][object_type]["TTG"] = t_close - t_start
                 data[basket_iterator][object_type]["TTT"] = t_complete - t_start
-                # logger.user_pop_up(data[basket_iterator], object_type)
+                log_obj_type = object_type; log_basket_id = basket_iterator
+                pop_up = threading.Thread(logger.user_pop_up(data[log_basket_id], log_obj_type)).start()
 
                 object_iterator += 1
-                logger.write_to_json(data[basket_iterator])
+
                 if object_iterator == num_objects_in_basket:
                     object_iterator = 0
                     basket_iterator += 1
-                    num_objects_in_basket = data[basket_iterator]["num_objects"]
-                    basket_objects = data[basket_iterator]["objects"]
+                    if basket_iterator == num_baskets:
+                        terminate[0] = True
+                        cv2.destroyAllWindows()
+                        break
+                    else:
+                        num_objects_in_basket = data[basket_iterator]["num_objects"]
+                        basket_objects = data[basket_iterator]["objects"]
 
-                if basket_iterator == num_baskets:
-                    terminate[0] = True
-                    cv2.destroyAllWindows()
-                    break
 
             if key & 0xFF == ord('b'): # Press b to begin timer
                 object_type = basket_objects[object_iterator]
@@ -290,6 +293,7 @@ def thread2(pipeline, profile, align, colorizer, image_width, image_height, fps,
                 data[basket_iterator][object_type]["NOSC"] += 1
                 data[basket_iterator][object_type]["t_select"] = t_select
                 data[basket_iterator][object_type]["OST"] = t_select - t_start
+                last_hand_command = "home"
 
             if key == 32:  # If space bar is pressed, initiate grasp - disable in experiment #1
                 UI_operations[1] = True #orient_wrist
