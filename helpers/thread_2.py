@@ -59,7 +59,7 @@ def select_ROI(mouseX, mouseY, r):
     roi_scores = r['scores']
     image_size = np.shape(masks[:, :, 0])
     mouseX = mouseX
-    # mouseY = image_size[0] - mouseY
+    mouseY = image_size[0] - mouseY
     selection_success = False
 
     if rois.shape[0] > 0 and (mouseY + mouseX) != 0:
@@ -89,10 +89,9 @@ def select_ROI(mouseX, mouseY, r):
     return rois, grasping_deltas, grasping_probs, masks, roi_scores, selection_success
 
 def display_gaze_on_image(image, x, y, color=(0,0,255)):
-
-    # image_shape = np.shape(image)
+    image_shape = np.shape(image)
     # # CV2 reference is the bottom left corner, therefore y = image_height - y
-    # y = image_shape[0] - y
+    y = image_shape[0] - y
     image = cv2.circle(image, (x, y), 20, color, 3)
     image = cv2.circle(image, (x, y), 2, color, 2)
     return image
@@ -225,7 +224,7 @@ def thread2(pipeline, profile, align, colorizer, image_width, image_height, fps,
 
             # when this is clicked, need to display the object type to the subject
             object_type_text = "GRAB: %s Object Iterator: %d" % (object_type, object_iterator)
-            object_type_location = (10, 40)
+            object_type_location = (10, 50)
             cv2.putText(display_output, object_type_text, object_type_location, font, 0.8,
                         (255, 255, 0))
 

@@ -123,9 +123,10 @@ def compute_grasp_type(grasp_box_height):
     # grasp_type = 0 -> OneFPinch
     # grasp_type = 1 -> TwoFPinch
     # grasp_type = 2 -> Power
-    if 0 < grasp_box_height <= 50:
+    # Used to be 50
+    if 0 < grasp_box_height <= 35:
         grasp_type = 0
-    elif 50 < grasp_box_height <= 100:
+    elif 35 < grasp_box_height <= 70:
         grasp_type = 1
     else:
         grasp_type = 2
@@ -216,14 +217,22 @@ def main():
     realsense_orientation = [None]
 
     # Defining calibration parameters between RealSense and Pupil Trackers
-    M_t = np.array([[   0.99504285, -0.03983597,  0.0911198 , -0.11259388],
-                    [ 0.0435523,   0.99828312, -0.03916633, -0.01442502],
-                    [-0.08940313,  0.04294065,  0.99506943,  0.02834942]])
+    # M_t = np.array([[   0.99504285, -0.03983597,  0.0911198 , -0.11259388],
+    #                 [ 0.0435523,   0.99828312, -0.03916633, -0.01442502],
+    #                 [-0.08940313,  0.04294065,  0.99506943,  0.02834942]])
+    M_t = np.array([[ 0.99830705, -0.0350097,   0.0464473,  -0.04189871],
+                    [ 0.03714259,  0.99825615, -0.04588115, -0.0359197 ],
+                    [-0.04476002,  0.04752865,  0.99786651,  0.00114495]])
     tvec = M_t[:, -1]
     rvec, jacobian = cv2.Rodrigues(M_t[:, :3])
     realsense_intrinsics_matrix = np.array([[609.87304688, 0., 332.6171875],
                                             [0., 608.84387207, 248.34165955],
                                             [0., 0., 1.]])
+
+    pupil_camera_intrinsics = np.array([[794.3311439869655, 0.0, 633.0104437728625],
+                                        [0.0, 793.5290139393004, 397.36927353414865],
+                                        [0.0, 0.0, 1.0]])
+
     o3d_intrinsics = o3d.camera.PinholeCameraIntrinsic(width=image_width, height=image_height,
                                                        fx=realsense_intrinsics_matrix[0, 0],
                                                        fy=realsense_intrinsics_matrix[1, 1],
@@ -275,8 +284,8 @@ def main():
     # Thread T1 - Running the eye tracker
     subscriber = initialize_pupil_tracker()
     t1 = threading.Thread(target=thread1,
-                          args=(subscriber, avg_gaze, terminate, rvec, tvec, realsense_intrinsics_matrix, image_width,
-                                image_height, center_crop_size))
+                          args=(subscriber, avg_gaze, terminate, M_t, rvec, tvec, pupil_camera_intrinsics,
+                                realsense_intrinsics_matrix, image_width, image_height, center_crop_size))
     t1.start()
 
     # Thread T2 - Running Intel RealSense camera + UI

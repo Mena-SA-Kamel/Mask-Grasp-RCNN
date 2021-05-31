@@ -3,12 +3,27 @@ import msgpack
 import numpy as np
 import cv2
 
-def get_gaze_points_in_realsense_frame(avg_gaze, rvec, tvec, realsense_intrinsics_matrix,
+def get_gaze_points_in_realsense_frame(avg_gaze, Mt, rvec, tvec, pupil_camera_intrinsics, realsense_intrinsics_matrix,
                                        image_width, center_crop_size, image_height):
-    gaze_points = np.array(avg_gaze).reshape(-1, 1, 3)
-    gaze_points_realsense_image, jacobian = cv2.projectPoints(gaze_points, rvec, tvec,
-                                                              realsense_intrinsics_matrix, None)
-    gaze_x_realsense, gaze_y_realsense = gaze_points_realsense_image.squeeze().astype('uint16')
+
+    realsense_window_size = [720, 1280]
+    gaze_points = [avg_gaze[0] * realsense_window_size[1], avg_gaze[1] * realsense_window_size[0]]
+    gaze_points = np.array(gaze_points).reshape(1, 2)
+    pupil_camera_intrinsics_inverse = np.linalg.inv(pupil_camera_intrinsics)
+    pupil_image_points = np.concatenate([gaze_points, np.ones((1, 1))], axis=-1).T
+    invertible_Mt_hat = np.append(Mt, np.array([0, 0, 0, 1])).reshape(4, 4)
+    inverse_Mt_hat = np.linalg.inv(invertible_Mt_hat)
+
+    tracker_world_points = np.dot(pupil_camera_intrinsics_inverse, pupil_image_points)
+    tracker_world_points_hat = np.append(tracker_world_points, np.ones((1, 1)), axis=0)
+    realsense_world_points = np.dot(inverse_Mt_hat, tracker_world_points_hat)
+    realsense_image_points = np.dot(realsense_intrinsics_matrix, realsense_world_points[:3, ])
+    realsense_image_points = realsense_image_points / realsense_image_points[-1,]
+    gaze_x_realsense, gaze_y_realsense, _ = realsense_image_points.squeeze().astype('int16')
+    #
+    # gaze_points_realsense_image, jacobian = cv2.projectPoints(gaze_points, rvec, tvec,
+    #                                                           realsense_intrinsics_matrix, None)
+    # gaze_x_realsense, gaze_y_realsense = gaze_points_realsense_image.squeeze().astype('uint16')
     gaze_x_realsense = int(gaze_x_realsense - (image_width - center_crop_size) / 2)
     gaze_y_realsense = int(gaze_y_realsense - (image_height - center_crop_size) / 2)
     return [gaze_x_realsense, gaze_y_realsense]
@@ -33,14 +48,17 @@ def initialize_pupil_tracker():
     subscriber.subscribe('gaze.')  # receive all gaze messages
     return subscriber
 
-def thread1(subscriber, avg_gaze, terminate, rvec, tvec, realsense_intrinsics_matrix, image_width,
-                      image_height, center_crop_size):
+def thread1(subscriber, avg_gaze, terminate, M_t, rvec, tvec, pupil_camera_intrinsics, realsense_intrinsics_matrix,
+            image_width, image_height, center_crop_size):
     while not terminate[0]:
         topic, payload = subscriber.recv_multipart()
         message = msgpack.loads(payload)
-        gaze_point_3d = message[b'gaze_point_3d']
-        avg_gaze[:] = get_gaze_points_in_realsense_frame(gaze_point_3d, rvec, tvec,
+        # gaze_point_3d = message[b'gaze_point_3d']
+        gaze_point_3d = message[b'norm_pos']
+        avg_gaze[:] = get_gaze_points_in_realsense_frame(gaze_point_3d, M_t, rvec, tvec,
+                                                         pupil_camera_intrinsics,
                                                          realsense_intrinsics_matrix,
                                                          image_width, center_crop_size,
                                                          image_height)
+
         # avg_gaze = [int(image_width / 2), int(image_height / 2)]
