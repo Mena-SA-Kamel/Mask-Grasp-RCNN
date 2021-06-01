@@ -48,11 +48,11 @@ def get_images_from_frames(color_frame, aligned_depth_frame):
 
 def get_joint_home_values_8bits():
     FE_MIN = 260
-    FE_MAX = 540
-    FE_HOME = 380
+    FE_MAX = 480
+    FE_HOME = 390
 
     UR_MIN = 320
-    UR_MAX = 490
+    UR_MAX = 510
     UR_HOME = 440
 
     SP_MIN = 120
@@ -220,9 +220,16 @@ def main():
     # M_t = np.array([[   0.99504285, -0.03983597,  0.0911198 , -0.11259388],
     #                 [ 0.0435523,   0.99828312, -0.03916633, -0.01442502],
     #                 [-0.08940313,  0.04294065,  0.99506943,  0.02834942]])
-    M_t = np.array([[ 0.99830705, -0.0350097,   0.0464473,  -0.04189871],
-                    [ 0.03714259,  0.99825615, -0.04588115, -0.0359197 ],
-                    [-0.04476002,  0.04752865,  0.99786651,  0.00114495]])
+    # M_t = np.array([[ 0.99830705, -0.0350097,   0.0464473,  -0.04189871],
+    #                 [ 0.03714259,  0.99825615, -0.04588115, -0.0359197 ],
+    #                 [-0.04476002,  0.04752865,  0.99786651,  0.00114495]])
+
+    M_t = np.array([[ 0.9994902,  -0.03142443, -0.00564274, -0.06200431],
+                    [ 0.03159303,  0.99896235,  0.03280415, -0.05681546],
+                    [ 0.00460604, -0.03296569,  0.99944587,  0.03872225]])
+    invertible_Mt_hat = np.append(M_t, np.array([0, 0, 0, 1])).reshape(4, 4)
+    inverse_Mt_hat = np.linalg.inv(invertible_Mt_hat)
+
     tvec = M_t[:, -1]
     rvec, jacobian = cv2.Rodrigues(M_t[:, :3])
     realsense_intrinsics_matrix = np.array([[609.87304688, 0., 332.6171875],
@@ -279,12 +286,13 @@ def main():
     error_msg = [None]
     hand_preshaped = False
     UI_operations = [False, False, False, False, True] # Confirm Selection, Initiate Grasp, Open Hand, Close Hand, Home arm joints
+    done_eval_flag = [False]
 
     # Initializing the eye tracker and storing the subscriber object to fetch gaze values as they update
     # Thread T1 - Running the eye tracker
     subscriber = initialize_pupil_tracker()
     t1 = threading.Thread(target=thread1,
-                          args=(subscriber, avg_gaze, terminate, M_t, rvec, tvec, pupil_camera_intrinsics,
+                          args=(subscriber, avg_gaze, terminate, inverse_Mt_hat, rvec, tvec, pupil_camera_intrinsics,
                                 realsense_intrinsics_matrix, image_width, image_height, center_crop_size))
     t1.start()
 
@@ -293,7 +301,7 @@ def main():
                           args=(pipeline, profile, align, colorizer, image_width, image_height, fps, selected_roi,
                                 realsense_orientation, arm_orientation, error_msg, center_crop_size,
                                 color_frame, aligned_depth_frame, rgbd_image_resized, intrinsics, dataset_object,
-                                mask_grasp_results, avg_gaze, top_grasp_boxes, grasp_box_index, UI_operations,
+                                mask_grasp_results, avg_gaze, top_grasp_boxes, grasp_box_index, done_eval_flag, UI_operations,
                                 terminate))
     t2.start()
 
@@ -324,6 +332,7 @@ def main():
             frame_count += 1
 
             if not confirm_selection:
+                done_eval_flag[0] = False
                 rgbd_image_temp = rgbd_image_resized[0]
                 mask_grasp_results[0] = mask_grasp_model.detect([rgbd_image_temp], verbose=0, task=mode)[0]  # slow step
                 top_grasp_boxes[0] = extract_top_grasp_boxes(selected_roi, inference_config, grasp_prob_thresh,
@@ -334,6 +343,7 @@ def main():
                                                   intrinsics)
                 grasp_DCM, grasp_box_index[0], real_width, real_height = selected_grasp
             else:
+                done_eval_flag[0] = True
                 arm_pitch, arm_roll, arm_yaw = arm_orientation[0]
                 cam_pitch, _, cam_roll = realsense_orientation[0]
 

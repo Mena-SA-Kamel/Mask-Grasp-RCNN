@@ -3,7 +3,7 @@ import msgpack
 import numpy as np
 import cv2
 
-def get_gaze_points_in_realsense_frame(avg_gaze, Mt, rvec, tvec, pupil_camera_intrinsics, realsense_intrinsics_matrix,
+def get_gaze_points_in_realsense_frame(avg_gaze, inverse_Mt_hat, rvec, tvec, pupil_camera_intrinsics, realsense_intrinsics_matrix,
                                        image_width, center_crop_size, image_height):
 
     realsense_window_size = [720, 1280]
@@ -11,8 +11,6 @@ def get_gaze_points_in_realsense_frame(avg_gaze, Mt, rvec, tvec, pupil_camera_in
     gaze_points = np.array(gaze_points).reshape(1, 2)
     pupil_camera_intrinsics_inverse = np.linalg.inv(pupil_camera_intrinsics)
     pupil_image_points = np.concatenate([gaze_points, np.ones((1, 1))], axis=-1).T
-    invertible_Mt_hat = np.append(Mt, np.array([0, 0, 0, 1])).reshape(4, 4)
-    inverse_Mt_hat = np.linalg.inv(invertible_Mt_hat)
 
     tracker_world_points = np.dot(pupil_camera_intrinsics_inverse, pupil_image_points)
     tracker_world_points_hat = np.append(tracker_world_points, np.ones((1, 1)), axis=0)
@@ -48,14 +46,14 @@ def initialize_pupil_tracker():
     subscriber.subscribe('gaze.')  # receive all gaze messages
     return subscriber
 
-def thread1(subscriber, avg_gaze, terminate, M_t, rvec, tvec, pupil_camera_intrinsics, realsense_intrinsics_matrix,
+def thread1(subscriber, avg_gaze, terminate, inverse_Mt_hat, rvec, tvec, pupil_camera_intrinsics, realsense_intrinsics_matrix,
             image_width, image_height, center_crop_size):
     while not terminate[0]:
         topic, payload = subscriber.recv_multipart()
         message = msgpack.loads(payload)
         # gaze_point_3d = message[b'gaze_point_3d']
         gaze_point_3d = message[b'norm_pos']
-        avg_gaze[:] = get_gaze_points_in_realsense_frame(gaze_point_3d, M_t, rvec, tvec,
+        avg_gaze[:] = get_gaze_points_in_realsense_frame(gaze_point_3d, inverse_Mt_hat, rvec, tvec,
                                                          pupil_camera_intrinsics,
                                                          realsense_intrinsics_matrix,
                                                          image_width, center_crop_size,

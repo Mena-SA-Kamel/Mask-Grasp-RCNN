@@ -128,11 +128,11 @@ def current_time():
 def thread2(pipeline, profile, align, colorizer, image_width, image_height, fps, selected_roi, realsense_orientation,
             arm_orientation, error_msg, center_crop_size, color_frame, aligned_depth_frame,
             rgbd_image_resized, intrinsics, dataset_object, mask_grasp_results, avg_gaze,
-            top_grasp_boxes, grasp_box_index, UI_operations, terminate):
+            top_grasp_boxes, grasp_box_index, done_eval_flag, UI_operations, terminate):
 
     display_output = np.array([image_height, image_width, 1]).astype('uint8')
     # Defining Display parameters
-    window_resize_factor = np.array([2, 2])
+    window_resize_factor = np.array([2,2])
 
     cv2.namedWindow('MASK-GRASP RCNN OUTPUT', cv2.WINDOW_AUTOSIZE)
     # cv2.namedWindow('MASK-GRASP RCNN OUTPUT', cv2.WINDOW_NORMAL)
@@ -145,7 +145,7 @@ def thread2(pipeline, profile, align, colorizer, image_width, image_height, fps,
     image_to_display = np.zeros((image_height, image_width, 3))
 
     ########### Experiment Logging
-    experiment_ID = 0
+    experiment_ID = 1
     num_baskets = 3
     objects = experiment_planner.load_data("helpers/all_objects.txt")
     data = []
@@ -195,14 +195,14 @@ def thread2(pipeline, profile, align, colorizer, image_width, image_height, fps,
 
             bgr_image = cv2.cvtColor(rgbd_image_resized[0].astype('uint8'), cv2.COLOR_RGB2BGR)
             gaze_x_realsense, gaze_y_realsense = avg_gaze
-            if mask_grasp_results != [None] and not confirm_selection:
+            if mask_grasp_results != [None] and not UI_operations[0]: # UI_operations[0] = confirm selection
                 image_to_display = bgr_image # Displaying the current frame
                 # Capture input from user about which object to interact with
                 selected_roi[0] = select_ROI(gaze_x_realsense, gaze_y_realsense, mask_grasp_results[0])
                 rois, grasping_deltas, grasping_probs, masks, roi_scores, selection_flag = selected_roi[0]
                 masked_image, colors = dataset_object.get_mask_overlay(bgr_image, masks, roi_scores, threshold=0)
                 image_to_display = masked_image
-            elif confirm_selection:
+            elif UI_operations[0] and done_eval_flag[0]:
                 image_to_display = plot_selected_box(image_to_display, top_grasp_boxes[0], grasp_box_index[0])
             image_with_gaze = display_gaze_on_image(image_to_display.copy(), gaze_x_realsense, gaze_y_realsense)
             resized_color_image_to_display = resize_image(image_with_gaze, window_resize_factor)
@@ -223,15 +223,15 @@ def thread2(pipeline, profile, align, colorizer, image_width, image_height, fps,
                         (0, 0, 255))
 
             # when this is clicked, need to display the object type to the subject
-            object_type_text = "GRAB: %s Object Iterator: %d" % (object_type, object_iterator)
-            object_type_location = (10, 50)
-            cv2.putText(display_output, object_type_text, object_type_location, font, 0.8,
-                        (255, 255, 0))
+            object_type_text = "GRAB: %s OI: %d" % (object_type, object_iterator)
+            object_type_location = (10, 80)
+            cv2.putText(display_output, object_type_text, object_type_location, font, 1.5,
+                        (0, 0, 255), thickness=3)
 
             # Printing the basket contents at the top of the window in random order
             basket_contents_text = "Contents: " + str(basket_objects)
             basket_contents_location = (10, 20)
-            cv2.putText(display_output, basket_contents_text, basket_contents_location, font, 0.8,
+            cv2.putText(display_output, basket_contents_text, basket_contents_location, font, 0.5,
                         (255, 255, 0))
             key = cv2.waitKey(10)
 

@@ -90,7 +90,7 @@ while True:
             previous_millis = current_millis
         dt = (current_millis - previous_millis) / 1000
         previous_millis = current_millis
-        ser.write(b'r')
+        ser.write(b'm')
         input_bytes = ser.readline()
         counter += 1
 

@@ -3,7 +3,7 @@ import numpy as np
 import random
 # import logger
 
-def get_num_objects_per_image(mean=3, std=1):#6, 2
+def get_num_objects_per_image(mean=4, std=1):#6, 2
     num_objects = int(np.random.normal(mean, std, 1))
     if num_objects < 0:
         num_objects = 0
@@ -22,6 +22,11 @@ def generate_experiment_basket(objects):
     num_objects = get_num_objects_per_image()
     # Sampling without replacement
     basket_contents = random.sample(objects, num_objects)
+    for i, object in enumerate(basket_contents):
+        if "*" in object:
+            options = ["RDM", "UR"]
+            orientation = options[random.getrandbits(1)]
+            basket_contents[i] = object.replace("*", orientation)
     return basket_contents
 
 # experiment_ID = 0
