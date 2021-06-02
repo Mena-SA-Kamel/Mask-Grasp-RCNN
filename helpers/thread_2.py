@@ -146,7 +146,7 @@ def thread2(pipeline, profile, align, colorizer, image_width, image_height, fps,
 
     ########### Experiment Logging
     experiment_ID = 1
-    num_baskets = 3
+    num_baskets = 33
     objects = experiment_planner.load_data("helpers/all_objects.txt")
     data = []
     for i in range(num_baskets):
