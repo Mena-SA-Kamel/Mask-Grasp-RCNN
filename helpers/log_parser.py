@@ -52,32 +52,16 @@ for folder in trial_folders:
                                     failures['obj_select_err'],
                                     failures['grasp_config_err'],
                                     failures['aperture_err']])
-            data_row = [experiment_date, num_basket_objects, object_iterator, object]
-            for key in data[object].keys():
-                if key == "fail_reason":
-                    data[object][key] = fail_numbers.tolist()
-                if type(data[object][key]) is list:
-                    for val in data[object][key]:
-                        data_row.append(val)
-                    continue
-                data_row.append(data[object][key])
-            data_row = np.array(data_row).reshape(1, -1)
 
-            flattened_data = np.concatenate([flattened_data, np.array(data_row)], axis=0)
-
-            # if 0 in [t_start, t_select, t_completion]:
-            #     print([t_start, t_select, t_close, t_completion])
-            #     continue
             total_num_objects += 1
             if (data[object]['success']):
                 num_passes_exp_1 += 1
                 ttt_log_exp_1.append(TTT)
-            if not(fail_numbers.any()):
-                num_passes_exp_0 += 1
-                ttt_log_exp_0.append(TTT)
+                if not(fail_numbers.any()):
+                    num_passes_exp_0 += 1
+                    ttt_log_exp_0.append(TTT)
             failures_log += fail_numbers.astype('int8')
             # print (t_start, t_select, t_close, t_completion)
-import code; code.interact(local=dict(globals(), **locals()))
 
 TAR_exp_1 = round(float(num_passes_exp_1)/total_num_objects * 100, 2)
 TAR_exp_0 = round(float(num_passes_exp_0)/total_num_objects * 100, 2)
