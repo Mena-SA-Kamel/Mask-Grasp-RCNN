@@ -82,8 +82,9 @@ class ResultAnalyzer:
     def generate_verdicts(self):
         self.total_num_objects = len(self.data_frame)
         df = results.data_frame
-        exp_0_verdicts = ~df['prosthetic_err'] & ~df['obj_select_err'] & ~df['grasp_config_err'] & ~df['aperture_err'] \
-                         & df['success'] & (df['NOSC'] == 0) & (df['NAC'] == 0)
+        # exp_0_verdicts = ~df['prosthetic_err'] & ~df['obj_select_err'] & ~df['grasp_config_err'] & ~df['aperture_err'] \
+        #                  & df['success'] & (df['NOSC'] == 0) & (df['NAC'] == 0)
+        exp_0_verdicts = df['success'] & (df['NOSC'] == 0) & (df['NAC'] == 0)
         self.data_frame = df.assign(exp_0_verdict=exp_0_verdicts)
         exp_1_verdicts = self.data_frame['success']
         self.data_frame = self.data_frame.assign(exp_1_verdict=exp_1_verdicts)
@@ -132,26 +133,37 @@ results.compute_TARs()
 results.analyze_error_sources()
 results.analyze_time_info()
 
-print("\n---------------RESULTS SUMMARY---------------\n")
+print("\n-----------------------RESULTS SUMMARY----------------------\n")
 print("Total Number of Objects: " + str(results.total_num_objects))
 print("Total Number of Baskers: " + str(results.num_baskets))
+
 print("\n---------------Experiment 0 - No User Control---------------")
 print("Total Number of Passes for Experiment 0 (No user input): " + str(results.num_passes_exp_0))
-print("Task Accomplishment Rate for Experiment 0 (No user input): " +  str(results.exp_0_TAR) + "%")
+print("Task Accomplishment Rate for Experiment 0 (No user input): " +  str(round(results.exp_0_TAR * 100, 2)) + "%")
 # print("Timing for Experiment 0: " + str(TTT_mean_exp_0) + "+-" + str(TTT_std_exp_0) + " s")
 print("Failure Distribution: \n" + str(results.exp_0_errors))
 timing_info_exp_0 = results.exp_0_timing.drop(['exp_0_verdict', 'exp_1_verdict'], axis=1)
-print("Timing for Experiment 0: \n" + str(timing_info_exp_0.mean())) + " +- " + str(timing_info_exp_0.std())
-import code; code.interact(local=dict(globals(), **locals()))
-
+print("Mean Timing for Experiment 0: \n" + str(timing_info_exp_0.mean()/1000.0))
+print("Standard Deviation of Timing for Experiment 0: \n" + str(timing_info_exp_0.std()/1000.0))
+print("------------------------------------------------------------\n")
 
 print("\n---------------Experiment 1 - Proposed System---------------")
 print("Total Number of Passes for Experiment 1: " + str(results.num_passes_exp_1))
-print("Task Accomplishment Rate for Experiment 1: " + str(results.exp_1_TAR) + "%")
+print("Task Accomplishment Rate for Experiment 1: " + str(round(results.exp_1_TAR * 100, 2)) + "%")
 print("Failure Distribution: \n" + str(results.exp_1_errors))
-# print("Total Task Time for Experiment 1: " + str(TTT_mean_exp_1) + "+-" + str(TTT_std_exp_1) + " s")
-print("\n---------------------------------------------\n")
+timing_info_exp_1 = results.exp_1_timing.drop(['exp_0_verdict', 'exp_1_verdict'], axis=1)
+print("Mean Timing for Experiment 1: \n" + str(timing_info_exp_1.mean()/1000.0))
+print("Standard Deviation of Timing for Experiment 1: \n" + str(timing_info_exp_1.std()/1000.0))
 
+print("\n------Timing on objects that failed in experiment 0---------")
+
+timing_info_exp_1_minus_0 = results.exp_1_minus_0_timing.drop(['exp_0_verdict', 'exp_1_verdict'], axis=1)
+print("Number of objects that failed in experiment 0, but passed in experiment 1: " + str(len(timing_info_exp_1_minus_0)))
+print("Mean Timing for Experiment 1 minus 0: \n" + str(timing_info_exp_1_minus_0.mean()/1000.0))
+print("Standard Deviation of Timing for Experiment 1 minus 0: \n" + str(timing_info_exp_1_minus_0.std()/1000.0))
+
+print("------------------------------------------------------------\n")
+import code; code.interact(local=dict(globals(), **locals()))
 
 #
 # # Grouping based on success and sources of error to determine Task Accomplishment rates
