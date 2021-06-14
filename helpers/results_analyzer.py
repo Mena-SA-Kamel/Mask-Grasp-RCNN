@@ -381,22 +381,22 @@ class ResultAnalyzer:
         exp_1_errors_pass_labels = df[df['exp_1_verdict'] == True]['error_combinations'].value_counts().index[1:]
         exp_1_errors_pass_labels = self.decode_categories(exp_1_errors_pass_labels, space=1)
 
-        labels = ["Semi-Autonomous Control", "Pass", "Fail"] + list(exp_1_errors_pass_labels) + list(exp_1_errors_fail_labels)
-        parents = ["", "Semi-Autonomous Control", "Semi-Autonomous Control"] + ["Pass"]*len(exp_1_errors_pass_labels) + ["Fail"]*len(exp_1_errors_fail_labels)
+        labels = ["Semi-Autonomous Control", "Pass", "Fail"] #+ list(exp_1_errors_pass_labels) + list(exp_1_errors_fail_labels)
+        parents = ["", "Semi-Autonomous Control", "Semi-Autonomous Control"] #+ ["Pass"]*len(exp_1_errors_pass_labels) + ["Fail"]*len(exp_1_errors_fail_labels)
         num_passes = self.num_passes_exp_1
         total_num_objects = self.total_num_objects
         num_fails = total_num_objects - num_passes
-        values = [total_num_objects, num_passes, num_fails] + list(exp_1_errors_pass) + list(exp_1_errors_fail)
+        values = [total_num_objects, num_passes, num_fails] #+ list(exp_1_errors_pass) + list(exp_1_errors_fail)
 
 
         sizes = [25]*len(labels)
         fig = go.Figure(go.Sunburst(
             branchvalues='total',
-            textinfo= 'label',
+            textinfo= 'label+value',
             labels=labels,
             parents=parents,
             values=values,
-            insidetextorientation='radial',
+            # insidetextorientation='radial',
             textfont=dict(size=sizes),
             rotation=5
         ))
@@ -635,30 +635,32 @@ class ResultAnalyzer:
         fig.show()
 
 
-        # index = np.arange(4)
-        # bar_width = 0.2
-        #
-        # fig, ax = plt.subplots()
-        # exp_0 = ax.bar(index, timing_mean_exp_0, bar_width,
-        #                yerr=timing_std_exp_0,
-        #                label="Full Autonomous Control",
-        #                capsize=3)
-        # exp_1 = ax.bar(index + bar_width, timing_mean_exp_1, bar_width,
-        #                yerr=timing_std_exp_1,
-        #                label="Semi-Autonomous Control",
-        #                capsize=3)
-        # # exp_1_0 = ax.bar(index + 2*bar_width, timing_mean_exp_1_minus_0, bar_width, yerr=timing_std_exp_1_minus_0, label="Semi-Autonomous Control 2")
-        #
-        # # ax.set_xlabel('')
-        # ax.set_ylabel('Time (s)',fontname="Arial")
-        # # ax.set_title('Comparing')
-        # ax.set_xticks(index + bar_width / 2)
-        # ax.set_xticklabels(labels)
-        # ax.legend(loc='upper left')
-        #
-        # plt.show()
-        # import code;
-        # code.interact(local=dict(globals(), **locals()))
+        index = np.arange(4)
+        bar_width = 0.2
+
+        fig, ax = plt.subplots()
+        exp_0 = ax.bar(index, timing_mean_exp_0, bar_width,
+                       yerr=timing_std_exp_0,
+                       label="Full Autonomous Control",
+                       capsize=3)
+        exp_1 = ax.bar(index + bar_width, timing_mean_exp_1, bar_width,
+                       yerr=timing_std_exp_1,
+                       label="Semi-Autonomous Control",
+                       capsize=3)
+        exp_1_0 = ax.bar(index + 2*bar_width, timing_mean_exp_1_minus_0, bar_width,
+                         yerr=timing_std_exp_1_minus_0,
+                         label="Semi-Autonomous Control - Worst Case Scenario",
+                         capsize=3)
+
+        # ax.set_xlabel('')
+        ax.set_ylabel('Time (s)',fontname="Arial")
+        # ax.set_title('Comparing')
+        ax.set_xticks(index + bar_width )
+        ax.set_xticklabels(labels)
+        ax.grid(axis='y', alpha=0.2)
+        ax.legend(loc='upper left')
+
+        plt.show()
 
 
 
@@ -685,11 +687,11 @@ results.compute_TARs()
 results.analyze_error_sources()
 results.analyze_time_info()
 # results.analyze_effect_of_object_type()
-results.analyze_effect_of_num_objects()
+# results.analyze_effect_of_num_objects()
 # results.plot_basket_size_distribution()
 # results.plot_timing_figures()
 # results.plot_error_percentages()
-# results.plot_TAR_figures()
+results.plot_TAR_figures()
 
 
 print("\n-----------------------RESULTS SUMMARY----------------------\n")
@@ -728,7 +730,7 @@ print("------------------------------------------------------------\n")
 
 
 # output = pd.read_pickle("flattened_data.pkl")
-#
+
 # # PLOTTING
 # labels = ["Task Accomplishment Rate", "Task Failure Rate"]
 # exp_0_tar = round(results.exp_0_TAR * 100, 2)
@@ -752,7 +754,7 @@ print("------------------------------------------------------------\n")
 #                  dict(text='Experiment II', x=0.82, y=0.5, font_size=25, showarrow=False)],
 #     legend = dict(font = dict(family = "Times New Roman", size = 25, color = "black")))
 # fig.show()
-
+#
 
 
 
